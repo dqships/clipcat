@@ -1,7 +1,7 @@
-import { buildTimeline, initialSegments, setRange } from "@clipcat/core";
+import { buildTimeline, initialSegments, punchProposal, setRange, timedPunches } from "@clipcat/core";
 import { source } from "@clipcat/core/fixtures";
 import { describe, expect, it } from "vitest";
-import { audioCommand, chunkCommand, chunkList, exportChunks, exportSize, frameTimeline, muxArgs } from "./export";
+import { audioCommand, chunkCommand, chunkList, exportChunks, exportSize, frameTimeline, muxArgs, punchPieces } from "./export";
 
 let n = 0;
 const id = () => `g${++n}`;
@@ -121,6 +121,43 @@ describe("chunkCommand", () => {
     expect(third).toBe(0.5);
     const held = { ...project, sources: [{ ...a, framing: "manual" as const, frameX: 0.5 }, project.sources[1]!] };
     expect(crops(held).slice(0, 2)).toEqual([0.5, 0.5]);
+  });
+});
+
+describe("punch-ins", () => {
+  const punch = (id: string, range: [number, number], style: "cut" | "zoom-in" | "slow-zoom") =>
+    punchProposal({ id, sourceId: "a", wordIds: [], reason: "", confidence: 1, status: "accepted" }, range, style);
+
+  it("splits ranges where punch-ins start and end, across chunks, counting from the punch-in's start", () => {
+    const { timeline } = setup();
+    // a plays 0..2 then 4..10 (output 2..8); the punch-in covers source 1..5, output 1..3.
+    const punches = timedPunches({ proposals: [punch("p", [1, 5], "slow-zoom")] }, timeline);
+    expect(punches[0]).toMatchObject({ start: 1, end: 3 });
+    const [first, second] = exportChunks(timeline, 75);
+    const one = punchPieces(first!.items, punches, 30, 1);
+    expect(one.map((x) => [x.from, x.frames, x.at, x.punch?.id ?? null])).toEqual([
+      [0, 30, 0, null],
+      [30, 30, 30, "p"],
+      [120, 15, 60, "p"],
+    ]);
+    // The rest of the punch-in starts the next chunk, still counted from output frame 30.
+    expect(punchPieces(second!.items, punches, 30, 1).map((x) => [x.from, x.frames, x.at, x.punch?.id ?? null])).toEqual([
+      [135, 15, 75, "p"],
+      [150, 60, 90, null],
+    ]);
+  });
+
+  it("snaps in with a crop, and zooms with zoompan from where the piece starts", () => {
+    const { timeline, shape } = setup();
+    const chunk = exportChunks(timeline, 10_000)[0]!;
+    const graph = (style: "cut" | "zoom-in" | "slow-zoom") =>
+      chunkCommand({ ...shape, punches: timedPunches({ proposals: [punch("p", [1, 5], style)] }, timeline), chunk, captions: null, encoder: "libx264", out: "c.mp4" }).graph;
+    expect(graph("cut")).toContain("scale=1920:1080:force_original_aspect_ratio=decrease:flags=lanczos,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:color=black,crop=w='trunc(iw/1.2500/2)*2':h='trunc(ih/1.2500/2)*2':x='(iw-ow)*0.5000':y='(ih-oh)*0.4000',scale=1920:1080:flags=lanczos");
+    // Four branches now: before, the two halves of the punch-in either side of the cut, after.
+    expect(graph("cut")).toContain("split=4[s0v0][s0v1][s0v2][s0v3]");
+    // The second half starts 30 frames into the punch-in; a zoom-in has pushed in by then (9 frames).
+    expect(graph("zoom-in")).toContain("zoompan=z='1+0.2000*min(1,(30+on)/9)':x='(iw-iw/zoom)*0.5000':y='(ih-ih/zoom)*0.4000':d=1:s=1920x1080:fps=30000/1000");
+    expect(graph("slow-zoom")).toContain("scale=3840:2160:flags=bicubic,zoompan=z='1+0.1500*(30+on)/60'");
   });
 });
 

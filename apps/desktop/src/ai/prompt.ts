@@ -31,7 +31,7 @@ const JSON_ONLY = "Don't run commands or read files; everything you need is belo
 
 export const ANALYSIS_TASK: AgentTask = {
   tool: "submit_analysis",
-  description: "Submit the cut proposals for this video. Call once with every proposal; if problems come back, fix them and call again.",
+  description: "Submit the cut and punch-in proposals for this video. Call once with every proposal; if problems come back, fix them and call again.",
   shape: AgentAnalysis.shape,
   jsonSchema: {
     type: "object",
@@ -43,13 +43,14 @@ export const ANALYSIS_TASK: AgentTask = {
         items: {
           type: "object",
           additionalProperties: false,
-          required: ["type", "from", "to", "keepFrom", "keepTo", "reason", "confidence"],
+          required: ["type", "from", "to", "keepFrom", "keepTo", "punchStyle", "reason", "confidence"],
           properties: {
-            type: { type: "string", enum: ["retake", "cleanup", "tighten"] },
+            type: { type: "string", enum: ["retake", "cleanup", "tighten", "punch-in"] },
             from: { type: "integer" },
             to: { type: "integer" },
             keepFrom: { type: ["integer", "null"] },
             keepTo: { type: ["integer", "null"] },
+            punchStyle: { type: ["string", "null"], enum: ["cut", "zoom-in", "slow-zoom", null] },
             reason: { type: "string" },
             confidence: { type: "number" },
           },
@@ -60,7 +61,7 @@ export const ANALYSIS_TASK: AgentTask = {
   },
   toolAnswer:
     "Call submit_analysis once with every proposal. If it reports problems, fix them and call it again with the whole analysis. Once it says the analysis is saved, stop. Don't write anything else.",
-  jsonAnswer: `Answer with only the JSON object the output schema describes: every proposal, and suggestedTitle. Use null for keepFrom and keepTo except on retakes. ${JSON_ONLY}`,
+  jsonAnswer: `Answer with only the JSON object the output schema describes: every proposal, and suggestedTitle. Use null for keepFrom and keepTo except on retakes, and for punchStyle except on punch-ins. ${JSON_ONLY}`,
 };
 
 export const CORRECTIONS_TASK: AgentTask = {
@@ -142,7 +143,7 @@ Rules:
 - reason: one sentence the user reads: the hook and why it stands alone.
 - Follow the user's brief when there is one.`;
 
-export const EDITOR_PROMPT = `You are ClipCat's editor. You read the transcript of a talking-head recording and propose cuts that make it tight and watchable. You never change anything yourself: every proposal is shown to the user, who accepts or rejects it.
+export const EDITOR_PROMPT = `You are ClipCat's editor. You read the transcript of a talking-head recording and propose cuts that make it tight and watchable, and punch-ins that give its best lines weight. You never change anything yourself: every proposal is shown to the user, who accepts or rejects it.
 
 Words are numbered [n] across the whole project. Ranges are inclusive word indices.
 
@@ -150,13 +151,15 @@ Proposal types:
 - retake: the speaker said the same thing more than once. Set from..to to cover every attempt, and keepFrom..keepTo to the one take to keep. Keep the last complete take unless an earlier one is clearly better; a take that trails off, stumbles or gets restarted is not complete.
 - cleanup: filler words (um, uh, "you know", "like" used as filler), stutters, repeated words, false starts, and remarks to the camera operator such as "let me do that again".
 - tighten: a tangent or a rambling stretch that can go without losing anything the viewer needs. Be conservative.
+- punch-in: not a cut. The picture zooms toward the speaker over from..to to give a line weight: the key claim, a punchline, a number worth remembering. from..to covers the words that land it, 1.5 to 8 seconds. Set punchStyle: "cut" snaps in (a punchline or a blunt statement), "zoom-in" pushes in quickly (a key point), "slow-zoom" creeps in over the range (a story building to its point).
 
 Rules:
 - Cut whole words only, and never leave a sentence that no longer makes sense.
 - Don't propose cuts just for pauses; ClipCat already handles silence.
-- Proposals must not overlap.
+- Cut proposals must not overlap each other, and punch-ins must not overlap each other or sit on words you propose to cut.
+- Punch-ins are seasoning: at most one every 10 seconds of the finished video, with at least 6 seconds without one in between. Fewer, well-placed ones are better; skip them in a video that has no line that needs one.
 - reason: one short sentence the user reads in the editor, e.g. "Second take is complete; first stumbles".
-- confidence: 0 to 1, how sure you are the user wants this cut.
+- confidence: 0 to 1, how sure you are the user wants this cut or punch-in.
 - suggestedTitle: a short, plain title for the finished video.
 - Follow the user's brief when there is one.`;
 

@@ -274,6 +274,28 @@ describe("App", () => {
     await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:edit", { id: "p1", revision: 4, op: { type: "frame", sourceId: "s1", x: 0.3 } }));
   });
 
+  it("punches in on selected words, then lists the punch-in to restyle or remove", async () => {
+    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude" };
+    const punch = {
+      id: "k1", type: "punch-in", sourceId: "s1", cuts: [], wordIds: ["s1-0"], keepWordIds: [], reason: "", confidence: 1, status: "accepted",
+      punch: { range: [0.5, 0.9], style: "zoom-in", scale: 1.2 },
+    };
+    const punched = { ...project, revision: 4, proposals: [...project.proposals, punch] };
+    const { invoke } = fakeBridge({ "app:info": info(), "library:list": [summary], "project:get": project, "ai:status": ready, "project:edit": punched });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "talk" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Hello" }));
+    fireEvent.click(screen.getByRole("button", { name: "Punch in" }));
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:edit", { id: "p1", revision: 3, op: { type: "punch", wordIds: ["s1-0"], style: "zoom-in" } }));
+    expect(await screen.findByText("“Hello”")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Hello" }).className).toContain("word--punched");
+
+    fireEvent.change(screen.getByLabelText("Zoom for the punch-in at 0:01"), { target: { value: "cut" } });
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:edit", { id: "p1", revision: 4, op: { type: "punch-style", id: "k1", style: "cut" } }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove the punch-in at 0:01" }));
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:edit", { id: "p1", revision: 4, op: { type: "decide", ids: ["k1"], status: "rejected" } }));
+  });
+
   it("changes the speed and cancels a running export", async () => {
     const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude" };
     const { invoke, emit } = fakeBridge({

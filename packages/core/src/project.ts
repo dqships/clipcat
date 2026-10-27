@@ -60,6 +60,16 @@ export const Segment = z.object({
 export const ProposalType = z.enum(["silence", "retake", "cleanup", "tighten", "visual", "punch-in"]);
 export const ProposalStatus = z.enum(["pending", "accepted", "rejected"]);
 
+/** How a punch-in zooms: snaps in, pushes in quickly, or creeps in over its length. */
+export const PunchStyle = z.enum(["cut", "zoom-in", "slow-zoom"]);
+
+/** A punch-in: the picture zooms toward the speaker over a source range. */
+export const Punch = z.object({
+  range: z.tuple([z.number(), z.number()]),
+  style: PunchStyle,
+  scale: z.number().min(1.05).max(1.6),
+});
+
 export const Proposal = z.object({
   id: z.string(),
   type: ProposalType,
@@ -71,6 +81,8 @@ export const Proposal = z.object({
   reason: z.string(),
   confidence: z.number().min(0).max(1),
   status: ProposalStatus,
+  /** Set on a punch-in, which cuts nothing; accepted, it zooms. */
+  punch: Punch.nullable().default(null),
 });
 
 const captionFields = {
@@ -163,6 +175,8 @@ export type Source = z.infer<typeof Source>;
 export type Word = z.infer<typeof Word>;
 export type Segment = z.infer<typeof Segment>;
 export type Proposal = z.infer<typeof Proposal>;
+export type PunchStyle = z.infer<typeof PunchStyle>;
+export type Punch = z.infer<typeof Punch>;
 export type Captions = z.infer<typeof Captions>;
 export type Snapshot = z.infer<typeof Snapshot>;
 export type LastExport = z.infer<typeof LastExport>;

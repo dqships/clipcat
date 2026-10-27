@@ -16,9 +16,10 @@ import {
   type Proposal,
   type ShortPlan,
   applyCorrections,
-  cutsOverlap,
+  sameSpot,
   replacePending,
   shortProject,
+  spaceProposedPunches,
   validateCorrections,
   validateProposals,
   validateShorts,
@@ -148,7 +149,11 @@ export class AnalysisRunner {
       (input) => {
         const parsed = AgentAnalysis.safeParse(input);
         if (!parsed.success) return { invalid: parsed.error.issues.map((i) => `${i.path.join(".") || "input"}: ${i.message}`) };
-        const { proposals, errors } = validateProposals(parsed.data, words, project.sources, () => `a${shortId()}`);
+        const valid = validateProposals(parsed.data, words, project.sources, () => `a${shortId()}`);
+        // Spaced against the punch-ins already accepted; pending ones are being replaced.
+        const spaced = spaceProposedPunches(project, valid.proposals, words);
+        const { proposals } = spaced;
+        const errors = [...valid.errors, ...spaced.errors];
         return {
           result: { proposals, title: parsed.data.suggestedTitle ?? "" },
           problems: errors,
@@ -240,6 +245,6 @@ export class AnalysisRunner {
  */
 export function addRequested(current: Proposal[], fresh: Proposal[]): Proposal[] {
   const replaced = (p: Proposal) =>
-    p.status === "pending" && AI_TYPES.includes(p.type) && fresh.some((f) => f.sourceId === p.sourceId && cutsOverlap(f.cuts, p.cuts));
+    p.status === "pending" && AI_TYPES.includes(p.type) && fresh.some((f) => sameSpot(f, p));
   return [...current.filter((p) => !replaced(p)), ...fresh];
 }

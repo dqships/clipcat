@@ -7,7 +7,7 @@
 
 import { copyFile, mkdir, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join } from "node:path";
-import { type Project, buildTimeline, captionCues, outputWords, toAss, toSrt } from "@clipcat/core";
+import { type Project, buildTimeline, captionCues, outputWords, timedPunches, toAss, toSrt } from "@clipcat/core";
 import type { JobContext, JobQueue } from "../jobs/queue";
 import type { Encoder } from "../media/encoders";
 import {
@@ -81,7 +81,7 @@ export class ExportRunner {
       const inputs = new Map(
         project.sources.map((s) => [s.id, s.media.videoCodec || !s.prep ? s.path : join(store.dir(projectId), s.prep.proxy)]),
       );
-      const shape = { project, format, fps, inputs, graphFile: "graph.txt" };
+      const shape = { project, punches: timedPunches(project, timeline), format, fps, inputs, graphFile: "graph.txt" };
       const ffmpeg = async ({ graph, args }: { graph: string; args: string[] }, duration: number, from: number, to: number) => {
         await writeFile(join(work, "graph.txt"), graph);
         const part = { signal: ctx.signal, progress: (f: number | null, label?: string) => ctx.progress(from + (f ?? 0) * (to - from), label) };

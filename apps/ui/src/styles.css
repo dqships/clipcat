@@ -385,6 +385,12 @@ body {
   opacity: 0.5;
 }
 
+/* Words a punch-in zooms on: a dotted underline, like a mark in the margin. */
+.word--punched {
+  text-decoration: underline dotted var(--color-accent);
+  text-underline-offset: var(--space-1);
+}
+
 .word--current {
   background: var(--color-surface-raised);
   box-shadow: inset 0 -1px 0 var(--color-accent);
@@ -844,6 +850,47 @@ body {
   justify-content: space-between;
   gap: var(--space-3);
   margin: 0;
+}
+
+/* Punch-ins in the edit: where, how it zooms, remove. */
+.punches {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.punches__item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.punches__where {
+  display: flex;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.punches__time {
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.punches__words {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .export__last {

@@ -5,7 +5,19 @@
 
 import { z } from "zod";
 import { type IdFactory, setRange, wordSpanRange } from "./edits";
-import { AspectRatio, Captions, CaptionsPatch, type Project, ProposalStatus, type Range, type Snapshot, type Word } from "./project";
+import {
+  AspectRatio,
+  Captions,
+  CaptionsPatch,
+  type Project,
+  type Proposal,
+  ProposalStatus,
+  PunchStyle,
+  type Range,
+  type Snapshot,
+  type Word,
+} from "./project";
+import { PUNCH_SCALE, punchProposal, punchRange } from "./punchins";
 
 export const EditOp = z.discriminatedUnion("type", [
   /** Cut (included: false) or restore (included: true) these words. */
@@ -20,6 +32,10 @@ export const EditOp = z.discriminatedUnion("type", [
   z.object({ type: z.literal("aspect"), aspectRatio: AspectRatio }),
   /** Where a recording's speaker is (0..1 across), set by hand; null goes back to following the faces found. Not an undo step. */
   z.object({ type: z.literal("frame"), sourceId: z.string(), x: z.number().min(0).max(1).nullable() }),
+  /** Punch in on these words (one recording's). An undo step, like accepting a suggested punch-in. */
+  z.object({ type: z.literal("punch"), wordIds: z.array(z.string()).min(1).max(10_000), style: PunchStyle }),
+  /** Another style for a punch-in. Not an undo step: the list shows it. */
+  z.object({ type: z.literal("punch-style"), id: z.string(), style: PunchStyle }),
   z.object({ type: z.literal("undo") }),
   z.object({ type: z.literal("redo") }),
 ]);
@@ -59,7 +75,8 @@ function wordRanges(project: Project, ids: Set<string>): { sourceId: string; ran
 
 /**
  * Applies `op` to a copy of `project` and returns it. Cuts and decisions
- * record an undo step; caption style, speed, shape, framing, undo and redo don't. Unknown word or proposal ids are an error,
+ * record an undo step, and so does a new punch-in; caption style, speed, shape,
+ * framing, punch-in style, undo and redo don't. Unknown word or proposal ids are an error,
  * not a silent no-op, so a stale UI finds out.
  */
 export function applyEdit(project: Project, op: EditOp, id: IdFactory): Project {
@@ -98,15 +115,40 @@ export function applyEdit(project: Project, op: EditOp, id: IdFactory): Project 
     return p;
   }
 
+  if (op.type === "punch-style") {
+    const proposal = p.proposals.find((x) => x.id === op.id);
+    if (!proposal?.punch) throw new Error(`Unknown punch-in: ${op.id}`);
+    proposal.punch = { ...proposal.punch, style: op.style, scale: PUNCH_SCALE[op.style] };
+    return p;
+  }
+
+  // A new punch-in joins as rejected before the undo step is taken, so undoing it takes it away again.
+  let added: Proposal | null = null;
+  if (op.type === "punch") {
+    const ids = new Set(op.wordIds);
+    const words = p.transcript.filter((w) => ids.has(w.id));
+    if (words.length !== ids.size) throw new Error(`Unknown words: ${op.wordIds.filter((w) => !p.transcript.some((x) => x.id === w)).slice(0, 5).join(", ")}`);
+    const sourceId = words[0]!.sourceId;
+    if (words.some((w) => w.sourceId !== sourceId)) throw new Error("A punch-in stays inside one recording");
+    added = punchProposal(
+      { id: id(), sourceId, wordIds: words.sort((a, b) => a.start - b.start).map((w) => w.id), reason: "", confidence: 1, status: "rejected" },
+      punchRange(words),
+      op.style,
+    );
+    p.proposals.push(added);
+  }
+
   const before = snapshot(p);
-  if (op.type === "words") {
+  if (added) {
+    added.status = "accepted";
+  } else if (op.type === "words") {
     const known = new Set(p.transcript.map((w) => w.id));
     const missing = op.wordIds.filter((w) => !known.has(w));
     if (missing.length > 0) throw new Error(`Unknown words: ${missing.slice(0, 5).join(", ")}`);
     for (const { sourceId, range } of wordRanges(p, new Set(op.wordIds))) {
       p.segments = setRange(p.segments, sourceId, range, op.included, id);
     }
-  } else {
+  } else if (op.type === "decide") {
     const byId = new Map(p.proposals.map((x) => [x.id, x]));
     const missing = op.ids.filter((x) => !byId.has(x));
     if (missing.length > 0) throw new Error(`Unknown proposals: ${missing.slice(0, 5).join(", ")}`);
