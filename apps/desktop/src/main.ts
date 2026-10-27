@@ -15,7 +15,7 @@ import { hydrateEnv } from "./ai/env";
 import { type Binary, binaryPath, probeVersion } from "./tools";
 import { broadcast, registerIpc } from "./ipc";
 import { JobQueue } from "./jobs/queue";
-import { defaultEncoder } from "./media/prep";
+import { encoderTestArgs, lazyEncoder, pickEncoder } from "./media/encoders";
 import { runFfmpeg } from "./media/run";
 import { realDeps } from "./pipeline/deps";
 import { ExportRunner } from "./pipeline/export";
@@ -51,9 +51,19 @@ async function toolInfo(name: Binary) {
   return { available: version !== null, version, path };
 }
 
+/** The hardware H.264 encoder this machine has, found on first use by encoding a test clip with each candidate. */
+const encoder = lazyEncoder(() =>
+  pickEncoder(process.platform, (e) =>
+    runFfmpeg(tool("ffmpeg"), encoderTestArgs(e), { duration: 0, signal: AbortSignal.timeout(20_000) }).then(
+      () => true,
+      () => false,
+    ),
+  ),
+);
+
 async function appInfo(): Promise<AppInfoValue> {
   const [ffmpeg, whisper] = await Promise.all([toolInfo("ffmpeg"), toolInfo("whisper-cli")]);
-  return { name: "ClipCat", version: app.getVersion(), platform: process.platform, arch: process.arch, ffmpeg, whisper };
+  return { name: "ClipCat", version: app.getVersion(), platform: process.platform, arch: process.arch, ffmpeg, whisper, encoder: await encoder() };
 }
 
 /** The smaller model is for CI and slow machines; everyone else gets the accurate one. */
@@ -96,7 +106,7 @@ function startPipeline() {
       // CI points this at a cached folder so each run doesn't download the model again.
       modelsDir: process.env.CLIPCAT_MODELS_DIR ?? join(data, "models"),
       model: MODEL,
-      encoder: defaultEncoder(process.platform),
+      encoder,
       dictionary: async () => (await settings.get()).dictionary,
     }),
     store,
@@ -109,7 +119,7 @@ function startPipeline() {
     changed,
     ffmpeg: (args, { cwd, duration, ctx }) =>
       runFfmpeg(tool("ffmpeg"), args, { cwd, duration, onProgress: (f) => ctx.progress(f), signal: ctx.signal }),
-    encoder: defaultEncoder(process.platform),
+    encoder,
     fontsDir: app.isPackaged ? join(process.resourcesPath, "fonts") : join(REPO_ROOT, "apps", "desktop", "resources", "fonts"),
   });
   return { store, settings, queue, pipeline, analysis, exporter };

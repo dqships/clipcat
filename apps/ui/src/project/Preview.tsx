@@ -100,6 +100,15 @@ export function Preview({ project, onTime, ref }: Props) {
     };
   }, [sourceId]);
 
+  // The preview plays at the export's speed; loading another recording resets the rate, so it is set again then.
+  const speed = project.speed;
+  useEffect(() => {
+    const v = video.current;
+    if (!v) return;
+    v.defaultPlaybackRate = speed;
+    v.playbackRate = speed;
+  }, [speed, sourceId]);
+
   const source = sources.find((s) => s.id === sourceId);
   if (!source?.prep) return <div className="project__video project__video--pending" />;
   return (
@@ -110,6 +119,7 @@ export function Preview({ project, onTime, ref }: Props) {
       controls
       preload="auto"
       onLoadedMetadata={(e) => {
+        e.currentTarget.playbackRate = speed;
         const next = pending.current;
         pending.current = null;
         if (!next) return;

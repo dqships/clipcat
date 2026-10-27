@@ -21,6 +21,8 @@ export const AppInfo = z.object({
   arch: z.string(),
   ffmpeg: ToolInfo,
   whisper: ToolInfo,
+  /** The H.264 encoder exports use: a hardware one, or libx264. */
+  encoder: z.string(),
 });
 
 export const AgentStatus = z.object({
