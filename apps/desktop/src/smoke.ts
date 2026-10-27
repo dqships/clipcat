@@ -32,7 +32,16 @@ export function startSmokeTimer(): void {
   }, TIMEOUT_MS).unref();
 }
 
-export type SmokeImport = { ok: boolean; words: number; text: string; pauses: number; failed: string[]; error?: string };
+export type SmokeImport = {
+  ok: boolean;
+  words: number;
+  text: string;
+  /** Source seconds of the first and last word, to see whether speech at either end was missed. */
+  span: [number, number] | null;
+  pauses: [number, number][];
+  failed: string[];
+  error?: string;
+};
 
 /** Failed job messages, collected from the queue's events during a smoke run. */
 const failures: string[] = [];
@@ -51,11 +60,12 @@ export async function smokeImport(pipeline: ImportPipeline, store: ProjectStore,
       ok: failures.length === 0 && (words > 0 || process.env.CLIPCAT_SMOKE_EXPECT_WORDS !== "1") && p.sources.every((s) => s.prep !== null),
       words,
       text: p.transcript.map((w) => w.text).join(" ").slice(0, 300),
-      pauses: p.proposals.filter((x) => x.type === "silence").length,
+      span: words > 0 ? [p.transcript[0]!.start, p.transcript[words - 1]!.end] : null,
+      pauses: p.proposals.filter((x) => x.type === "silence").flatMap((x) => x.cuts),
       failed: failures,
     };
   } catch (e) {
-    return { ok: false, words: 0, text: "", pauses: 0, failed: failures, error: e instanceof Error ? e.message : String(e) };
+    return { ok: false, words: 0, text: "", span: null, pauses: [], failed: failures, error: e instanceof Error ? e.message : String(e) };
   }
 }
 

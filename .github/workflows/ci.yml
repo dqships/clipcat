@@ -106,6 +106,9 @@ jobs:
           fi
           ff="${{ matrix.ffmpeg }}"
           if [ "$words" = 1 ]; then
+            for f in one two; do
+              echo "$f.$ext:"; "$ff" -hide_banner -i "$dir/$f.$ext" -af volumedetect -f null - 2>&1 | grep -E "Duration|mean_volume|max_volume"
+            done
             "$ff" -hide_banner -y -i "$dir/one.$ext" -f lavfi -t 2.5 -i anullsrc=r=48000:cl=mono -i "$dir/two.$ext" \
               -f lavfi -i testsrc2=s=1280x720:r=30 \
               -filter_complex "[0:a]aresample=48000,aformat=channel_layouts=mono[a0];[2:a]aresample=48000,aformat=channel_layouts=mono[a2];[a0][1:a][a2]concat=n=3:v=0:a=1[a]" \
@@ -125,6 +128,9 @@ jobs:
             CLIPCAT_SMOKE_EXPECT_WORDS="${{ steps.clip.outputs.words }}" CLIPCAT_MODEL=base \
             CLIPCAT_MODELS_DIR="$(cd ${{ matrix.models }} && pwd -W 2>/dev/null || pwd)" "${{ matrix.app }}" || code=$?
           cat "$out"; echo
+          # whisper-cli's raw output, for when the transcript looks wrong.
+          data="$HOME/Library/Application Support/ClipCat"; [ "$RUNNER_OS" = "Windows" ] && data="$APPDATA/ClipCat"
+          find "$data/projects" -name transcript.json -exec cat {} \; | head -c 6000 || true; echo
           test "${code:-0}" = 0
           grep -q '"ok":true' "$out"
       - uses: actions/upload-artifact@v4
