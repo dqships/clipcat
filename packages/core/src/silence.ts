@@ -41,8 +41,8 @@ export function silenceThreshold(levels: Float32Array): number {
   return Math.max(Math.min(-42, speech - 24, floor + 12), ROOM_QUIET_DB);
 }
 
-/** Silent stretches in seconds, never covering a transcribed word. */
-export function detectSilence(levels: Float32Array, words: Pick<Word, "start" | "end">[] = []): Range[] {
+/** Quiet stretches in seconds, straight from the meter. */
+export function quietRanges(levels: Float32Array): Range[] {
   const threshold = silenceThreshold(levels);
   const raw: Range[] = [];
   let start = -1;
@@ -54,7 +54,34 @@ export function detectSilence(levels: Float32Array, words: Pick<Word, "start" | 
       start = -1;
     }
   }
-  return protectWords(raw, words).filter(([a, b]) => b - a >= SILENCE_MIN);
+  return raw;
+}
+
+/** Silent stretches in seconds, never covering a transcribed word. */
+export function detectSilence(levels: Float32Array, words: Pick<Word, "start" | "end">[] = []): Range[] {
+  return protectWords(quietRanges(levels), words).filter(([a, b]) => b - a >= SILENCE_MIN);
+}
+
+/** No spoken word lasts longer than this; one that does has swallowed a pause. */
+export const WORD_MAX = 1.5;
+
+/**
+ * Whisper sometimes stretches the word before a pause (or after it) across
+ * the whole pause, which would hide the pause from `protectWords`. Such a word
+ * is cut back to where the meter says the quiet starts (or ends).
+ */
+export function trimStretchedWords<W extends Pick<Word, "start" | "end">>(words: W[], quiet: Range[]): W[] {
+  return words.map((w) => {
+    if (w.end - w.start <= WORD_MAX) return w;
+    let { start, end } = w;
+    const tail = quiet.find(([a, b]) => a > start && a < end && b - a >= SILENCE_MIN);
+    if (tail) end = tail[0];
+    else {
+      const head = quiet.find(([a, b]) => a <= start && b > start && b < end && b - a >= SILENCE_MIN);
+      if (head) start = head[1];
+    }
+    return start === w.start && end === w.end ? w : { ...w, start, end: Math.max(end, start + FRAME_SECONDS) };
+  });
 }
 
 /** Trims or splits ranges so none overlaps a word: the transcript wins over the meter. */

@@ -15,7 +15,9 @@ import {
   detectSilence,
   frameLevels,
   initialSegments,
+  quietRanges,
   silenceProposals,
+  trimStretchedWords,
 } from "@clipcat/core";
 import type { JobContext, JobQueue } from "../jobs/queue";
 import type { PrepOutputs } from "../media/prep";
@@ -31,8 +33,8 @@ export type PipelineDeps = {
   probe: (file: string) => Promise<MediaInfo>;
   prep: (input: string, media: MediaInfo, out: PrepOutputs, ctx: JobContext) => Promise<void>;
   /** Makes sure a speech model is on disk (downloading it if needed) and returns its name and path. */
-  ensureModel: (ctx: JobContext) => Promise<{ model: string; path: string }>;
-  transcribe: (opts: { model: string; wav: string; outBase: string; language: string }, ctx: JobContext) => Promise<WhisperJson>;
+  ensureModel: (ctx: JobContext) => Promise<{ model: string; path: string; vad: string | null }>;
+  transcribe: (opts: { model: string; vad: string | null; wav: string; outBase: string; language: string }, ctx: JobContext) => Promise<WhisperJson>;
   readWav: (path: string) => Promise<Pcm>;
   changed: (project: Project) => void;
 };
@@ -158,11 +160,12 @@ export class ImportPipeline {
     const project = await this.deps.store.get(projectId);
     const source = project.sources.find((s) => s.id === sourceId);
     if (!source?.prep) return; // prep failed or the source is gone; nothing to listen to
-    const { model, path } = await this.deps.ensureModel(ctx);
+    const { model, path, vad } = await this.deps.ensureModel(ctx);
     ctx.progress(0, `Transcribing ${source.name}`);
     const json = await this.deps.transcribe(
       {
         model: path,
+        vad,
         wav: this.abs(projectId, source.prep.wav),
         outBase: join(this.deps.store.mediaDir(projectId, sourceId), "transcript"),
         language: project.language,
@@ -186,11 +189,17 @@ export class ImportPipeline {
     const source = project.sources.find((s) => s.id === sourceId);
     if (!source?.prep) return;
     const pcm = await this.deps.readWav(this.abs(projectId, source.prep.wav));
-    const words = project.transcript.filter((w) => w.sourceId === sourceId);
-    const ranges = detectSilence(frameLevels(pcm.samples, pcm.sampleRate), words);
+    const levels = frameLevels(pcm.samples, pcm.sampleRate);
+    const words = trimStretchedWords(
+      project.transcript.filter((w) => w.sourceId === sourceId),
+      quietRanges(levels),
+    );
+    const fixed = new Map(words.map((w) => [w.id, w]));
+    const ranges = detectSilence(levels, words);
     await this.save(projectId, (p) => {
       const s = p.sources.find((x) => x.id === sourceId);
       if (!s) return;
+      p.transcript = p.transcript.map((w) => fixed.get(w.id) ?? w);
       s.silenceRanges = ranges;
       // Fresh silence proposals replace pending ones; ones the user already decided on stay.
       p.proposals = [

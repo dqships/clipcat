@@ -47,7 +47,7 @@ describe.skipIf(!binDir)("prep with real ffmpeg", () => {
     const pipeline = new ImportPipeline({
       ...realDeps({ ffmpeg: exe("ffmpeg"), ffprobe: exe("ffprobe"), whisper: "", modelsDir: "", model: "base", encoder: "libx264" }),
       // No speech model in CI: stand in for whisper with the words we generated.
-      ensureModel: async () => ({ model: "fake", path: "" }),
+      ensureModel: async () => ({ model: "fake", path: "", vad: null }),
       transcribe: async () => ({
         transcription: [
           { offsets: { from: 200, to: 1300 }, text: " one" },

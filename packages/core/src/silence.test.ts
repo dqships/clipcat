@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { counter, words } from "./fixtures";
-import { HANDLE, detectSilence, frameLevels, silenceProposals, silenceThreshold } from "./silence";
+import { HANDLE, detectSilence, frameLevels, quietRanges, silenceProposals, silenceThreshold, trimStretchedWords } from "./silence";
 
 const RATE = 16000;
 
@@ -36,6 +36,21 @@ describe("silence", () => {
   it("never covers a word, even a quiet one", () => {
     const ranges = detectSilence(frameLevels(synth(6, [[0.5, 2], [4, 5.5]]), RATE), [{ start: 2.9, end: 3.1 }]);
     for (const [a, b] of ranges) expect(b <= 2.9 || a >= 3.1).toBe(true);
+  });
+
+  it("cuts back a word whisper stretched across the pause", () => {
+    const levels = frameLevels(synth(6, [[0.5, 2], [4, 5.5]]), RATE);
+    const quiet = quietRanges(levels);
+    const ws = [
+      { start: 1.6, end: 4, text: "wrong," },
+      { start: 4, end: 4.3, text: "This" },
+      { start: 2.9, end: 3.1, text: "quiet" },
+    ];
+    const [wrong, ...rest] = trimStretchedWords(ws, quiet);
+    expect(wrong!.end).toBeCloseTo(2, 1);
+    expect(rest).toEqual(ws.slice(1));
+    const ranges = detectSilence(levels, [wrong!, ws[1]!]);
+    expect(ranges.some(([a, b]) => a < 2.2 && b > 3.8)).toBe(true);
   });
 
   it("proposes long pauses with handles, skips short ones", () => {

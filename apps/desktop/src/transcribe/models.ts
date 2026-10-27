@@ -1,4 +1,5 @@
-// Whisper models, downloaded once into the app's data folder on first use.
+// Whisper models, downloaded once into the app's data folder on first use,
+// plus the small Silero voice-activity model whisper-cli uses to skip silence.
 // Hugging Face serves them over HTTPS; we check the size the server announced
 // and the ggml magic number before a download replaces anything.
 
@@ -10,19 +11,40 @@ import { pipeline } from "node:stream/promises";
 
 export type ModelId = "large-v3-turbo-q5_0" | "base";
 
-export const MODELS: Record<ModelId, { file: string; label: string; approxMB: number }> = {
-  "large-v3-turbo-q5_0": { file: "ggml-large-v3-turbo-q5_0.bin", label: "Large v3 Turbo (best, 550 MB)", approxMB: 550 },
-  base: { file: "ggml-base.bin", label: "Base (fast, 150 MB)", approxMB: 150 },
+export type ModelFile = { file: string; url: string; label: string; approxMB: number; minBytes: number };
+
+const WHISPER_URL = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main";
+
+export const MODELS: Record<ModelId, ModelFile> = {
+  "large-v3-turbo-q5_0": {
+    file: "ggml-large-v3-turbo-q5_0.bin",
+    url: `${WHISPER_URL}/ggml-large-v3-turbo-q5_0.bin`,
+    label: "Large v3 Turbo (best, 550 MB)",
+    approxMB: 550,
+    minBytes: 100_000_000,
+  },
+  base: { file: "ggml-base.bin", url: `${WHISPER_URL}/ggml-base.bin`, label: "Base (fast, 150 MB)", approxMB: 150, minBytes: 50_000_000 },
 };
 
-const BASE_URL = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main";
+/**
+ * Without it whisper can drop a whole sentence that comes before a long
+ * pause; with it whisper hears only the speech and maps times back.
+ */
+export const VAD_MODEL: ModelFile = {
+  file: "ggml-silero-v5.1.2.bin",
+  url: "https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v5.1.2.bin",
+  label: "Silero VAD (1 MB)",
+  approxMB: 1,
+  minBytes: 500_000,
+};
+
 const GGML_MAGICS = new Set([0x67676d6c, 0x6c6d6767]); // "ggml" either byte order
 
-export const modelPath = (dir: string, id: ModelId): string => join(dir, MODELS[id].file);
+export const modelPath = (dir: string, model: ModelFile): string => join(dir, model.file);
 
-export async function hasModel(dir: string, id: ModelId): Promise<boolean> {
+export async function hasModel(dir: string, model: ModelFile): Promise<boolean> {
   try {
-    return (await stat(modelPath(dir, id))).size > 1_000_000;
+    return (await stat(modelPath(dir, model))).size >= model.minBytes;
   } catch {
     return false;
   }
@@ -41,14 +63,14 @@ async function looksLikeGgml(path: string): Promise<boolean> {
 
 export async function downloadModel(
   dir: string,
-  id: ModelId,
+  model: ModelFile,
   onProgress: (fraction: number) => void,
   signal: AbortSignal,
 ): Promise<string> {
   await mkdir(dir, { recursive: true });
-  const target = modelPath(dir, id);
+  const target = modelPath(dir, model);
   const part = `${target}.part`;
-  const response = await fetch(`${BASE_URL}/${MODELS[id].file}`, { signal });
+  const response = await fetch(model.url, { signal });
   if (!response.ok || !response.body) throw new Error(`Model download failed: HTTP ${response.status}`);
   const total = Number(response.headers.get("content-length") ?? 0);
   let received = 0;

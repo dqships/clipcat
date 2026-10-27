@@ -28,6 +28,11 @@ describe("whisperArgs", () => {
     const args = whisperArgs({ model: "/m.bin", wav: "/a.wav", outBase: "/out/t", language: "en", threads: 4 });
     expect(args.join(" ")).toBe("-m /m.bin -f /a.wav -l en -t 4 -ml 1 -sow -oj -of /out/t -pp -np");
   });
+
+  it("turns on voice detection when given its model", () => {
+    const args = whisperArgs({ model: "/m.bin", vad: "/v.bin", wav: "/a.wav", outBase: "/out/t", language: "en", threads: 4 });
+    expect(args.slice(0, 3)).toEqual(["--vad", "-vm", "/v.bin"]);
+  });
 });
 
 describe("whisperProgress", () => {

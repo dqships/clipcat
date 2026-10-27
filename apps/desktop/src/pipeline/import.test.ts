@@ -41,7 +41,7 @@ function setup(over: Partial<PipelineDeps> = {}) {
       return media;
     },
     prep: async () => {},
-    ensureModel: async () => ({ model: "base", path: "/models/base.bin" }),
+    ensureModel: async () => ({ model: "base", path: "/models/base.bin", vad: "/models/vad.bin" }),
     transcribe: async () => ({
       transcription: [
         { offsets: { from: 500, to: 900 }, text: " Hello" },

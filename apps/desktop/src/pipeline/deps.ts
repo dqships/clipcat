@@ -7,7 +7,7 @@ import { type Encoder, prepArgs } from "../media/prep";
 import { probe } from "../media/probe";
 import { runFfmpeg } from "../media/run";
 import { readWav } from "../media/wav";
-import { MODELS, type ModelId, downloadModel, hasModel, modelPath } from "../transcribe/models";
+import { MODELS, type ModelFile, type ModelId, VAD_MODEL, downloadModel, hasModel, modelPath } from "../transcribe/models";
 import { runWhisper, whisperArgs } from "../transcribe/whisper";
 import type { PipelineDeps } from "./import";
 
@@ -36,11 +36,15 @@ export function realDeps(tools: Tools): Omit<PipelineDeps, "store" | "queue" | "
       }
     },
     ensureModel: async (ctx: JobContext) => {
-      if (!(await hasModel(tools.modelsDir, tools.model))) {
-        ctx.progress(0, `Downloading the speech model (${MODELS[tools.model].approxMB} MB, once)`);
-        await downloadModel(tools.modelsDir, tools.model, (f) => ctx.progress(f), ctx.signal);
-      }
-      return { model: tools.model, path: modelPath(tools.modelsDir, tools.model) };
+      const fetchOnce = async (model: ModelFile, what: string) => {
+        if (await hasModel(tools.modelsDir, model)) return;
+        ctx.progress(0, `Downloading ${what} (${model.approxMB} MB, once)`);
+        await downloadModel(tools.modelsDir, model, (f) => ctx.progress(f), ctx.signal);
+      };
+      const speech = MODELS[tools.model];
+      await fetchOnce(speech, "the speech model");
+      await fetchOnce(VAD_MODEL, "the voice detector");
+      return { model: tools.model, path: modelPath(tools.modelsDir, speech), vad: modelPath(tools.modelsDir, VAD_MODEL) };
     },
     transcribe: (opts, ctx) =>
       runWhisper({
