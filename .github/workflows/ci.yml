@@ -137,10 +137,20 @@ jobs:
         run: |
           w="vendor/bin/${{ matrix.target }}/whisper-cli"; m="$(cd ${{ matrix.models }} && pwd -W 2>/dev/null || pwd)/ggml-base.bin"
           "${{ matrix.ffmpeg }}" -v error -y -i "${{ steps.clip.outputs.file }}" -vn -ac 1 -ar 16000 -c:a pcm_s16le "$RUNNER_TEMP/clip.wav"
-          for flags in "" "-ng" "-nfa" "-ng -ml 1 -sow"; do
-            echo "== flags: [$flags]"
-            "$w" -m "$m" -f "$RUNNER_TEMP/clip.wav" -l en -np $flags 2>&1 | grep -E '^\[' | head -40 || true
+          ff="${{ matrix.ffmpeg }}"
+          echo "== silences in clip.wav"
+          "$ff" -hide_banner -i "$RUNNER_TEMP/clip.wav" -af silencedetect=n=-40dB:d=0.4 -f null - 2>&1 | grep -E "silence_|Duration" || true
+          dir="$(dirname "${{ steps.clip.outputs.file }}")"
+          for f in one two; do
+            src=$(ls "$dir"/$f.* | head -1)
+            "$ff" -v error -y -i "$src" -ac 1 -ar 16000 -c:a pcm_s16le "$RUNNER_TEMP/$f.wav"
+            echo "== $f alone"
+            "$w" -m "$m" -f "$RUNNER_TEMP/$f.wav" -l en -np 2>&1 | grep -E '^\[' || true
           done
+          echo "== clip"
+          "$w" -m "$m" -f "$RUNNER_TEMP/clip.wav" -l en -np 2>&1 | grep -E '^\[' || true
+          echo "== clip from 0.5 s"
+          "$w" -m "$m" -f "$RUNNER_TEMP/clip.wav" -l en -np -ot 500 2>&1 | grep -E '^\[' || true
       - uses: actions/upload-artifact@v4
         with:
           name: ClipCat-${{ matrix.target }}
