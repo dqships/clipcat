@@ -23,6 +23,16 @@ export const AppInfo = z.object({
   whisper: ToolInfo,
 });
 
+export const AgentStatus = z.object({
+  status: z.enum(["ready", "not-installed", "signed-out", "outdated"]),
+  version: z.string().nullable(),
+  /** What to do about it, when it isn't ready. */
+  detail: z.string().nullable(),
+});
+
+/** The AI editors ClipCat can drive. Claude Code first; Codex follows. */
+export const AiStatus = z.object({ claude: AgentStatus });
+
 export const ProjectSummary = z.object({
   id: z.string(),
   name: z.string(),
@@ -57,6 +67,10 @@ export const methods = {
   "project:import": { input: z.object({ projectId: z.string().regex(/^[a-zA-Z0-9-]+$/).nullable(), files: Files }), output: Project },
   "project:get": { input: ProjectRef, output: Project },
   "project:remove": { input: ProjectRef, output: z.void() },
+  /** Whether the user's AI editor is installed and signed in. Probing runs the CLI, so it takes a moment. */
+  "ai:status": { input: z.void(), output: AiStatus },
+  /** Saves the brief and queues an AI pass that proposes retake, cleanup and tighten cuts. */
+  "project:analyze": { input: ProjectRef.extend({ brief: z.string().max(4000) }), output: z.void() },
   /** Cancels the project's queued and running jobs. */
   "jobs:cancel": { input: ProjectRef, output: z.void() },
 } as const;
@@ -95,3 +109,5 @@ export type AppInfoValue = z.output<typeof AppInfo>;
 export type ToolInfoValue = z.output<typeof ToolInfo>;
 export type ProjectSummaryValue = z.output<typeof ProjectSummary>;
 export type JobEventValue = z.output<typeof JobEvent>;
+export type AgentStatusValue = z.output<typeof AgentStatus>;
+export type AiStatusValue = z.output<typeof AiStatus>;

@@ -6,6 +6,9 @@ import { BrowserWindow, app, dialog, nativeTheme, shell } from "electron";
 import tokens from "../../../design/tokens.json";
 import { join, resolve } from "node:path";
 import type { AppInfoValue } from "@clipcat/ipc";
+import { AnalysisRunner } from "./ai/analyze";
+import { claudeAgent, probeClaude } from "./ai/claude";
+import { hydrateEnv } from "./ai/env";
 import { type Binary, binaryPath, probeVersion } from "./tools";
 import { broadcast, registerIpc } from "./ipc";
 import { JobQueue } from "./jobs/queue";
@@ -50,12 +53,27 @@ async function appInfo(): Promise<AppInfoValue> {
 /** The smaller model is for CI and slow machines; everyone else gets the accurate one. */
 const MODEL: ModelId = process.env.CLIPCAT_MODEL === "base" ? "base" : "large-v3-turbo-q5_0";
 
+/** The user's PATH from their login shell, read once; the agent CLIs are found on it. */
+const hostEnv = hydrateEnv();
+
 function startPipeline() {
   const data = app.getPath("userData");
   const store = new ProjectStore(join(data, "projects"));
   const queue = new JobQueue((event) => {
     if (isSmokeRun()) recordSmokeJob(event);
     broadcast("job", event);
+  });
+  const changed = (p: { id: string; revision: number }) => broadcast("project:changed", { id: p.id, revision: p.revision });
+  const analysis = new AnalysisRunner({
+    store,
+    queue,
+    agent: async () => {
+      const host = await hostEnv;
+      const status = await probeClaude(host);
+      if (status.status !== "ready") throw new Error(status.detail ?? "Claude Code isn't ready");
+      return claudeAgent(host, app.getVersion());
+    },
+    changed,
   });
   const pipeline = new ImportPipeline({
     ...realDeps({
@@ -69,9 +87,9 @@ function startPipeline() {
     }),
     store,
     queue,
-    changed: (p) => broadcast("project:changed", { id: p.id, revision: p.revision }),
+    changed,
   });
-  return { store, queue, pipeline };
+  return { store, queue, pipeline, analysis };
 }
 
 function createWindow(): BrowserWindow {
@@ -114,7 +132,7 @@ if (!squirrelLaunch) {
   if (!app.requestSingleInstanceLock()) app.quit();
 
   app.whenReady().then(() => {
-    const { store, queue, pipeline } = startPipeline();
+    const { store, queue, pipeline, analysis } = startPipeline();
     serveUi(UI_ROOT);
     serveMedia((id) => store.dir(id));
     registerIpc(
@@ -124,7 +142,8 @@ if (!squirrelLaunch) {
           if (!isSmokeRun()) return;
           const info = await appInfo();
           const file = process.env.CLIPCAT_SMOKE_IMPORT;
-          finishSmoke({ screen, info, ...(file ? { import: await smokeImport(pipeline, store, queue, file) } : {}) });
+          const ai = { claude: await probeClaude(await hostEnv) };
+          finishSmoke({ screen, info, ai, ...(file ? { import: await smokeImport(pipeline, store, queue, file) } : {}) });
         },
         "library:list": () => store.list(),
         "files:pick": async (_, event) => {
@@ -146,6 +165,8 @@ if (!squirrelLaunch) {
           queue.cancel(id);
           await store.remove(id);
         },
+        "ai:status": async () => ({ claude: await probeClaude(await hostEnv) }),
+        "project:analyze": ({ id, brief }) => analysis.analyze(id, brief),
         "jobs:cancel": ({ id }) => queue.cancel(id),
       },
       DEV_URL,

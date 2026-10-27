@@ -89,7 +89,10 @@ export const Project = z.object({
   speed: z.number().min(0.5).max(2).default(1),
   /** Bumped on every write; a write based on an older revision is refused. */
   revision: z.number().int().nonnegative(),
+  /** What the user asked the AI editor for, kept for the next run. */
   brief: z.string().default(""),
+  /** The AI editor's title for the video; empty until it has run. */
+  suggestedTitle: z.string().default(""),
   sources: z.array(Source),
   transcript: z.array(Word),
   segments: z.array(Segment),

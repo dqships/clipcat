@@ -307,6 +307,7 @@ body {
   display: grid;
   align-content: start;
   gap: var(--space-3);
+  overflow: auto;
 }
 
 .project__video {
@@ -355,6 +356,119 @@ body {
 
 .word:hover {
   background: var(--color-surface-raised);
+}
+
+.word--proposed {
+  color: var(--color-text-muted);
+  text-decoration: line-through;
+  text-decoration-color: var(--color-danger);
+}
+
+/* AI cuts: a brief, one button, the proposals. */
+.ai {
+  display: grid;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+}
+
+.ai__notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.ai__label {
+  font-size: var(--text-caption);
+  line-height: var(--leading-caption);
+  color: var(--color-text-muted);
+}
+
+.ai__brief {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  font: inherit;
+  resize: vertical;
+}
+
+.ai__brief:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.ai__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.button:disabled {
+  opacity: 0.5;
+  cursor: default;
+  filter: none;
+}
+
+.ai__hint {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-caption);
+  line-height: var(--leading-caption);
+}
+
+.proposals {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.proposal {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0 var(--space-2);
+  width: 100%;
+  padding: var(--space-2);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.proposal:hover {
+  background: var(--color-surface-raised);
+}
+
+.proposal:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.proposal__type {
+  font-size: var(--text-caption);
+  line-height: var(--leading-body);
+  font-weight: var(--font-weight-semibold);
+}
+
+.proposal__reason {
+  font-size: var(--text-body);
+}
+
+.proposal__words {
+  grid-column: 2;
+  color: var(--color-text-muted);
+  font-size: var(--text-caption);
+  line-height: var(--leading-caption);
+  text-decoration: line-through;
+  text-decoration-color: var(--color-danger);
 }
 
 .empty {

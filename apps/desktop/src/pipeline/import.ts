@@ -17,6 +17,7 @@ import {
   fromSpeechTime,
   initialSegments,
   quietRanges,
+  replacePending,
   silenceProposals,
   speechSpans,
   trimStretchedWords,
@@ -208,19 +209,12 @@ export class ImportPipeline {
       p.transcript = p.transcript.map((w) => fixed.get(w.id) ?? w);
       s.silenceRanges = ranges;
       // Fresh silence proposals replace pending ones; ones the user already decided on stay.
-      p.proposals = [
-        ...p.proposals.filter((x) => !(x.type === "silence" && x.sourceId === sourceId && x.status === "pending")),
-        ...silenceProposals(sourceId, ranges, words, s.media.duration, () => `x${shortId()}`).filter(
-          (np) =>
-            !p.proposals.some(
-              (old) => old.type === "silence" && old.sourceId === sourceId && old.status !== "pending" && overlaps(old.cuts, np.cuts),
-            ),
-        ),
-      ];
+      p.proposals = replacePending(
+        p.proposals,
+        silenceProposals(sourceId, ranges, words, s.media.duration, () => `x${shortId()}`),
+        (x) => x.type === "silence" && x.sourceId === sourceId,
+      );
     });
   }
 }
 
-function overlaps(a: [number, number][], b: [number, number][]): boolean {
-  return a.some(([a0, a1]) => b.some(([b0, b1]) => a0 < b1 && b0 < a1));
-}
