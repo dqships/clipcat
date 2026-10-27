@@ -1,0 +1,131 @@
+/* App styles. Every value is a token from design/tokens.css (DESIGN.md);
+   scripts/check-tokens.mjs fails the build on raw colors, sizes or durations. */
+@import "../../../design/tokens.css";
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--color-background);
+  color: var(--color-text);
+  font-family: var(--font-family);
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+  font-weight: var(--font-weight-regular);
+  -webkit-font-smoothing: antialiased;
+}
+
+.app {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  height: 100%;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Title bar: a drag region the height of a control, logo clear of the
+   macOS traffic lights. */
+.titlebar {
+  display: flex;
+  align-items: center;
+  min-height: var(--space-7);
+  padding: var(--space-2) var(--space-4) var(--space-2) var(--space-9);
+  border-bottom: 1px solid var(--color-border);
+  -webkit-app-region: drag;
+}
+
+.titlebar__logo {
+  display: block;
+  height: var(--space-5);
+}
+
+.library {
+  display: grid;
+  place-items: center;
+  padding: var(--space-6);
+}
+
+.empty {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-3);
+  max-width: calc(var(--space-9) * 4);
+  text-align: center;
+}
+
+.empty__title {
+  margin: var(--space-4) 0 0;
+  font-size: var(--text-title);
+  line-height: var(--leading-title);
+  font-weight: var(--font-weight-semibold);
+}
+
+.empty__body {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-callout);
+  line-height: var(--leading-callout);
+}
+
+.strip {
+  width: calc(var(--space-9) * 2.5);
+  height: auto;
+}
+
+.strip__film {
+  fill: var(--color-primary);
+}
+
+.strip__hole,
+.strip__frame {
+  fill: var(--color-background);
+}
+
+.strip__tape {
+  fill: var(--color-accent);
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-height);
+  padding: 0 var(--space-4);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-size: var(--text-caption);
+  line-height: var(--leading-caption);
+  font-variant-numeric: tabular-nums;
+}
+
+.status--danger {
+  color: var(--color-danger);
+}
+
+.status__sep {
+  color: var(--color-border);
+}
+
+.icon-sm {
+  width: var(--icon-size-sm);
+  height: var(--icon-size-sm);
+  flex: none;
+}

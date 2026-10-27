@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Typecheck, test, tokens
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
+      - run: npm run lint:tokens
+      - run: npm run build --workspace=@clipcat/ui
+
+  package:
+    name: Package and smoke test (${{ matrix.target }})
+    needs: check
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            target: darwin-arm64
+            app: apps/desktop/out/ClipCat-darwin-arm64/ClipCat.app/Contents/MacOS/ClipCat
+            ffmpeg: apps/desktop/out/ClipCat-darwin-arm64/ClipCat.app/Contents/Resources/ffmpeg/ffmpeg
+          - os: windows-latest
+            target: win32-x64
+            app: apps/desktop/out/ClipCat-win32-x64/ClipCat.exe
+            ffmpeg: apps/desktop/out/ClipCat-win32-x64/resources/ffmpeg/ffmpeg.exe
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      SKIP_SIGN: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run fetch:ffmpeg -- ${{ matrix.target }}
+      - run: npm run make
+      - name: Bundled ffmpeg has libass
+        run: |
+          "${{ matrix.ffmpeg }}" -hide_banner -version | head -1
+          "${{ matrix.ffmpeg }}" -hide_banner -filters | grep -E '^ ... (ass|subtitles) '
+      - name: Smoke test the packaged app
+        run: |
+          out="$RUNNER_TEMP/smoke.json"
+          CLIPCAT_SMOKE=1 CLIPCAT_SMOKE_OUT="$out" "${{ matrix.app }}" || code=$?
+          cat "$out"; echo
+          test "${code:-0}" = 0
+          grep -q '"ok":true' "$out"
+          grep -q '"screen":"library"' "$out"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ClipCat-${{ matrix.target }}
+          path: |
+            apps/desktop/out/make/**/*.dmg
+            apps/desktop/out/make/**/*.zip
+            apps/desktop/out/make/squirrel.windows/**/*.exe
+          if-no-files-found: error
+          retention-days: 14
