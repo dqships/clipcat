@@ -13,6 +13,7 @@
     "@clipcat/core": "*",
     "@clipcat/ipc": "*",
     "@fontsource/jost": "^5.3.0",
+    "@mediapipe/tasks-vision": "^1.2.0",
     "lucide-react": "^1.60.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"

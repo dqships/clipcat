@@ -96,7 +96,7 @@ jobs:
           test "${code:-0}" = 0
           grep -q '"ok":true' "$out"
           grep -q '"screen":"library"' "$out"
-          # The system's face detector (Vision, Windows.Media.FaceAnalysis) runs inside the app.
+          # The face detector (MediaPipe on WebAssembly) loads and runs inside the app.
           grep -q '"faceDetector":null' "$out"
       - name: Cache the speech models
         uses: actions/cache@v4

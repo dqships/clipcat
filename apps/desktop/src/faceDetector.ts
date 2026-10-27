@@ -1,60 +1,50 @@
-// The face detector behind the vertical crop: Chromium's Shape Detection API
-// (FaceDetector), which uses the system's own detector (Vision on macOS,
-// Windows.Media.FaceAnalysis on Windows), so nothing is bundled or
-// downloaded. It runs in a hidden window of its own with the experimental
-// web platform features it is behind turned on; the app's own window never
-// gets them.
+// The face detector behind the vertical crop: the UI's faces.html page
+// (MediaPipe's BlazeFace model on its WebAssembly runtime, both shipped with
+// the app) in a hidden window of its own, so detection runs offline and the
+// same on macOS and Windows. Chromium's own FaceDetector would be lighter, but
+// it isn't implemented on Windows.
 
-import { writeFile } from "node:fs/promises";
-import { join } from "node:path";
-import { BrowserWindow, app } from "electron";
+import { BrowserWindow } from "electron";
 import type { FaceBox, FaceDetector } from "./media/faces";
 
-/** Runs in the hidden window: detects faces in each base64 JPEG, as fractions of its frame. */
-const DETECT = `async (jpegs) => {
-  const detector = new FaceDetector({ fastMode: true, maxDetectedFaces: 4 });
-  const out = [];
-  for (const b64 of jpegs) {
-    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
-    const image = await createImageBitmap(new Blob([bytes], { type: "image/jpeg" }));
-    const faces = await detector.detect(image);
-    out.push(faces.map(({ boundingBox: b }) => ({ x: b.x / image.width, y: b.y / image.height, width: b.width / image.width, height: b.height / image.height })));
-    image.close();
-  }
-  return out;
-}`;
-
-/** Asks for a detection on a blank frame, so a detector that exists but can't run counts as missing. */
+/** Asks for a detection on a blank frame, so a page that loads but can't run counts as missing. */
 const PROBE = `(async () => {
-  if (typeof FaceDetector === "undefined") return "FaceDetector is not available";
   try {
+    await window.clipcatFaces.ready;
     const canvas = new OffscreenCanvas(64, 64);
     canvas.getContext("2d").fillRect(0, 0, 64, 64);
-    await new FaceDetector().detect(await createImageBitmap(canvas));
+    const blob = await canvas.convertToBlob({ type: "image/jpeg" });
+    const b64 = btoa(String.fromCharCode(...new Uint8Array(await blob.arrayBuffer())));
+    await window.clipcatFaces.detect([b64]);
     return null;
   } catch (e) {
-    return String(e && e.message || e);
+    return String((e && e.message) || e);
   }
 })()`;
 
+let page: string | null = null;
 let win: BrowserWindow | null = null;
 let ready: Promise<string | null> | null = null;
 
+/** Where faces.html is served: the app's own origin, or the dev server. Set once at startup. */
+export function setFacePage(url: string): void {
+  page = url;
+}
+
 async function open(): Promise<string | null> {
+  if (!page) return "The face detector's page isn't set";
   const w = new BrowserWindow({
     show: false,
     width: 64,
     height: 64,
-    webPreferences: { experimentalFeatures: true, backgroundThrottling: false, sandbox: true, contextIsolation: true, nodeIntegration: false },
+    webPreferences: { backgroundThrottling: false, sandbox: true, contextIsolation: true, nodeIntegration: false },
   });
   win = w;
   w.on("closed", () => {
     win = null;
     ready = null;
   });
-  const page = join(app.getPath("temp"), "clipcat-faces.html");
-  await writeFile(page, "<!doctype html><meta charset=utf-8><title>faces</title>");
-  await w.loadFile(page);
+  await w.loadURL(page);
   const problem = (await w.webContents.executeJavaScript(PROBE)) as string | null;
   if (problem) {
     // Nothing to keep it open for; the answer stays the same until the app restarts.
@@ -65,13 +55,13 @@ async function open(): Promise<string | null> {
   return problem;
 }
 
-/** Why there's no face detector on this system, or null when there is one. Opens the hidden window on first use. */
+/** Why there's no face detector, or null when there is one. Opens the hidden window on first use. */
 export function faceDetectorProblem(): Promise<string | null> {
   ready ??= open().catch((e: unknown) => (e instanceof Error ? e.message : String(e)));
   return ready;
 }
 
-/** The detector, or null when this system has none. */
+/** The detector, or null when it can't run. */
 export async function faceDetector(): Promise<FaceDetector | null> {
   if (await faceDetectorProblem()) return null;
   return async (jpegs) => {
@@ -80,7 +70,7 @@ export async function faceDetector(): Promise<FaceDetector | null> {
       if (problem || !win) throw new Error(problem ?? "The face detector closed");
     }
     const list = JSON.stringify(jpegs.map((j) => j.toString("base64")));
-    return (await win.webContents.executeJavaScript(`(${DETECT})(${list})`)) as FaceBox[][];
+    return (await win.webContents.executeJavaScript(`window.clipcatFaces.detect(${list})`)) as FaceBox[][];
   };
 }
 

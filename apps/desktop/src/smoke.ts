@@ -4,8 +4,8 @@
 // With CLIPCAT_SMOKE_IMPORT=<file> it also imports that file and waits for
 // prep, transcription and silence analysis, then exports it as 9:16 with
 // captions; a failed step is a 1, and so is an empty transcript when
-// CLIPCAT_SMOKE_EXPECT_WORDS=1. The report says whether the system's face
-// detector runs and how many frames had a face. CI runs this against the
+// CLIPCAT_SMOKE_EXPECT_WORDS=1. The report says whether the face detector
+// runs and how many frames had a face. CI runs this against the
 // packaged app on macOS and Windows.
 
 import { app } from "electron";

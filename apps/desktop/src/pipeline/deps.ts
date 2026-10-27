@@ -28,7 +28,7 @@ export type Tools = {
   encoder: () => Promise<Encoder>;
   /** The user's names and terms, passed to whisper as its initial prompt. */
   dictionary?: () => Promise<string[]>;
-  /** The system's face detector, or null where there is none. */
+  /** The face detector, or null when it can't run. */
   faceDetector?: () => Promise<FaceDetector | null>;
 };
 

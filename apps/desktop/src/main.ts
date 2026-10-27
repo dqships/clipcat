@@ -19,7 +19,7 @@ import { broadcast, registerIpc } from "./ipc";
 import { JobQueue } from "./jobs/queue";
 import { encoderTestArgs, lazyEncoder, pickEncoder } from "./media/encoders";
 import { runFfmpeg } from "./media/run";
-import { closeFaceDetector, faceDetector, faceDetectorProblem } from "./faceDetector";
+import { closeFaceDetector, faceDetector, faceDetectorProblem, setFacePage } from "./faceDetector";
 import { realDeps } from "./pipeline/deps";
 import { ExportRunner } from "./pipeline/export";
 import { ImportPipeline } from "./pipeline/import";
@@ -204,6 +204,7 @@ if (!squirrelLaunch) {
       return { claude, codex, api: { hasKey: key !== null, model: current.apiModel }, agent: current.agent };
     };
     serveUi(UI_ROOT);
+    setFacePage(DEV_URL ? new URL("faces.html", DEV_URL).toString() : `${APP_ORIGIN}/faces.html`);
     serveMedia((id) => store.dir(id));
     registerIpc(
       {

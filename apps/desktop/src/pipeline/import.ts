@@ -43,7 +43,7 @@ export type PipelineDeps = {
    * is the job's own label, shown again once a download is done.
    */
   transcribe: (opts: { wav: string; outBase: string; language: string; label: string }, ctx: JobContext) => Promise<Heard>;
-  /** The speaker's centre (0..1 across) every few seconds of `proxy`; null where this system can't look for faces. */
+  /** The speaker's centre (0..1 across) every few seconds of `proxy`; null when the face detector can't run. */
   faces: (opts: { proxy: string; duration: number; dir: string }, ctx: JobContext) => Promise<{ t: number; x: number }[] | null>;
   readWav: (path: string) => Promise<Pcm>;
   writeWav: (path: string, pcm: Pcm) => Promise<void>;
@@ -247,7 +247,7 @@ export class ImportPipeline {
             ctx,
           )
         : [];
-    // No detector on this system: leave it unknown, and the crop stays where it's set.
+    // No detector: leave it unknown, and the crop stays where it's set.
     if (faces === null) return void (await this.deps.store.log(projectId, { type: "faces", source: sourceId, found: null }));
     await this.save(projectId, (p) => {
       const s = p.sources.find((x) => x.id === sourceId);

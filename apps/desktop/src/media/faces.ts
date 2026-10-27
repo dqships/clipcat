@@ -1,6 +1,6 @@
 // Where the speaker is, for the vertical crop: frames sampled from the proxy
-// every couple of seconds, faces found in each by the system's own face
-// detector (see faces/detector.ts), and the speaker's centre kept for each.
+// every couple of seconds, faces found in each by the face detector (see
+// faceDetector.ts), and the speaker's centre kept for each.
 
 import { mkdir, readFile, readdir, rm } from "node:fs/promises";
 import { join } from "node:path";
@@ -17,7 +17,7 @@ const BATCH = 16;
 
 /** A face, as fractions of the frame. */
 export type FaceBox = { x: number; y: number; width: number; height: number };
-/** Finds the faces in each JPEG; null where this system has no face detector. */
+/** Finds the faces in each JPEG. */
 export type FaceDetector = (jpegs: Buffer[]) => Promise<FaceBox[][]>;
 
 export function faceFrameArgs(proxy: string, pattern: string): string[] {
