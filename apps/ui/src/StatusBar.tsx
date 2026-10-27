@@ -4,7 +4,7 @@ import { ICON_STROKE } from "./icons";
 
 type Props = { info: AppInfoValue | null; error: string | null };
 
-/** One quiet line at the foot of the window: app version and whether the bundled ffmpeg runs. */
+/** One quiet line at the foot of the window: app version and whether the bundled tools run. */
 export function StatusBar({ info, error }: Props) {
   if (error) {
     return (
@@ -16,7 +16,13 @@ export function StatusBar({ info, error }: Props) {
   }
   if (!info) return <footer className="status" role="status" />;
 
-  const ok = info.ffmpeg.available;
+  const missing = (
+    [
+      ["ffmpeg", info.ffmpeg],
+      ["whisper-cli", info.whisper],
+    ] as const
+  ).find(([, t]) => !t.available);
+  const ok = !missing;
   const Icon = ok ? CircleCheck : TriangleAlert;
   return (
     <footer className={ok ? "status" : "status status--danger"} role="status">
@@ -27,7 +33,7 @@ export function StatusBar({ info, error }: Props) {
         ·
       </span>
       <Icon className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
-      <span>{ok ? info.ffmpeg.version : `ffmpeg not found at ${info.ffmpeg.path}`}</span>
+      <span>{missing ? `${missing[0]} not found at ${missing[1].path}` : info.ffmpeg.version}</span>
     </footer>
   );
 }

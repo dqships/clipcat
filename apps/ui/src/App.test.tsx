@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 
@@ -6,6 +6,75 @@ afterEach(() => {
   cleanup();
   delete window.clipcat;
 });
+
+const tool = (path: string, version: string | null = "ffmpeg version 6.1.1") => ({ available: version !== null, version, path });
+const info = (over: object = {}) => ({
+  name: "ClipCat",
+  version: "0.1.0",
+  platform: "darwin",
+  arch: "arm64",
+  ffmpeg: tool("/x/ffmpeg"),
+  whisper: tool("/x/whisper-cli", "whisper"),
+  ...over,
+});
+
+const project = {
+  version: 1,
+  id: "p1",
+  name: "talk",
+  language: "en",
+  aspectRatio: "16:9",
+  speed: 1,
+  revision: 3,
+  brief: "",
+  sources: [
+    {
+      id: "s1",
+      name: "talk.mp4",
+      path: "/v/talk.mp4",
+      order: 0,
+      media: { duration: 75, width: 1920, height: 1080, fps: 30, vfr: false, videoCodec: "h264", audioCodec: "aac" },
+      frameX: 0.5,
+      prep: { proxy: "media/s1/proxy.mp4", wav: "media/s1/audio.wav", waveform: "media/s1/waveform.png", thumbs: "media/s1/thumb-%04d.jpg" },
+      transcription: { backend: "whisper.cpp", model: "base" },
+      silenceRanges: [],
+    },
+  ],
+  transcript: [
+    { id: "s1-0", sourceId: "s1", text: "Hello", start: 0.5, end: 0.9 },
+    { id: "s1-1", sourceId: "s1", text: "again.", start: 3, end: 3.5 },
+  ],
+  segments: [],
+  proposals: [
+    { id: "x1", type: "silence", sourceId: "s1", cuts: [[1, 2.5]], wordIds: [], keepWordIds: [], reason: "", confidence: 1, status: "pending" },
+  ],
+  captions: {},
+  createdAt: "",
+  updatedAt: "",
+};
+
+/** A stand-in for the preload bridge: canned answers per method, and a way to push events. */
+function fakeBridge(answers: Record<string, unknown>) {
+  const listeners = new Map<string, Set<(p: unknown) => void>>();
+  const invoke = vi.fn(async (method: string, _input?: unknown) => {
+    const answer = answers[method];
+    return typeof answer === "function" ? (answer as (i: unknown) => unknown)(_input) : answer;
+  });
+  window.clipcat = {
+    invoke,
+    on: (event: string, listener: (p: unknown) => void) => {
+      const set = listeners.get(event) ?? new Set();
+      set.add(listener);
+      listeners.set(event, set);
+      return () => set.delete(listener);
+    },
+    pathForFile: (f: File) => `/dropped/${f.name}`,
+  } as never;
+  const emit = (event: string, payload: unknown) => act(() => listeners.get(event)?.forEach((l) => l(payload)));
+  return { invoke, emit };
+}
+
+const summary = { id: "p1", name: "talk", updatedAt: "", duration: 75, sources: 1, thumb: "media/s1/thumb-0001.jpg" };
 
 describe("App", () => {
   it("shows the empty library with one h1", () => {
@@ -15,34 +84,72 @@ describe("App", () => {
   });
 
   it("shows the ffmpeg version from the main process", async () => {
-    const invoke = vi.fn(async (method: string) =>
-      method === "app:info"
-        ? {
-            name: "ClipCat",
-            version: "0.1.0",
-            platform: "darwin",
-            arch: "arm64",
-            ffmpeg: { available: true, version: "ffmpeg version 6.1.1", path: "/x/ffmpeg" },
-          }
-        : undefined,
-    );
-    window.clipcat = { invoke } as never;
+    const { invoke } = fakeBridge({ "app:info": info(), "library:list": [] });
     render(<App />);
     expect(await screen.findByText("ffmpeg version 6.1.1")).toBeTruthy();
     expect(invoke).toHaveBeenCalledWith("app:ready", { screen: "library" });
   });
 
-  it("says where ffmpeg was expected when it is missing", async () => {
-    window.clipcat = {
-      invoke: async () => ({
-        name: "ClipCat",
-        version: "0.1.0",
-        platform: "win32",
-        arch: "x64",
-        ffmpeg: { available: false, version: null, path: "C:\\ClipCat\\ffmpeg.exe" },
-      }),
-    } as never;
+  it("says which tool is missing and where it was expected", async () => {
+    fakeBridge({ "app:info": info({ whisper: tool("C:\\ClipCat\\whisper-cli.exe", null) }), "library:list": [] });
     render(<App />);
-    expect(await screen.findByText(/ffmpeg not found at C:\\ClipCat\\ffmpeg.exe/)).toBeTruthy();
+    expect(await screen.findByText(/whisper-cli not found at C:\\ClipCat\\whisper-cli.exe/)).toBeTruthy();
+  });
+
+  it("imports picked files and lists the new project", async () => {
+    let list: unknown[] = [];
+    const { invoke } = fakeBridge({
+      "app:info": info(),
+      "library:list": () => list,
+      "files:pick": ["/v/talk.mp4"],
+      "project:import": () => {
+        list = [summary];
+        return project;
+      },
+    });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Add videos" }));
+    expect(await screen.findByRole("button", { name: "talk" })).toBeTruthy();
+    expect(invoke).toHaveBeenCalledWith("project:import", { projectId: null, files: ["/v/talk.mp4"] });
+    expect(screen.getByText("1:15 · 1 video")).toBeTruthy();
+  });
+
+  it("imports dropped files", async () => {
+    const { invoke } = fakeBridge({ "app:info": info(), "library:list": [], "project:import": project });
+    render(<App />);
+    const main = await screen.findByRole("main");
+    fireEvent.drop(main, { dataTransfer: { files: [new File(["x"], "a.mov")] } });
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:import", { projectId: null, files: ["/dropped/a.mov"] }));
+  });
+
+  it("shows job progress and failures on the card", async () => {
+    const { emit } = fakeBridge({ "app:info": info(), "library:list": [summary] });
+    render(<App />);
+    await screen.findByRole("button", { name: "talk" });
+    const job = { projectId: "p1", jobId: "j1", kind: "transcribe", label: "Transcribing talk.mp4", state: "running", fraction: 0.4 };
+    emit("job", job);
+    expect(screen.getByRole("progressbar", { name: "Transcribing talk.mp4" }).getAttribute("value")).toBe("40");
+    emit("job", { ...job, state: "failed", fraction: null, error: "whisper-cli exited with 1" });
+    expect(screen.getByText(/Transcribing talk.mp4 failed: whisper-cli exited with 1/)).toBeTruthy();
+  });
+
+  it("opens a project with its transcript and pauses", async () => {
+    fakeBridge({ "app:info": info(), "library:list": [summary], "project:get": project });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "talk" }));
+    expect(await screen.findByRole("heading", { level: 1, name: "talk" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "again." })).toBeTruthy();
+    expect(screen.getByText("1 pause found, 0:02 to cut.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Back to library" }));
+    expect(await screen.findByRole("heading", { level: 1, name: "Library" })).toBeTruthy();
+  });
+
+  it("asks before deleting a project", async () => {
+    const { invoke } = fakeBridge({ "app:info": info(), "library:list": [summary], "project:remove": undefined });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Delete talk" }));
+    expect(invoke).not.toHaveBeenCalledWith("project:remove", expect.anything());
+    fireEvent.click(screen.getByRole("button", { name: "Delete project" }));
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:remove", { id: "p1" }));
   });
 });

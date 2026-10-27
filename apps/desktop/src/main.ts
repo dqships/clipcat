@@ -1,15 +1,22 @@
-// ClipCat's main process: one window, the UI on app://clipcat, and the IPC
-// handlers. All media work will live here, never in the renderer.
+// ClipCat's main process: one window, the UI on app://clipcat, prepared media
+// on media://, and the IPC handlers. All media work lives here, never in the
+// renderer.
 
-import { BrowserWindow, app, nativeTheme, shell } from "electron";
+import { BrowserWindow, app, dialog, nativeTheme, shell } from "electron";
 import tokens from "../../../design/tokens.json";
 import { join, resolve } from "node:path";
 import type { AppInfoValue } from "@clipcat/ipc";
-import { binaryPath, probeVersion } from "./ffmpeg";
-import { registerIpc } from "./ipc";
-import { APP_ORIGIN, registerSchemes, serveUi } from "./protocol";
+import { type Binary, binaryPath, probeVersion } from "./tools";
+import { broadcast, registerIpc } from "./ipc";
+import { JobQueue } from "./jobs/queue";
+import { defaultEncoder } from "./media/prep";
+import { realDeps } from "./pipeline/deps";
+import { ImportPipeline } from "./pipeline/import";
+import { APP_ORIGIN, registerSchemes, serveMedia, serveUi } from "./protocol";
 import { handleSquirrelEvent } from "./squirrel";
-import { startSmokeTimer, finishSmoke, isSmokeRun } from "./smoke";
+import { ProjectStore } from "./store/projects";
+import type { ModelId } from "./transcribe/models";
+import { startSmokeTimer, finishSmoke, isSmokeRun, recordSmokeJob, smokeImport } from "./smoke";
 
 const squirrelLaunch = handleSquirrelEvent();
 
@@ -20,22 +27,51 @@ const REPO_ROOT = resolve(__dirname, "..", "..", "..");
 app.setName("ClipCat");
 registerSchemes();
 
-async function appInfo(): Promise<AppInfoValue> {
-  const path = binaryPath("ffmpeg", {
+const tool = (name: Binary) =>
+  binaryPath(name, {
     packaged: app.isPackaged,
     resourcesPath: process.resourcesPath,
     repoRoot: REPO_ROOT,
     platform: process.platform,
     arch: process.arch,
   });
+
+async function toolInfo(name: Binary) {
+  const path = tool(name);
   const version = await probeVersion(path);
-  return {
-    name: "ClipCat",
-    version: app.getVersion(),
-    platform: process.platform,
-    arch: process.arch,
-    ffmpeg: { available: version !== null, version, path },
-  };
+  return { available: version !== null, version, path };
+}
+
+async function appInfo(): Promise<AppInfoValue> {
+  const [ffmpeg, whisper] = await Promise.all([toolInfo("ffmpeg"), toolInfo("whisper-cli")]);
+  return { name: "ClipCat", version: app.getVersion(), platform: process.platform, arch: process.arch, ffmpeg, whisper };
+}
+
+/** The smaller model is for CI and slow machines; everyone else gets the accurate one. */
+const MODEL: ModelId = process.env.CLIPCAT_MODEL === "base" ? "base" : "large-v3-turbo-q5_0";
+
+function startPipeline() {
+  const data = app.getPath("userData");
+  const store = new ProjectStore(join(data, "projects"));
+  const queue = new JobQueue((event) => {
+    if (isSmokeRun()) recordSmokeJob(event);
+    broadcast("job", event);
+  });
+  const pipeline = new ImportPipeline({
+    ...realDeps({
+      ffmpeg: tool("ffmpeg"),
+      ffprobe: tool("ffprobe"),
+      whisper: tool("whisper-cli"),
+      // CI points this at a cached folder so each run doesn't download the model again.
+      modelsDir: process.env.CLIPCAT_MODELS_DIR ?? join(data, "models"),
+      model: MODEL,
+      encoder: defaultEncoder(process.platform),
+    }),
+    store,
+    queue,
+    changed: (p) => broadcast("project:changed", { id: p.id, revision: p.revision }),
+  });
+  return { store, queue, pipeline };
 }
 
 function createWindow(): BrowserWindow {
@@ -78,17 +114,44 @@ if (!squirrelLaunch) {
   if (!app.requestSingleInstanceLock()) app.quit();
 
   app.whenReady().then(() => {
+    const { store, queue, pipeline } = startPipeline();
     serveUi(UI_ROOT);
+    serveMedia((id) => store.dir(id));
     registerIpc(
       {
         "app:info": () => appInfo(),
         "app:ready": async ({ screen }) => {
-          if (isSmokeRun()) finishSmoke({ screen, info: await appInfo() });
+          if (!isSmokeRun()) return;
+          const info = await appInfo();
+          const file = process.env.CLIPCAT_SMOKE_IMPORT;
+          finishSmoke({ screen, info, ...(file ? { import: await smokeImport(pipeline, store, queue, file) } : {}) });
         },
+        "library:list": () => store.list(),
+        "files:pick": async (_, event) => {
+          const win = BrowserWindow.fromWebContents(event.sender);
+          const options: Electron.OpenDialogOptions = {
+            title: "Add videos",
+            properties: ["openFile", "multiSelections"],
+            filters: [
+              { name: "Video and audio", extensions: ["mp4", "mov", "m4v", "mkv", "webm", "avi", "mp3", "wav", "m4a", "aac", "flac"] },
+              { name: "All files", extensions: ["*"] },
+            ],
+          };
+          const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);
+          return result.canceled ? [] : result.filePaths;
+        },
+        "project:import": ({ projectId, files }) => pipeline.import(files, projectId),
+        "project:get": ({ id }) => store.get(id),
+        "project:remove": async ({ id }) => {
+          queue.cancel(id);
+          await store.remove(id);
+        },
+        "jobs:cancel": ({ id }) => queue.cancel(id),
       },
       DEV_URL,
     );
     if (isSmokeRun()) startSmokeTimer();
+    else void pipeline.resume();
     createWindow();
   });
 

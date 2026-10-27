@@ -35,11 +35,13 @@ jobs:
           - os: macos-14
             target: darwin-arm64
             app: apps/desktop/out/ClipCat-darwin-arm64/ClipCat.app/Contents/MacOS/ClipCat
-            ffmpeg: apps/desktop/out/ClipCat-darwin-arm64/ClipCat.app/Contents/Resources/ffmpeg/ffmpeg
+            ffmpeg: apps/desktop/out/ClipCat-darwin-arm64/ClipCat.app/Contents/Resources/bin/ffmpeg
+            models: ~/clipcat-models
           - os: windows-latest
             target: win32-x64
             app: apps/desktop/out/ClipCat-win32-x64/ClipCat.exe
-            ffmpeg: apps/desktop/out/ClipCat-win32-x64/resources/ffmpeg/ffmpeg.exe
+            ffmpeg: apps/desktop/out/ClipCat-win32-x64/resources/bin/ffmpeg.exe
+            models: ~/clipcat-models
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -54,6 +56,17 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run fetch:ffmpeg -- ${{ matrix.target }}
+      - name: Cache whisper-cli
+        uses: actions/cache@v4
+        with:
+          path: vendor/bin/${{ matrix.target }}/whisper-cli*
+          key: whisper-${{ matrix.target }}-${{ hashFiles('scripts/build-whisper.mjs') }}
+      - run: npm run build:whisper
+      - name: Prep pipeline against the pinned ffmpeg
+        run: npx vitest run src/pipeline
+        working-directory: apps/desktop
+        env:
+          CLIPCAT_TEST_FFMPEG: ${{ github.workspace }}/vendor/bin/${{ matrix.target }}
       - run: npm run make
       - name: Bundled ffmpeg has libass
         run: |
@@ -67,6 +80,53 @@ jobs:
           test "${code:-0}" = 0
           grep -q '"ok":true' "$out"
           grep -q '"screen":"library"' "$out"
+      - name: Cache the speech model
+        uses: actions/cache@v4
+        with:
+          path: ${{ matrix.models }}
+          key: whisper-model-base-v1
+      - name: Make a spoken test clip
+        id: clip
+        run: |
+          dir="$RUNNER_TEMP/clip"; mkdir -p "$dir"
+          one="The first take of this sentence goes wrong."
+          two="This is the second take, and it is the one we keep."
+          words=0
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            ext=aiff
+            say -o "$dir/one.$ext" "$one" && say -o "$dir/two.$ext" "$two" && words=1
+          else
+            ext=wav
+            win="$(cygpath -w "$dir")"
+            powershell -NoProfile -Command "
+              Add-Type -AssemblyName System.Speech
+              \$s = New-Object System.Speech.Synthesis.SpeechSynthesizer
+              \$s.SetOutputToWaveFile('$win\one.wav'); \$s.Speak('$one')
+              \$s.SetOutputToWaveFile('$win\two.wav'); \$s.Speak('$two'); \$s.Dispose()" && words=1 || true
+          fi
+          ff="${{ matrix.ffmpeg }}"
+          if [ "$words" = 1 ]; then
+            "$ff" -hide_banner -y -i "$dir/one.$ext" -f lavfi -t 2.5 -i anullsrc=r=48000:cl=mono -i "$dir/two.$ext" \
+              -f lavfi -i testsrc2=s=1280x720:r=30 \
+              -filter_complex "[0:a]aresample=48000,aformat=channel_layouts=mono[a0];[2:a]aresample=48000,aformat=channel_layouts=mono[a2];[a0][1:a][a2]concat=n=3:v=0:a=1[a]" \
+              -map 3:v -map "[a]" -shortest -c:v libx264 -pix_fmt yuv420p -c:a aac "$dir/clip.mp4"
+          else
+            echo "No text-to-speech voice here; importing a clip without speech."
+            "$ff" -hide_banner -y -f lavfi -i testsrc2=s=1280x720:r=30:d=6 -f lavfi -i sine=f=220:d=6 \
+              -c:v libx264 -pix_fmt yuv420p -c:a aac "$dir/clip.mp4"
+          fi
+          echo "file=$dir/clip.mp4" >> "$GITHUB_OUTPUT"
+          echo "words=$words" >> "$GITHUB_OUTPUT"
+      - name: Import, transcribe and find pauses in the packaged app
+        run: |
+          out="$RUNNER_TEMP/smoke-import.json"
+          mkdir -p ${{ matrix.models }}
+          CLIPCAT_SMOKE=1 CLIPCAT_SMOKE_OUT="$out" CLIPCAT_SMOKE_IMPORT="${{ steps.clip.outputs.file }}" \
+            CLIPCAT_SMOKE_EXPECT_WORDS="${{ steps.clip.outputs.words }}" CLIPCAT_MODEL=base \
+            CLIPCAT_MODELS_DIR="$(cd ${{ matrix.models }} && pwd -W 2>/dev/null || pwd)" "${{ matrix.app }}" || code=$?
+          cat "$out"; echo
+          test "${code:-0}" = 0
+          grep -q '"ok":true' "$out"
       - uses: actions/upload-artifact@v4
         with:
           name: ClipCat-${{ matrix.target }}
