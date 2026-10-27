@@ -12,7 +12,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const TAG = "v1.9.4"; // also WHISPER_RELEASE in apps/desktop/src/tools.ts
-const COMMIT = "7d75b14994ae7f59623e2471445e2355fe506ed2";
+// The commit the v1.9.4 tag points at (not the annotated tag object, 7d75b14…).
+const COMMIT = "927cfce34f31707e17f2bff35c349632fb9e2c3a";
 const REPO = "https://github.com/ggml-org/whisper.cpp";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
