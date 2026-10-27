@@ -59,14 +59,16 @@ const config = {
     }),
   ],
   hooks: {
-    // Copies this platform's ffmpeg, ffprobe and whisper-cli from vendor/ into the stage
-    // folder, so packaging fails loudly instead of shipping without them.
+    // Copies this platform's ffmpeg, ffprobe, whisper-cli and (Apple Silicon) clipcat-parakeet
+    // from vendor/ into the stage folder, so packaging fails loudly instead of shipping without them.
     prePackage: async (/** @type {unknown} */ _config, /** @type {string} */ platform, /** @type {string} */ arch) => {
       const from = join(__dirname, "..", "..", "vendor", "bin", `${platform}-${arch}`);
       const exe = platform === "win32" ? ".exe" : "";
-      for (const tool of ["ffmpeg", "ffprobe", "whisper-cli"]) {
+      const parakeet = platform === "darwin" && arch === "arm64" ? ["clipcat-parakeet"] : [];
+      for (const tool of ["ffmpeg", "ffprobe", "whisper-cli", ...parakeet]) {
         if (!existsSync(join(from, tool + exe))) {
-          throw new Error(`No ${tool} for ${platform}-${arch} in vendor/bin. Run: npm run fetch:ffmpeg && npm run build:whisper`);
+          const build = parakeet.length ? " && npm run build:parakeet" : "";
+          throw new Error(`No ${tool} for ${platform}-${arch} in vendor/bin. Run: npm run fetch:ffmpeg && npm run build:whisper${build}`);
         }
       }
       rmSync(join(STAGE, "bin"), { recursive: true, force: true });

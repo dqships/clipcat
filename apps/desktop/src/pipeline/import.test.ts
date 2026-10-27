@@ -43,16 +43,19 @@ function setup(over: Partial<PipelineDeps> = {}) {
       return media;
     },
     prep: async () => {},
-    ensureModel: async () => ({ model: "base", path: "/models/base.bin" }),
     // Times in the speech audio, where 3.2 s to 5.8 s of the quiet stretch was taken out.
     transcribe: async (opts) => {
       heard.push(opts.wav);
       return {
-        transcription: [
-          { offsets: { from: 500, to: 900 }, text: " Hello" },
-          { offsets: { from: 900, to: 1000 }, text: "." },
-          { offsets: { from: 3600, to: 4100 }, text: " Again" },
-        ],
+        backend: "parakeet",
+        model: "parakeet-tdt-0.6b-v3",
+        json: {
+          transcription: [
+            { offsets: { from: 500, to: 900 }, text: " Hello" },
+            { offsets: { from: 900, to: 1000 }, text: "." },
+            { offsets: { from: 3600, to: 4100 }, text: " Again" },
+          ],
+        },
       };
     },
     readWav: async () => pcm(),
@@ -82,7 +85,7 @@ describe("ImportPipeline", () => {
     const p = await store.get(created.id);
     const s = p.sources[0]!;
     expect(s.prep?.proxy).toBe(`media/${s.id}/proxy.mp4`);
-    expect(s.transcription).toEqual({ backend: "whisper.cpp", model: "base" });
+    expect(s.transcription).toEqual({ backend: "parakeet", model: "parakeet-tdt-0.6b-v3" });
     expect(p.transcript.map((w) => [w.id, w.text])).toEqual([
       [`${s.id}-0`, "Hello."],
       [`${s.id}-1`, "Again"],

@@ -62,6 +62,22 @@ jobs:
           path: vendor/bin/${{ matrix.target }}/whisper-cli*
           key: whisper-${{ matrix.target }}-${{ hashFiles('scripts/build-whisper.mjs') }}
       - run: npm run build:whisper
+      # Parakeet (Apple Silicon only) needs Swift 6, so Xcode 16 or newer.
+      - name: Select the newest Xcode
+        if: matrix.target == 'darwin-arm64'
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+      - name: Cache clipcat-parakeet
+        if: matrix.target == 'darwin-arm64'
+        uses: actions/cache@v4
+        with:
+          path: vendor/bin/${{ matrix.target }}/clipcat-parakeet
+          key: parakeet-${{ matrix.target }}-${{ hashFiles('native/parakeet/Package.swift', 'native/parakeet/Sources/**', 'scripts/build-parakeet.mjs') }}
+      - run: npm run build:parakeet
+      - name: clipcat-parakeet runs
+        if: matrix.target == 'darwin-arm64'
+        run: vendor/bin/${{ matrix.target }}/clipcat-parakeet --version
       - name: Prep pipeline against the pinned ffmpeg
         run: npx vitest run src/pipeline
         working-directory: apps/desktop
@@ -91,11 +107,11 @@ jobs:
               if (bad.length) { console.error(bad.join("; ")); process.exit(1); }' "$out"
           fi
           grep -q '"screen":"library"' "$out"
-      - name: Cache the speech model
+      - name: Cache the speech models
         uses: actions/cache@v4
         with:
           path: ${{ matrix.models }}
-          key: whisper-model-base-v1
+          key: speech-models-${{ matrix.target }}-v2
       - name: Make a spoken test clip
         id: clip
         run: |
@@ -136,9 +152,9 @@ jobs:
             CLIPCAT_SMOKE_EXPECT_WORDS="${{ steps.clip.outputs.words }}" CLIPCAT_MODEL=base \
             CLIPCAT_MODELS_DIR="$(cd ${{ matrix.models }} && pwd -W 2>/dev/null || pwd)" "${{ matrix.app }}" || code=$?
           cat "$out"; echo
-          # whisper-cli's raw output, for when the transcript looks wrong.
+          # The speech engine's raw output and the project log, for when the transcript looks wrong.
           data="$HOME/Library/Application Support/ClipCat"; [ "$RUNNER_OS" = "Windows" ] && data="$APPDATA/ClipCat"
-          find "$data/projects" -name transcript.json -exec cat {} \; | head -c 6000 || true; echo
+          find "$data/projects" \( -name 'transcript*.json' -o -name events.jsonl \) -exec cat {} \; | head -c 6000 || true; echo
           test "${code:-0}" = 0
           grep -q '"ok":true' "$out"
           # Both sentences, from the start, with the pause between them found.
@@ -150,7 +166,9 @@ jobs:
               if (!r.span || r.span[0] > 1) bad.push("the transcript does not start with the first sentence");
               if (!r.pauses.some(([a, b]) => b - a > 1.5)) bad.push("the pause between the sentences was not found");
               if (!(r.exported > 100000)) bad.push("the 9:16 export is missing or empty");
-              if (bad.length) { console.error(bad.join("; ")); process.exit(1); }' "$out"
+              const engine = process.argv[2] === "darwin-arm64" ? "parakeet" : "whisper.cpp";
+              if (!r.backends.every((b) => b === engine)) bad.push(`heard by ${r.backends.join(", ")}, not ${engine}`);
+              if (bad.length) { console.error(bad.join("; ")); process.exit(1); }' "$out" "${{ matrix.target }}"
           fi
       - uses: actions/upload-artifact@v4
         with:

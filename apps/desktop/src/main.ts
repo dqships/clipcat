@@ -4,6 +4,7 @@
 
 import { BrowserWindow, app, dialog, nativeTheme, safeStorage, shell } from "electron";
 import { randomUUID } from "node:crypto";
+import { existsSync } from "node:fs";
 import { applyEdit } from "@clipcat/core";
 import tokens from "../../../design/tokens.json";
 import { extname, join, resolve } from "node:path";
@@ -63,12 +64,19 @@ const encoder = lazyEncoder(() =>
   ),
 );
 
+/** Parakeet is built for Apple Silicon only; CLIPCAT_TRANSCRIBER=whisper turns it off. */
+const PARAKEET = process.platform === "darwin" && process.arch === "arm64" && process.env.CLIPCAT_TRANSCRIBER !== "whisper";
+
 async function appInfo(): Promise<AppInfoValue> {
-  const [ffmpeg, whisper] = await Promise.all([toolInfo("ffmpeg"), toolInfo("whisper-cli")]);
-  return { name: "ClipCat", version: app.getVersion(), platform: process.platform, arch: process.arch, ffmpeg, whisper, encoder: await encoder() };
+  const [ffmpeg, whisper, parakeet] = await Promise.all([
+    toolInfo("ffmpeg"),
+    toolInfo("whisper-cli"),
+    PARAKEET ? toolInfo("clipcat-parakeet") : null,
+  ]);
+  return { name: "ClipCat", version: app.getVersion(), platform: process.platform, arch: process.arch, ffmpeg, whisper, parakeet, encoder: await encoder() };
 }
 
-/** The smaller model is for CI and slow machines; everyone else gets the accurate one. */
+/** The smaller whisper model is for CI and slow machines; everyone else gets the accurate one. */
 const MODEL: ModelId = process.env.CLIPCAT_MODEL === "base" ? "base" : "large-v3-turbo-q5_0";
 
 /** The user's PATH from their login shell, read once; the agent CLIs are found on it. */
@@ -112,6 +120,7 @@ function startPipeline() {
       ffmpeg: tool("ffmpeg"),
       ffprobe: tool("ffprobe"),
       whisper: tool("whisper-cli"),
+      parakeet: PARAKEET && existsSync(tool("clipcat-parakeet")) ? tool("clipcat-parakeet") : null,
       // CI points this at a cached folder so each run doesn't download the model again.
       modelsDir: process.env.CLIPCAT_MODELS_DIR ?? join(data, "models"),
       model: MODEL,
