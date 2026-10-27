@@ -4,11 +4,12 @@
 // of reaching the file system.
 
 import { z } from "zod";
-import { CHANNEL_PREFIX } from "./channels";
+import { Project } from "@clipcat/core";
+import { CHANNEL_PREFIX, EVENT_PREFIX } from "./channels";
 
-export const FfmpegInfo = z.object({
+export const ToolInfo = z.object({
   available: z.boolean(),
-  /** First line of `ffmpeg -version`, or null when the binary is missing or broken. */
+  /** First line of `<tool> -version`, or null when the binary is missing or broken. */
   version: z.string().nullable(),
   path: z.string(),
 });
@@ -18,21 +19,65 @@ export const AppInfo = z.object({
   version: z.string(),
   platform: z.string(),
   arch: z.string(),
-  ffmpeg: FfmpegInfo,
+  ffmpeg: ToolInfo,
+  whisper: ToolInfo,
 });
+
+export const ProjectSummary = z.object({
+  id: z.string(),
+  name: z.string(),
+  updatedAt: z.string(),
+  duration: z.number(),
+  sources: z.number().int(),
+  thumb: z.string().nullable(),
+});
+
+export const JobEvent = z.object({
+  projectId: z.string(),
+  jobId: z.string(),
+  kind: z.string(),
+  label: z.string(),
+  state: z.enum(["queued", "running", "done", "failed", "cancelled"]),
+  fraction: z.number().nullable(),
+  error: z.string().optional(),
+});
+
+const ProjectRef = z.object({ id: z.string().regex(/^[a-zA-Z0-9-]+$/) });
+/** Absolute paths, as the file picker or a drop gives them. */
+const Files = z.array(z.string().min(1).max(4096)).min(1).max(200);
 
 export const methods = {
   "app:info": { input: z.void(), output: AppInfo },
   /** The renderer reports it has drawn its first screen; used by the smoke test. */
   "app:ready": { input: z.object({ screen: z.string() }), output: z.void() },
+  "library:list": { input: z.void(), output: z.array(ProjectSummary) },
+  /** Opens the system file picker; resolves with the chosen files, or [] when cancelled. */
+  "files:pick": { input: z.void(), output: z.array(z.string()) },
+  /** Adds files to a project (a new one when projectId is null) and starts processing them. */
+  "project:import": { input: z.object({ projectId: z.string().regex(/^[a-zA-Z0-9-]+$/).nullable(), files: Files }), output: Project },
+  "project:get": { input: ProjectRef, output: Project },
+  "project:remove": { input: ProjectRef, output: z.void() },
+  /** Cancels the project's queued and running jobs. */
+  "jobs:cancel": { input: ProjectRef, output: z.void() },
 } as const;
+
+/** Pushed from main to the UI. */
+export const events = {
+  job: JobEvent,
+  "project:changed": z.object({ id: z.string(), revision: z.number().int() }),
+} as const;
+
+export type Events = typeof events;
+export type EventName = keyof Events;
+export type EventPayload<E extends EventName> = z.output<Events[E]>;
+export const eventChannelFor = (event: EventName): string => `${EVENT_PREFIX}${event}`;
 
 export type Methods = typeof methods;
 export type MethodName = keyof Methods;
 export type Input<M extends MethodName> = z.input<Methods[M]["input"]>;
 export type Output<M extends MethodName> = z.output<Methods[M]["output"]>;
 
-export { CHANNEL_PREFIX };
+export { CHANNEL_PREFIX, EVENT_PREFIX };
 export const channelFor = (method: MethodName): string => `${CHANNEL_PREFIX}${method}`;
 
 export const isMethodName = (name: string): name is MethodName => Object.hasOwn(methods, name);
@@ -40,6 +85,13 @@ export const isMethodName = (name: string): name is MethodName => Object.hasOwn(
 /** What the preload script puts on `window.clipcat`. */
 export interface ClipcatBridge {
   invoke<M extends MethodName>(method: M, ...input: Input<M> extends void ? [] : [Input<M>]): Promise<Output<M>>;
+  /** Subscribes to a pushed event; returns the unsubscribe function. */
+  on<E extends EventName>(event: E, listener: (payload: EventPayload<E>) => void): () => void;
+  /** The path of a file dropped onto the window (Electron hides it from the page). */
+  pathForFile(file: File): string;
 }
 
 export type AppInfoValue = z.output<typeof AppInfo>;
+export type ToolInfoValue = z.output<typeof ToolInfo>;
+export type ProjectSummaryValue = z.output<typeof ProjectSummary>;
+export type JobEventValue = z.output<typeof JobEvent>;

@@ -1,4 +1,4 @@
-// Downloads static ffmpeg and ffprobe builds into vendor/ffmpeg/<platform>-<arch>/,
+// Downloads static ffmpeg and ffprobe builds into vendor/bin/<platform>-<arch>/,
 // checking each against a pinned sha256 before it is unpacked.
 //
 //   npm run fetch:ffmpeg                    this machine's platform
@@ -41,7 +41,7 @@ if (targets.length === 0) targets.push(`${process.platform}-${process.arch}`);
 for (const target of targets) {
   const pins = PINS[target];
   if (!pins) throw new Error(`No ffmpeg build pinned for ${target}. Known: ${Object.keys(PINS).join(", ")}`);
-  const dir = join(root, "vendor", "ffmpeg", target);
+  const dir = join(root, "vendor", "bin", target);
   await mkdir(dir, { recursive: true });
 
   for (const [name, sha] of Object.entries(pins)) {

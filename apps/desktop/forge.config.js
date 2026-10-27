@@ -35,8 +35,8 @@ const config = {
       !path.startsWith("/dist/") &&
       path !== "/ui" &&
       !path.startsWith("/ui/"),
-    // Staged by the prePackage hook; ends up at Resources/ffmpeg.
-    extraResource: [join(STAGE, "ffmpeg")],
+    // Staged by the prePackage hook; ends up at Resources/bin.
+    extraResource: [join(STAGE, "bin")],
     osxSign: process.env.SKIP_SIGN ? undefined : {},
     osxNotarize:
       process.env.APPLE_ID && process.env.APPLE_PASSWORD && process.env.APPLE_TEAM_ID
@@ -59,16 +59,19 @@ const config = {
     }),
   ],
   hooks: {
-    // Copies this platform's ffmpeg and ffprobe from vendor/ into the stage
+    // Copies this platform's ffmpeg, ffprobe and whisper-cli from vendor/ into the stage
     // folder, so packaging fails loudly instead of shipping without them.
     prePackage: async (/** @type {unknown} */ _config, /** @type {string} */ platform, /** @type {string} */ arch) => {
-      const from = join(__dirname, "..", "..", "vendor", "ffmpeg", `${platform}-${arch}`);
-      if (!existsSync(from)) {
-        throw new Error(`No ffmpeg for ${platform}-${arch} in vendor/. Run: npm run fetch:ffmpeg -- ${platform}-${arch}`);
+      const from = join(__dirname, "..", "..", "vendor", "bin", `${platform}-${arch}`);
+      const exe = platform === "win32" ? ".exe" : "";
+      for (const tool of ["ffmpeg", "ffprobe", "whisper-cli"]) {
+        if (!existsSync(join(from, tool + exe))) {
+          throw new Error(`No ${tool} for ${platform}-${arch} in vendor/bin. Run: npm run fetch:ffmpeg && npm run build:whisper`);
+        }
       }
-      rmSync(join(STAGE, "ffmpeg"), { recursive: true, force: true });
+      rmSync(join(STAGE, "bin"), { recursive: true, force: true });
       mkdirSync(STAGE, { recursive: true });
-      cpSync(from, join(STAGE, "ffmpeg"), { recursive: true });
+      cpSync(from, join(STAGE, "bin"), { recursive: true });
     },
   },
 };

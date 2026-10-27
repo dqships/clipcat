@@ -3,3 +3,6 @@
 
 /** One prefix for every channel, so main can reject anything else. */
 export const CHANNEL_PREFIX = "clipcat:";
+
+/** Events pushed from main to the UI. */
+export const EVENT_PREFIX = "clipcat-event:";

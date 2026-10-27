@@ -2,7 +2,7 @@ import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("electron", () => ({ ipcMain: {}, net: {}, protocol: {} }));
-import { resolveInside } from "./protocol";
+import { parseRange, resolveInside } from "./protocol";
 
 const root = join("/opt", "clipcat", "ui");
 
@@ -24,5 +24,22 @@ describe("resolveInside", () => {
 
   it("refuses malformed escapes", () => {
     expect(resolveInside(root, "/%E0%A4%A")).toBeNull();
+  });
+});
+
+describe("parseRange", () => {
+  it("reads the ranges a video element sends", () => {
+    expect(parseRange("bytes=0-", 1000)).toEqual({ start: 0, end: 999 });
+    expect(parseRange("bytes=100-199", 1000)).toEqual({ start: 100, end: 199 });
+    expect(parseRange("bytes=-100", 1000)).toEqual({ start: 900, end: 999 });
+    expect(parseRange("bytes=500-5000", 1000)).toEqual({ start: 500, end: 999 });
+  });
+
+  it("refuses what it can't satisfy", () => {
+    expect(parseRange(null, 1000)).toBeNull();
+    expect(parseRange("bytes=1000-", 1000)).toBeNull();
+    expect(parseRange("bytes=5-1", 1000)).toBeNull();
+    expect(parseRange("bytes=0-1,5-9", 1000)).toBeNull();
+    expect(parseRange("bytes=-", 1000)).toBeNull();
   });
 });
