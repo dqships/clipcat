@@ -151,6 +151,16 @@ jobs:
           "$w" -m "$m" -f "$RUNNER_TEMP/clip.wav" -l en -np 2>&1 | grep -E '^\[' || true
           echo "== clip from 0.5 s"
           "$w" -m "$m" -f "$RUNNER_TEMP/clip.wav" -l en -np -ot 500 2>&1 | grep -E '^\[' || true
+          echo "== clip with room tone"
+          "$ff" -v error -y -i "$RUNNER_TEMP/clip.wav" -f lavfi -i "anoisesrc=c=pink:a=0.003:r=16000" -filter_complex "[0][1]amix=inputs=2:duration=first:normalize=0" -ac 1 -ar 16000 -c:a pcm_s16le "$RUNNER_TEMP/tone.wav"
+          "$w" -m "$m" -f "$RUNNER_TEMP/tone.wav" -l en -np 2>&1 | grep -E '^\[' || true
+          echo "== clip with silero VAD"
+          curl -sSL -o "$RUNNER_TEMP/vad.bin" https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v5.1.2.bin
+          ls -l "$RUNNER_TEMP/vad.bin"
+          vm="$(cd "$RUNNER_TEMP" && pwd -W 2>/dev/null || pwd)/vad.bin"
+          "$w" -m "$m" -f "$RUNNER_TEMP/clip.wav" -l en -np --vad -vm "$vm" 2>&1 | grep -E '^\[|vad|error' || true
+          echo "== clip with silero VAD, word segments"
+          "$w" -m "$m" -f "$RUNNER_TEMP/clip.wav" -l en -np -ml 1 -sow --vad -vm "$vm" 2>&1 | grep -E '^\[' | head -30 || true
       - uses: actions/upload-artifact@v4
         with:
           name: ClipCat-${{ matrix.target }}
