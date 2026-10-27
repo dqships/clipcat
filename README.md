@@ -52,6 +52,13 @@ from the pause finder and from Claude, are accepted or rejected under the
 preview. Every edit is undoable with Cmd/Ctrl+Z and redone with
 Shift+Cmd/Ctrl+Z, and the preview plays the edit with the cuts skipped.
 
+Export renders the edit with ffmpeg in one pass: 16:9 at the recordings' own
+height (up to 1440p) or 9:16 at 1080×1920, cropped around the speaker, on the
+hardware H.264 encoder (libx264 if it fails). Captions are built from the kept
+words, burned in with libass in Jost, and saved as an `.srt` beside the video.
+The caption font in `apps/desktop/resources/fonts` is Jost SemiBold (SIL OFL,
+`OFL.txt`), converted from the `@fontsource/jost` Latin subsets.
+
 ## Licenses
 
 A few files in `apps/desktop` are adapted from Diffusion Studio's editor and keep

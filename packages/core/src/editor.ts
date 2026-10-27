@@ -5,13 +5,15 @@
 
 import { z } from "zod";
 import { type IdFactory, setRange, wordSpanRange } from "./edits";
-import { type Project, ProposalStatus, type Range, type Snapshot, type Word } from "./project";
+import { Captions, CaptionsPatch, type Project, ProposalStatus, type Range, type Snapshot, type Word } from "./project";
 
 export const EditOp = z.discriminatedUnion("type", [
   /** Cut (included: false) or restore (included: true) these words. */
   z.object({ type: z.literal("words"), wordIds: z.array(z.string()).min(1).max(100_000), included: z.boolean() }),
   /** Accept, reject, or put back to pending these proposals. */
   z.object({ type: z.literal("decide"), ids: z.array(z.string()).min(1).max(10_000), status: ProposalStatus }),
+  /** Caption style. Not an undo step: it changes no cut, and the controls show it. */
+  z.object({ type: z.literal("captions"), captions: CaptionsPatch }),
   z.object({ type: z.literal("undo") }),
   z.object({ type: z.literal("redo") }),
 ]);
@@ -50,8 +52,8 @@ function wordRanges(project: Project, ids: Set<string>): { sourceId: string; ran
 }
 
 /**
- * Applies `op` to a copy of `project` and returns it. Every change but undo
- * and redo records an undo step. Unknown word or proposal ids are an error,
+ * Applies `op` to a copy of `project` and returns it. Cuts and decisions
+ * record an undo step; caption style, undo and redo don't. Unknown word or proposal ids are an error,
  * not a silent no-op, so a stale UI finds out.
  */
 export function applyEdit(project: Project, op: EditOp, id: IdFactory): Project {
@@ -64,6 +66,11 @@ export function applyEdit(project: Project, op: EditOp, id: IdFactory): Project 
     if (!step) return p;
     to.push(snapshot(p));
     restore(p, step);
+    return p;
+  }
+
+  if (op.type === "captions") {
+    p.captions = Captions.parse({ ...p.captions, ...op.captions });
     return p;
   }
 

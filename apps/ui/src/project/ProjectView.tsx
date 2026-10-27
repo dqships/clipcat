@@ -6,6 +6,9 @@ import { ICON_STROKE } from "../icons";
 import { JobLine } from "../JobLine";
 import { type ProjectJobs, useProjectChanges } from "../useJobs";
 import { AiPanel } from "./AiPanel";
+import { CaptionOverlay } from "./CaptionOverlay";
+import { CaptionsPanel } from "./CaptionsPanel";
+import { ExportPanel } from "./ExportPanel";
 import { type Playhead, Preview, type PreviewHandle } from "./Preview";
 import { Proposals } from "./Proposals";
 import { Waveform } from "./Waveform";
@@ -17,7 +20,8 @@ type Props = { projectId: string; jobs: ProjectJobs; onBack: () => void };
 /**
  * The editor: the preview plays the edit, the strip shows where the cuts
  * are, and the transcript is where they're made. Suggested cuts, from the
- * pause finder and from Claude, wait below the preview for a decision.
+ * pause finder and from Claude, wait below the preview for a decision;
+ * caption style and export come after.
  */
 export function ProjectView({ projectId, jobs, onBack }: Props) {
   const [project, setProjectState] = useState<Project | null>(null);
@@ -89,11 +93,20 @@ export function ProjectView({ projectId, jobs, onBack }: Props) {
           </p>
         )}
         <section className="project__preview" aria-label="Preview">
-          {project ? <Preview ref={preview} project={project} onTime={setPlayhead} /> : <div className="project__video project__video--pending" />}
+          {project ? (
+            <div className="stage">
+              <Preview ref={preview} project={project} onTime={setPlayhead} />
+              <CaptionOverlay project={project} playhead={playhead} />
+            </div>
+          ) : (
+            <div className="project__video project__video--pending" />
+          )}
           {project && <Waveform project={project} playhead={playhead} onSeek={seek} />}
           <JobLine jobs={jobs} />
           {project && <Proposals project={project} onSeek={seek} onEdit={edit} />}
           {project && <AiPanel project={project} jobs={jobs} />}
+          {project && <CaptionsPanel project={project} onEdit={edit} />}
+          {project && <ExportPanel project={project} jobs={jobs} />}
         </section>
         <section className="project__transcript" aria-labelledby="transcript-title">
           <h2 id="transcript-title" className="section-title">

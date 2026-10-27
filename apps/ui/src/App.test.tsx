@@ -47,10 +47,11 @@ const project = {
   ],
   segments: [{ id: "g1", sourceId: "s1", sourceStart: 0, sourceEnd: 75, included: true }],
   history: { past: [], future: [] },
+  lastExport: null,
   proposals: [
     { id: "x1", type: "silence", sourceId: "s1", cuts: [[1, 2.5]], wordIds: [], keepWordIds: [], reason: "", confidence: 1, status: "pending" },
   ],
-  captions: {},
+  captions: { enabled: true, mode: "sentence", font: "Jost", size: 54, color: "#FFFFFF", effect: "shadow", case: "regular", background: "none", position: 0.82 },
   createdAt: "",
   updatedAt: "",
 };
@@ -212,6 +213,35 @@ describe("App", () => {
     await vi.waitFor(() => expect((screen.getByRole("button", { name: "Undo" }) as HTMLButtonElement).disabled).toBe(false));
     fireEvent.keyDown(window, { key: "z", metaKey: true });
     await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:edit", { id: "p1", revision: 4, op: { type: "undo" } }));
+  });
+
+  it("styles captions, shows them over the preview and exports", async () => {
+    const ready = { claude: { status: "ready", version: "2.1.0", detail: null } };
+    const exported = { ...project, lastExport: { path: "/Movies/talk.mp4", format: "16:9", at: "" } };
+    const { invoke } = fakeBridge({
+      "app:info": info(),
+      "library:list": [summary],
+      "project:get": exported,
+      "ai:status": ready,
+      "project:edit": { ...exported, revision: 4 },
+      "project:export": { path: "/Movies/talk (vertical).mp4" },
+      "project:reveal-export": undefined,
+    });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "talk" }));
+    fireEvent.click(await screen.findByRole("button", { name: "again." }));
+    expect(document.querySelector(".captions")?.textContent).toContain("again.");
+
+    fireEvent.change(screen.getByLabelText("Letters"), { target: { value: "upper" } });
+    await vi.waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("project:edit", { id: "p1", revision: 3, op: { type: "captions", captions: { case: "upper" } } }),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Export 9:16/ }));
+    expect(invoke).toHaveBeenCalledWith("project:export", { id: "p1", format: "9:16" });
+    expect(screen.getByText("Last export: talk.mp4 (16:9)")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Show file" }));
+    expect(invoke).toHaveBeenCalledWith("project:reveal-export", { id: "p1" });
   });
 
   it("says when Claude Code isn't installed", async () => {
