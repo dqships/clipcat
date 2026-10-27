@@ -11,6 +11,12 @@ const PAUSE_GAP = 1;
 
 export const SUBMIT_TOOL = "submit_analysis";
 
+/** How a tool-calling agent (Claude Code) hands its answer back. */
+export const TOOL_ANSWER = `Call ${SUBMIT_TOOL} once with every proposal. If it reports problems, fix them and call it again with the whole analysis. Once it says the analysis is saved, stop. Don't write anything else.`;
+
+/** How an agent held to an output schema (Codex) hands it back. */
+export const JSON_ANSWER = "Answer with only the JSON object the output schema describes: every proposal, and suggestedTitle. Use null for keepFrom and keepTo except on retakes. Don't run commands or read files; everything you need is below.";
+
 export const SYSTEM_PROMPT = `You are ClipCat's editor. You read the transcript of a talking-head recording and propose cuts that make it tight and watchable. You never change anything yourself: every proposal is shown to the user, who accepts or rejects it.
 
 Words are numbered [n] across the whole project. Ranges are inclusive word indices.
@@ -29,7 +35,7 @@ Rules:
 - suggestedTitle: a short, plain title for the finished video.
 - Follow the user's brief when there is one.
 
-Call ${SUBMIT_TOOL} once with every proposal. If it reports problems, fix them and call it again with the whole analysis. Once it says the analysis is saved, stop. Don't write anything else.`;
+${TOOL_ANSWER}`;
 
 const seconds = (t: number) => `${t.toFixed(1)}s`;
 
