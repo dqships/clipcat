@@ -1,12 +1,13 @@
 // The real tools behind the import pipeline: bundled ffmpeg, ffprobe and
 // whisper-cli, and the speech model in the app's data folder.
 
+import { writeFile } from "node:fs/promises";
 import { availableParallelism } from "node:os";
 import type { JobContext } from "../jobs/queue";
 import { type Encoder, prepArgs } from "../media/prep";
 import { probe } from "../media/probe";
 import { runFfmpeg } from "../media/run";
-import { readWav } from "../media/wav";
+import { encodeWav, readWav } from "../media/wav";
 import { MODELS, type ModelId, downloadModel, hasModel, modelPath } from "../transcribe/models";
 import { runWhisper, whisperArgs } from "../transcribe/whisper";
 import type { PipelineDeps } from "./import";
@@ -51,5 +52,6 @@ export function realDeps(tools: Tools): Omit<PipelineDeps, "store" | "queue" | "
         signal: ctx.signal,
       }),
     readWav,
+    writeWav: (path, pcm) => writeFile(path, encodeWav(pcm.samples, pcm.sampleRate)),
   };
 }

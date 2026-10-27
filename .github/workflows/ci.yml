@@ -79,6 +79,16 @@ jobs:
           cat "$out"; echo
           test "${code:-0}" = 0
           grep -q '"ok":true' "$out"
+          # Both sentences, from the start, with the pause between them found.
+          if [ "${{ steps.clip.outputs.words }}" = 1 ]; then
+            node -e '
+              const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).import;
+              const bad = [];
+              if (!/first take/i.test(r.text) || !/second take/i.test(r.text)) bad.push("a sentence is missing");
+              if (!r.span || r.span[0] > 1) bad.push("the transcript does not start with the first sentence");
+              if (!r.pauses.some(([a, b]) => b - a > 1.5)) bad.push("the pause between the sentences was not found");
+              if (bad.length) { console.error(bad.join("; ")); process.exit(1); }' "$out"
+          fi
           grep -q '"screen":"library"' "$out"
       - name: Cache the speech model
         uses: actions/cache@v4
@@ -125,8 +135,21 @@ jobs:
             CLIPCAT_SMOKE_EXPECT_WORDS="${{ steps.clip.outputs.words }}" CLIPCAT_MODEL=base \
             CLIPCAT_MODELS_DIR="$(cd ${{ matrix.models }} && pwd -W 2>/dev/null || pwd)" "${{ matrix.app }}" || code=$?
           cat "$out"; echo
+          # whisper-cli's raw output, for when the transcript looks wrong.
+          data="$HOME/Library/Application Support/ClipCat"; [ "$RUNNER_OS" = "Windows" ] && data="$APPDATA/ClipCat"
+          find "$data/projects" -name transcript.json -exec cat {} \; | head -c 6000 || true; echo
           test "${code:-0}" = 0
           grep -q '"ok":true' "$out"
+          # Both sentences, from the start, with the pause between them found.
+          if [ "${{ steps.clip.outputs.words }}" = 1 ]; then
+            node -e '
+              const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).import;
+              const bad = [];
+              if (!/first take/i.test(r.text) || !/second take/i.test(r.text)) bad.push("a sentence is missing");
+              if (!r.span || r.span[0] > 1) bad.push("the transcript does not start with the first sentence");
+              if (!r.pauses.some(([a, b]) => b - a > 1.5)) bad.push("the pause between the sentences was not found");
+              if (bad.length) { console.error(bad.join("; ")); process.exit(1); }' "$out"
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: ClipCat-${{ matrix.target }}

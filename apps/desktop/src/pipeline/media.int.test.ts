@@ -46,12 +46,13 @@ describe.skipIf(!binDir)("prep with real ffmpeg", () => {
     const store = new ProjectStore(join(root, "projects"));
     const pipeline = new ImportPipeline({
       ...realDeps({ ffmpeg: exe("ffmpeg"), ffprobe: exe("ffprobe"), whisper: "", modelsDir: "", model: "base", encoder: "libx264" }),
-      // No speech model in CI: stand in for whisper with the words we generated.
+      // No speech model in CI: stand in for whisper with the words we generated, timed
+      // in the speech audio, where 1.7 s to 3.8 s of the pause was taken out.
       ensureModel: async () => ({ model: "fake", path: "" }),
       transcribe: async () => ({
         transcription: [
           { offsets: { from: 200, to: 1300 }, text: " one" },
-          { offsets: { from: 4200, to: 5800 }, text: " two" },
+          { offsets: { from: 1900, to: 3500 }, text: " two" },
         ],
       }),
       store,
@@ -69,7 +70,8 @@ describe.skipIf(!binDir)("prep with real ffmpeg", () => {
     expect(s.media.duration).toBeGreaterThan(5.5);
     const dir = store.mediaDir(p.id, s.id);
     const files = await readdir(dir);
-    expect(files).toEqual(expect.arrayContaining(["proxy.mp4", "audio.wav", "waveform.png", "thumb-0001.jpg"]));
+    expect(files).toEqual(expect.arrayContaining(["proxy.mp4", "audio.wav", "speech.wav", "waveform.png", "thumb-0001.jpg"]));
+    expect(p.transcript[1]!.start).toBeCloseTo(4, 0);
     expect((await stat(join(dir, "proxy.mp4"))).size).toBeGreaterThan(10_000);
     const proxy = await realDeps({ ffmpeg: "", ffprobe: exe("ffprobe"), whisper: "", modelsDir: "", model: "base", encoder: "libx264" }).probe(
       join(dir, "proxy.mp4"),

@@ -33,6 +33,8 @@ function setup(over: Partial<PipelineDeps> = {}) {
   const store = new ProjectStore(root);
   const queue = new JobQueue((e) => events.push(e));
   const changes: Project[] = [];
+  const heard: string[] = [];
+  const seconds: number[] = [];
   const deps: PipelineDeps = {
     store,
     queue,
@@ -42,18 +44,25 @@ function setup(over: Partial<PipelineDeps> = {}) {
     },
     prep: async () => {},
     ensureModel: async () => ({ model: "base", path: "/models/base.bin" }),
-    transcribe: async () => ({
-      transcription: [
-        { offsets: { from: 500, to: 900 }, text: " Hello" },
-        { offsets: { from: 900, to: 1000 }, text: "." },
-        { offsets: { from: 6200, to: 6700 }, text: " Again" },
-      ],
-    }),
+    // Times in the speech audio, where 3.2 s to 5.8 s of the quiet stretch was taken out.
+    transcribe: async (opts) => {
+      heard.push(opts.wav);
+      return {
+        transcription: [
+          { offsets: { from: 500, to: 900 }, text: " Hello" },
+          { offsets: { from: 900, to: 1000 }, text: "." },
+          { offsets: { from: 3600, to: 4100 }, text: " Again" },
+        ],
+      };
+    },
     readWav: async () => pcm(),
+    writeWav: async (_path, written) => {
+      seconds.push(written.samples.length / written.sampleRate);
+    },
     changed: (p) => changes.push(p),
     ...over,
   };
-  return { pipeline: new ImportPipeline(deps), store, events, changes };
+  return { pipeline: new ImportPipeline(deps), store, events, changes, heard, seconds };
 }
 
 const settle = async (events: JobEvent[], n: number) => {
@@ -64,7 +73,7 @@ const settle = async (events: JobEvent[], n: number) => {
 
 describe("ImportPipeline", () => {
   it("imports, transcribes and proposes the long pause", async () => {
-    const { pipeline, store, events } = setup();
+    const { pipeline, store, events, heard, seconds } = setup();
     const created = await pipeline.import(["/videos/talk.mp4"], null);
     expect(created.name).toBe("talk");
     expect(created.segments).toHaveLength(1);
@@ -78,6 +87,10 @@ describe("ImportPipeline", () => {
       [`${s.id}-0`, "Hello."],
       [`${s.id}-1`, "Again"],
     ]);
+    // Whisper heard the speech without the long pause; its times were mapped back.
+    expect(heard[0]).toMatch(/speech\.wav$/);
+    expect(seconds[0]).toBeCloseTo(7.4, 1);
+    expect(p.transcript[1]!.start).toBeCloseTo(6.2, 1);
     const silence = p.proposals.filter((x) => x.type === "silence");
     expect(silence).toHaveLength(1);
     const [[a, b]] = silence[0]!.cuts as [[number, number]];
