@@ -4,7 +4,8 @@
 import { writeFile } from "node:fs/promises";
 import { availableParallelism } from "node:os";
 import type { JobContext } from "../jobs/queue";
-import { type Encoder, prepArgs } from "../media/prep";
+import type { Encoder } from "../media/encoders";
+import { prepArgs } from "../media/prep";
 import { probe } from "../media/probe";
 import { runFfmpeg } from "../media/run";
 import { encodeWav, readWav } from "../media/wav";
@@ -18,7 +19,8 @@ export type Tools = {
   whisper: string;
   modelsDir: string;
   model: ModelId;
-  encoder: Encoder;
+  /** The H.264 encoder to try first (probed once); libx264 is the fallback. */
+  encoder: () => Promise<Encoder>;
   /** The user's names and terms, passed to whisper as its initial prompt. */
   dictionary?: () => Promise<string[]>;
 };
@@ -36,11 +38,12 @@ export function realDeps(tools: Tools): Omit<PipelineDeps, "store" | "queue" | "
           onProgress: (f) => ctx.progress(f),
           signal: ctx.signal,
         });
+      const encoder = await tools.encoder();
       try {
-        await pass(tools.encoder);
+        await pass(encoder);
       } catch (e) {
         // A hardware encoder can be missing or busy; the software one always works, just slower.
-        if (tools.encoder === "libx264" || ctx.signal.aborted) throw e;
+        if (encoder === "libx264" || ctx.signal.aborted) throw e;
         ctx.progress(0);
         await pass("libx264");
       }

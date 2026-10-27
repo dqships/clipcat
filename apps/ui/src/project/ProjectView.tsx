@@ -102,11 +102,11 @@ export function ProjectView({ projectId, jobs, onBack }: Props) {
             <div className="project__video project__video--pending" />
           )}
           {project && <Waveform project={project} playhead={playhead} onSeek={seek} />}
-          <JobLine jobs={jobs} />
+          <JobLine jobs={jobs} onCancel={() => void bridge()?.invoke("jobs:cancel", { id: projectId })} />
           {project && <Proposals project={project} onSeek={seek} onEdit={edit} />}
           {project && <AiPanel project={project} jobs={jobs} />}
           {project && <CaptionsPanel project={project} onEdit={edit} />}
-          {project && <ExportPanel project={project} jobs={jobs} />}
+          {project && <ExportPanel project={project} jobs={jobs} onEdit={edit} />}
         </section>
         <section className="project__transcript" aria-labelledby="transcript-title">
           <h2 id="transcript-title" className="section-title">

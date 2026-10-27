@@ -1,10 +1,13 @@
-// The export: one ffmpeg pass that cuts every kept range out of the original
-// recordings, fits them to the output frame, joins them, applies the speed,
-// burns in the captions with libass and encodes an MP4 that starts playing
-// before it has fully downloaded.
+// The export, in pieces a long video can survive: the timeline snapped to
+// whole output frames, the picture rendered in chunks of a few minutes (each
+// seeking straight to its part of the recordings), the sound in one pass, and
+// the two joined without re-encoding into an MP4 that starts playing before
+// it has fully downloaded. Snapping every kept range to whole frames keeps the
+// picture and the sound the same length piece by piece, so they stay in sync
+// however many cuts there are.
 
-import type { Project, Source, Timeline } from "@clipcat/core";
-import type { Encoder } from "./prep";
+import type { Project, Source, Timeline, TimelineItem } from "@clipcat/core";
+import { type Encoder, encoderArgs } from "./encoders";
 
 export type ExportFormat = "16:9" | "9:16";
 export type Size = { width: number; height: number };
@@ -29,108 +32,210 @@ export function exportFps(sources: Source[]): number {
   return fps > 0 ? Math.min(60, Math.round(fps)) : 30;
 }
 
-function encoderArgs(encoder: Encoder, size: Size): string[] {
-  const rate = size.width * size.height >= 2560 * 1440 ? "16M" : "10M";
-  switch (encoder) {
-    case "h264_videotoolbox":
-      return ["-c:v", "h264_videotoolbox", "-b:v", rate, "-allow_sw", "1", "-profile:v", "high"];
-    case "h264_mf":
-      return ["-c:v", "h264_mf", "-b:v", rate];
-    case "libx264":
-      return ["-c:v", "libx264", "-preset", "medium", "-crf", "18", "-profile:v", "high"];
+/** Output seconds per video chunk. */
+export const CHUNK_SECONDS = 240;
+const SAMPLE_RATE = 48000;
+
+/** A kept range in whole output frames: `frames` frames from frame `from` of its recording, counted on the export's frame grid. */
+export type FramedItem = TimelineItem & { from: number; frames: number };
+export type FramedTimeline = Omit<Timeline, "items"> & { items: FramedItem[]; fps: number; frames: number };
+
+/** One video render: some frames of the timeline, starting at output frame `start`. */
+export type Chunk = { items: FramedItem[]; start: number; frames: number };
+
+/** Source seconds that one output frame covers. */
+const frameStep = (fps: number, speed: number) => speed / fps;
+
+/**
+ * The timeline with every kept range snapped to the frame grid: frame k of a
+ * recording starts at k × speed / fps seconds. Ranges too short for a frame are
+ * dropped. Captions are timed against this, so they land on the same frames.
+ */
+export function frameTimeline(timeline: Timeline, fps: number): FramedTimeline {
+  const step = frameStep(fps, timeline.speed);
+  const items: FramedItem[] = [];
+  let frames = 0;
+  for (const item of timeline.items) {
+    const from = Math.round(item.sourceStart / step);
+    const n = Math.round(item.sourceEnd / step) - from;
+    if (n <= 0) continue;
+    items.push({
+      ...item,
+      sourceStart: from * step,
+      sourceEnd: (from + n) * step,
+      outputStart: frames / fps,
+      outputEnd: (frames + n) / fps,
+      from,
+      frames: n,
+    });
+    frames += n;
   }
+  return { items, duration: frames / fps, speed: timeline.speed, fps, frames };
 }
 
-export type ExportPlan = {
+/** Splits the timeline into renders of at most `size` frames, cutting a long range in two where it must. */
+export function exportChunks(timeline: FramedTimeline, size: number): Chunk[] {
+  const chunks: Chunk[] = [];
+  let current: FramedItem[] = [];
+  let filled = 0;
+  let start = 0;
+  for (const item of timeline.items) {
+    let rest = item;
+    while (rest.frames > 0) {
+      const take = Math.min(rest.frames, size - filled);
+      current.push({ ...rest, frames: take });
+      filled += take;
+      rest = { ...rest, from: rest.from + take, frames: rest.frames - take };
+      if (filled === size) {
+        chunks.push({ items: current, start, frames: filled });
+        start += filled;
+        current = [];
+        filled = 0;
+      }
+    }
+  }
+  if (filled > 0) chunks.push({ items: current, start, frames: filled });
+  return chunks;
+}
+
+type Shape = {
   project: Pick<Project, "sources" | "speed">;
-  timeline: Timeline;
   format: ExportFormat;
+  fps: number;
   /** The file each source is read from: the original, or the proxy for audio-only sources. */
   inputs: Map<string, string>;
-  /** An ASS file and its fonts directory, relative to ffmpeg's working directory; null for no captions. */
-  captions: { ass: string; fontsDir: string } | null;
-  encoder: Encoder;
   /** The filter graph is written here (relative to the working directory) and read with -filter_complex_script. */
   graphFile: string;
   out: string;
 };
 
-/**
- * The filter graph and ffmpeg arguments for an export. Each source is read
- * once, set to a constant frame rate and split into one branch per kept
- * range, so the graph stays one decode per recording however many cuts.
- */
-export function exportCommand(plan: ExportPlan): { graph: string; args: string[] } {
-  const { timeline, format, project } = plan;
-  if (timeline.items.length === 0) throw new Error("Nothing is left to export: every part of the video is cut.");
-  const size = exportSize(format, project.sources);
-  const fps = exportFps(project.sources);
-  const used = [...new Set(timeline.items.map((i) => i.sourceId))];
-  const inputIndex = new Map(used.map((id, i) => [id, i]));
-  const sources = new Map(project.sources.map((s) => [s.id, s]));
+const BASE_ARGS = ["-hide_banner", "-nostdin", "-y", "-progress", "pipe:1", "-nostats"];
+const sec = (t: number) => t.toFixed(6);
 
-  const fit = (s: Source) => {
-    const { width: W, height: H } = size;
-    if (format === "9:16") {
-      // Fill the frame: crop to its shape around the speaker, then scale.
-      const r = (W / H).toFixed(6);
-      const x = Math.min(1, Math.max(0, s.frameX)).toFixed(4);
-      return `crop=w='min(iw,ih*${r})':h='min(ih,iw/${r})':x='(iw-ow)*${x}':y='(ih-oh)/2',scale=${W}:${H}:flags=lanczos`;
-    }
-    // Fit inside the frame, letterboxed if the recording has another shape.
-    return `scale=${W}:${H}:force_original_aspect_ratio=decrease:flags=lanczos,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:color=black`;
-  };
+/** The sources a list of ranges reads, in order of first use. */
+function sourcesUsed(items: FramedItem[]): string[] {
+  return [...new Set(items.map((i) => i.sourceId))];
+}
 
-  const lines: string[] = [];
-  const counts = new Map<string, number>();
-  for (const item of timeline.items) counts.set(item.sourceId, (counts.get(item.sourceId) ?? 0) + 1);
-  for (const id of used) {
-    const i = inputIndex.get(id)!;
-    const n = counts.get(id)!;
-    const s = sources.get(id)!;
-    const vOut = Array.from({ length: n }, (_, k) => `[s${i}v${k}]`).join("");
-    const aOut = Array.from({ length: n }, (_, k) => `[s${i}a${k}]`).join("");
-    lines.push(`[${i}:v:0]fps=${fps},${fit(s)},setsar=1,format=yuv420p,split=${n}${vOut}`);
-    lines.push(`[${i}:a:0]aformat=sample_rates=48000:channel_layouts=stereo,asplit=${n}${aOut}`);
+function fitFilter(s: Source, format: ExportFormat, size: Size): string {
+  const { width: W, height: H } = size;
+  if (format === "9:16") {
+    // Fill the frame: crop to its shape around the speaker, then scale.
+    const r = (W / H).toFixed(6);
+    const x = Math.min(1, Math.max(0, s.frameX)).toFixed(4);
+    return `crop=w='min(iw,ih*${r})':h='min(ih,iw/${r})':x='(iw-ow)*${x}':y='(ih-oh)/2',scale=${W}:${H}:flags=lanczos`;
   }
+  // Fit inside the frame, letterboxed if the recording has another shape.
+  return `scale=${W}:${H}:force_original_aspect_ratio=decrease:flags=lanczos,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:color=black`;
+}
+
+export type ChunkPlan = Shape & {
+  chunk: Chunk;
+  /** An ASS file and its fonts directory, relative to ffmpeg's working directory; null for no captions. */
+  captions: { ass: string; fontsDir: string } | null;
+  encoder: Encoder;
+};
+
+/**
+ * The picture for one chunk, without sound. Each recording is read once from
+ * just before its first range in the chunk, set to the frame grid (fps ÷ speed
+ * in source time, so the speed change keeps every frame) and split into one
+ * branch per range, cut by frame number.
+ */
+export function chunkCommand(plan: ChunkPlan): { graph: string; args: string[] } {
+  const { chunk, fps, format, project } = plan;
+  const size = exportSize(format, project.sources);
+  const step = frameStep(fps, project.speed);
+  const sources = new Map(project.sources.map((s) => [s.id, s]));
+  const used = sourcesUsed(chunk.items);
+  // ffmpeg reads fps as a fraction: frames per source second.
+  const rate = `${fps * 1000}/${Math.round(project.speed * 1000)}`;
+
+  const args = [...BASE_ARGS];
+  const lines: string[] = [];
+  const first = new Map<string, number>();
+  used.forEach((id, i) => {
+    const mine = chunk.items.filter((x) => x.sourceId === id);
+    const from = Math.min(...mine.map((x) => x.from));
+    const to = Math.max(...mine.map((x) => x.from + x.frames));
+    first.set(id, from);
+    // Seeks to the first frame needed (decoding from the keyframe before it) and reads a little past the last.
+    args.push("-ss", sec(from * step), "-t", sec((to - from) * step + 1), "-i", plan.inputs.get(id)!);
+    const outs = mine.map((_, k) => `[s${i}v${k}]`).join("");
+    lines.push(`[${i}:v:0]fps=fps=${rate}:start_time=0,${fitFilter(sources.get(id)!, format, size)},setsar=1,format=yuv420p,split=${mine.length}${outs}`);
+  });
   const taken = new Map<string, number>();
-  const pairs: string[] = [];
-  timeline.items.forEach((item, k) => {
-    const i = inputIndex.get(item.sourceId)!;
+  const parts: string[] = [];
+  chunk.items.forEach((item, k) => {
+    const i = used.indexOf(item.sourceId);
     const b = taken.get(item.sourceId) ?? 0;
     taken.set(item.sourceId, b + 1);
-    const a = item.sourceStart.toFixed(6);
-    const e = item.sourceEnd.toFixed(6);
-    lines.push(`[s${i}v${b}]trim=start=${a}:end=${e},setpts=PTS-STARTPTS[v${k}]`);
-    lines.push(`[s${i}a${b}]atrim=start=${a}:end=${e},asetpts=PTS-STARTPTS[a${k}]`);
-    pairs.push(`[v${k}][a${k}]`);
+    const a = item.from - first.get(item.sourceId)!;
+    lines.push(`[s${i}v${b}]trim=start_frame=${a}:end_frame=${a + item.frames},setpts=PTS-STARTPTS[v${k}]`);
+    parts.push(`[v${k}]`);
   });
-  lines.push(`${pairs.join("")}concat=n=${timeline.items.length}:v=1:a=1[cv][ca]`);
-
-  let v = "[cv]";
-  let a = "[ca]";
-  if (project.speed !== 1) {
-    lines.push(`${v}setpts=PTS/${project.speed}[sv]`, `${a}atempo=${project.speed}[sa]`);
-    v = "[sv]";
-    a = "[sa]";
-  }
+  lines.push(`${parts.join("")}concat=n=${parts.length}:v=1:a=0[cv]`);
+  // Renumber the frames at the output rate; the speed change happens here.
   if (plan.captions) {
-    lines.push(`${v}ass=filename=${plan.captions.ass}:fontsdir=${plan.captions.fontsDir}[outv]`);
-    v = "[outv]";
+    // libass times each frame by its place in the whole video, so number from the chunk's start.
+    lines.push(`[cv]settb=1/${fps},setpts=N+${chunk.start},ass=filename=${plan.captions.ass}:fontsdir=${plan.captions.fontsDir},setpts=N[outv]`);
+  } else {
+    lines.push(`[cv]settb=1/${fps},setpts=N[outv]`);
   }
-  const graph = `${lines.join(";\n")}\n`;
 
-  const args = ["-hide_banner", "-nostdin", "-y", "-progress", "pipe:1", "-nostats"];
-  for (const id of used) args.push("-i", plan.inputs.get(id)!);
   args.push(
     "-filter_complex_script", plan.graphFile,
-    "-map", v, "-map", a,
-    ...encoderArgs(plan.encoder, size),
+    "-map", "[outv]", "-an",
+    ...encoderArgs(plan.encoder, size.width * size.height >= 2560 * 1440 ? "16M" : "10M", true),
     "-r", String(fps),
-    "-pix_fmt", "yuv420p",
-    "-c:a", "aac", "-b:a", "192k",
-    "-movflags", "+faststart",
     plan.out,
   );
-  return { graph, args };
+  return { graph: `${lines.join(";\n")}\n`, args };
+}
+
+export type AudioPlan = Shape & { timeline: FramedTimeline };
+
+/** The sound for the whole edit in one pass: every range cut by sample, joined, then sped up or slowed. */
+export function audioCommand(plan: AudioPlan): { graph: string; args: string[] } {
+  const { timeline, fps, project } = plan;
+  const step = frameStep(fps, project.speed);
+  const used = sourcesUsed(timeline.items);
+  const args = [...BASE_ARGS];
+  const lines: string[] = [];
+  used.forEach((id, i) => {
+    args.push("-i", plan.inputs.get(id)!);
+    const n = timeline.items.filter((x) => x.sourceId === id).length;
+    const outs = Array.from({ length: n }, (_, k) => `[s${i}a${k}]`).join("");
+    lines.push(`[${i}:a:0]aformat=sample_rates=${SAMPLE_RATE}:channel_layouts=stereo,asplit=${n}${outs}`);
+  });
+  const taken = new Map<string, number>();
+  const parts: string[] = [];
+  timeline.items.forEach((item, k) => {
+    const i = used.indexOf(item.sourceId);
+    const b = taken.get(item.sourceId) ?? 0;
+    taken.set(item.sourceId, b + 1);
+    const a = Math.round(item.from * step * SAMPLE_RATE);
+    const e = Math.round((item.from + item.frames) * step * SAMPLE_RATE);
+    lines.push(`[s${i}a${b}]atrim=start_sample=${a}:end_sample=${e},asetpts=PTS-STARTPTS[a${k}]`);
+    parts.push(`[a${k}]`);
+  });
+  lines.push(`${parts.join("")}concat=n=${parts.length}:v=0:a=1${project.speed === 1 ? "[outa]" : `[ca];\n[ca]atempo=${project.speed}[outa]`}`);
+  args.push("-filter_complex_script", plan.graphFile, "-map", "[outa]", "-vn", "-c:a", "aac", "-b:a", "192k", plan.out);
+  return { graph: `${lines.join(";\n")}\n`, args };
+}
+
+/** The concat list for the chunks, relative to the folder it sits in. */
+export const chunkList = (files: string[]) => `ffconcat version 1.0\n${files.map((f) => `file '${f}'`).join("\n")}\n`;
+
+/** Joins the chunks and the sound without re-encoding, with the index up front for streaming. */
+export function muxArgs(list: string, audio: string, out: string): string[] {
+  return [
+    ...BASE_ARGS,
+    "-f", "concat", "-safe", "0", "-i", list,
+    "-i", audio,
+    "-map", "0:v:0", "-map", "1:a:0",
+    "-c", "copy",
+    "-movflags", "+faststart",
+    out,
+  ];
 }

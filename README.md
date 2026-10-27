@@ -63,10 +63,17 @@ from the pause finder and from Claude, are accepted or rejected under the
 preview. Every edit is undoable with Cmd/Ctrl+Z and redone with
 Shift+Cmd/Ctrl+Z, and the preview plays the edit with the cuts skipped.
 
-Export renders the edit with ffmpeg in one pass: 16:9 at the recordings' own
-height (up to 1440p) or 9:16 at 1080×1920, cropped around the speaker, on the
-hardware H.264 encoder (libx264 if it fails). Captions are built from the kept
-words, burned in with libass in Jost, and saved as an `.srt` beside the video.
+Export renders the edit with ffmpeg: 16:9 at the recordings' own height (up to
+1440p) or 9:16 at 1080×1920, cropped around the speaker, at the speed set in the
+Export panel (0.5× to 2×, which the preview plays at too). Every kept range is
+snapped to whole frames, the picture is rendered four minutes at a time, each
+chunk seeking straight to its part of the recordings, and the sound in one pass;
+the two are joined without re-encoding, so a long video stays in sync and a
+cancel (the × beside the progress bar) stops at once. The H.264 encoder is the
+machine's own: VideoToolbox on a Mac; on Windows NVENC, Quick Sync, AMF or Media
+Foundation, whichever encodes a test clip first. libx264 takes over if it fails.
+Captions are built from the kept words, burned in with libass in Jost, and
+saved as an `.srt` beside the video.
 The caption font in `apps/desktop/resources/fonts` is Jost SemiBold (SIL OFL,
 `OFL.txt`), converted from the `@fontsource/jost` Latin subsets.
 

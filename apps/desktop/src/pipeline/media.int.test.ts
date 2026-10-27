@@ -19,6 +19,15 @@ import { ImportPipeline } from "./import";
 const binDir = process.env.CLIPCAT_TEST_FFMPEG;
 const exe = (name: string) => join(binDir ?? "", process.platform === "win32" ? `${name}.exe` : name);
 const run = promisify(execFile);
+const sw = async () => "libx264" as const;
+
+/** Seconds of video and of audio in a file, from the streams' own durations. */
+async function streamDurations(file: string): Promise<{ video: number; audio: number }> {
+  const { stdout } = await run(exe("ffprobe"), ["-v", "error", "-show_entries", "stream=codec_type,duration", "-of", "json", file]);
+  const streams = (JSON.parse(stdout) as { streams: { codec_type: string; duration: string }[] }).streams;
+  const of = (type: string) => Number(streams.find((s) => s.codec_type === type)?.duration ?? Number.NaN);
+  return { video: of("video"), audio: of("audio") };
+}
 
 describe.skipIf(!binDir)("prep with real ffmpeg", () => {
   let root: string;
@@ -50,7 +59,7 @@ describe.skipIf(!binDir)("prep with real ffmpeg", () => {
     const events: JobEvent[] = [];
     store = new ProjectStore(join(root, "projects"));
     const pipeline = new ImportPipeline({
-      ...realDeps({ ffmpeg: exe("ffmpeg"), ffprobe: exe("ffprobe"), whisper: "", modelsDir: "", model: "base", encoder: "libx264" }),
+      ...realDeps({ ffmpeg: exe("ffmpeg"), ffprobe: exe("ffprobe"), whisper: "", modelsDir: "", model: "base", encoder: sw }),
       // No speech model in CI: stand in for whisper with the words we generated, timed
       // in the speech audio, where 1.7 s to 3.8 s of the pause was taken out.
       ensureModel: async () => ({ model: "fake", path: "" }),
@@ -79,7 +88,7 @@ describe.skipIf(!binDir)("prep with real ffmpeg", () => {
     expect(files).toEqual(expect.arrayContaining(["proxy.mp4", "audio.wav", "speech.wav", "waveform.png", "thumb-0001.jpg"]));
     expect(p.transcript[1]!.start).toBeCloseTo(4, 0);
     expect((await stat(join(dir, "proxy.mp4"))).size).toBeGreaterThan(10_000);
-    const proxy = await realDeps({ ffmpeg: "", ffprobe: exe("ffprobe"), whisper: "", modelsDir: "", model: "base", encoder: "libx264" }).probe(
+    const proxy = await realDeps({ ffmpeg: "", ffprobe: exe("ffprobe"), whisper: "", modelsDir: "", model: "base", encoder: sw }).probe(
       join(dir, "proxy.mp4"),
     );
     expect(proxy.height).toBe(720);
@@ -96,16 +105,18 @@ describe.skipIf(!binDir)("prep with real ffmpeg", () => {
     const pause = p.proposals.find((x) => x.type === "silence")!;
     let n = 0;
     await store.update(projectId, null, (q) => applyEdit(q, { type: "decide", ids: [pause.id], status: "accepted" }, () => `e${++n}`));
-    const exporter = new ExportRunner({
+    const deps = {
       store,
       queue: new JobQueue(() => {}),
       changed: () => {},
-      ffmpeg: (args, { cwd, duration, ctx }) => runFfmpeg(exe("ffmpeg"), args, { cwd, duration, signal: ctx.signal }),
-      encoder: "libx264",
+      ffmpeg: (args: string[], { cwd, duration, ctx }: { cwd: string; duration: number; ctx: { signal: AbortSignal } }) =>
+        runFfmpeg(exe("ffmpeg"), args, { cwd, duration, signal: ctx.signal }),
+      encoder: sw,
       fontsDir: join(__dirname, "..", "..", "resources", "fonts"),
-    });
+    };
+    const exporter = new ExportRunner(deps);
     const ctx = { signal: new AbortController().signal, progress: () => {} };
-    const probe = realDeps({ ffmpeg: "", ffprobe: exe("ffprobe"), whisper: "", modelsDir: "", model: "base", encoder: "libx264" }).probe;
+    const probe = realDeps({ ffmpeg: "", ffprobe: exe("ffprobe"), whisper: "", modelsDir: "", model: "base", encoder: sw }).probe;
 
     const wide = join(root, "wide.mp4");
     await exporter.run(projectId, "16:9", wide, ctx);
@@ -125,5 +136,20 @@ describe.skipIf(!binDir)("prep with real ffmpeg", () => {
     expect([t.width, t.height]).toEqual([1080, 1920]);
     expect((await store.get(projectId)).lastExport).toMatchObject({ path: tall, format: "9:16" });
     expect((await readdir(root)).some((f) => f.includes("partial"))).toBe(false);
+
+    // A long video's path: chunks of about a second, joined, at 1.25× speed.
+    await store.update(projectId, null, (q) => {
+      q.speed = 1.25;
+    });
+    const chunked = new ExportRunner({ ...deps, chunkSeconds: 1 });
+    const fast = join(root, "fast.mp4");
+    await chunked.run(projectId, "16:9", fast, ctx);
+    const f = await probe(fast);
+    expect(f.duration).toBeGreaterThan(w.duration / 1.25 - 0.15);
+    expect(f.duration).toBeLessThan(w.duration / 1.25 + 0.15);
+    // Picture and sound end together: the chunks join without a gap or drift.
+    const streams = await streamDurations(fast);
+    expect(Math.abs(streams.video - streams.audio)).toBeLessThan(0.05);
+    expect((await readdir(store.dir(projectId))).includes("export")).toBe(false);
   }, 180_000);
 });

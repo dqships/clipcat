@@ -4,30 +4,12 @@
 // of the app can treat every source as video.
 
 import type { MediaInfo } from "@clipcat/core";
+import { type Encoder, encoderArgs } from "./encoders";
 
 export type PrepOutputs = { proxy: string; wav: string; waveform: string; thumbs: string };
-export type Encoder = "h264_videotoolbox" | "h264_mf" | "libx264";
 
 export const PROXY_HEIGHT = 720;
 export const THUMB_EVERY_SECONDS = 5;
-
-/** The hardware H.264 encoder for this platform, with libx264 as the fallback. */
-export function defaultEncoder(platform: NodeJS.Platform): Encoder {
-  if (platform === "darwin") return "h264_videotoolbox";
-  if (platform === "win32") return "h264_mf";
-  return "libx264";
-}
-
-function encoderArgs(encoder: Encoder): string[] {
-  switch (encoder) {
-    case "h264_videotoolbox":
-      return ["-c:v", "h264_videotoolbox", "-b:v", "6M", "-allow_sw", "1"];
-    case "h264_mf":
-      return ["-c:v", "h264_mf", "-b:v", "6M"];
-    case "libx264":
-      return ["-c:v", "libx264", "-preset", "veryfast", "-crf", "23"];
-  }
-}
 
 /**
  * ffmpeg arguments for the prep pass. `thumbs` is a printf pattern
@@ -53,7 +35,7 @@ export function prepArgs(input: string, media: MediaInfo, out: PrepOutputs, enco
   args.push(
     "-map", v, "-map", a,
     "-vf", `fps=${fps},scale=-2:${PROXY_HEIGHT}:flags=bilinear,format=yuv420p`,
-    ...encoderArgs(encoder),
+    ...encoderArgs(encoder, "6M", false),
     "-g", String(fps),
     "-c:a", "aac", "-b:a", "128k",
     ...(hasVideo ? [] : ["-shortest"]),

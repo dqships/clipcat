@@ -14,6 +14,8 @@ export const EditOp = z.discriminatedUnion("type", [
   z.object({ type: z.literal("decide"), ids: z.array(z.string()).min(1).max(10_000), status: ProposalStatus }),
   /** Caption style. Not an undo step: it changes no cut, and the controls show it. */
   z.object({ type: z.literal("captions"), captions: CaptionsPatch }),
+  /** Playback speed of the finished video. Not an undo step either, for the same reason. */
+  z.object({ type: z.literal("speed"), speed: z.number().min(0.5).max(2) }),
   z.object({ type: z.literal("undo") }),
   z.object({ type: z.literal("redo") }),
 ]);
@@ -53,7 +55,7 @@ function wordRanges(project: Project, ids: Set<string>): { sourceId: string; ran
 
 /**
  * Applies `op` to a copy of `project` and returns it. Cuts and decisions
- * record an undo step; caption style, undo and redo don't. Unknown word or proposal ids are an error,
+ * record an undo step; caption style, speed, undo and redo don't. Unknown word or proposal ids are an error,
  * not a silent no-op, so a stale UI finds out.
  */
 export function applyEdit(project: Project, op: EditOp, id: IdFactory): Project {
@@ -71,6 +73,11 @@ export function applyEdit(project: Project, op: EditOp, id: IdFactory): Project 
 
   if (op.type === "captions") {
     p.captions = Captions.parse({ ...p.captions, ...op.captions });
+    return p;
+  }
+
+  if (op.type === "speed") {
+    p.speed = op.speed;
     return p;
   }
 

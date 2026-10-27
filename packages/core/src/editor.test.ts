@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { initialSegments, isWordKept } from "./edits";
-import { HISTORY_LIMIT, applyEdit } from "./editor";
+import { EditOp, HISTORY_LIMIT, applyEdit } from "./editor";
 import { counter, source, words } from "./fixtures";
 import { Project } from "./project";
 
@@ -83,5 +83,12 @@ describe("caption edits", () => {
     p = applyEdit(p, { type: "captions", captions: { enabled: false } }, id);
     expect(p.captions).toMatchObject({ mode: "word", case: "upper", enabled: false });
     expect(p.history.past).toHaveLength(0);
+  });
+
+  it("sets the speed without an undo step", () => {
+    const p = applyEdit(project(), { type: "speed", speed: 1.25 }, id);
+    expect(p.speed).toBe(1.25);
+    expect(p.history.past).toHaveLength(0);
+    expect(EditOp.safeParse({ type: "speed", speed: 3 }).success).toBe(false);
   });
 });

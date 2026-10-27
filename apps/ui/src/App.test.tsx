@@ -245,6 +245,28 @@ describe("App", () => {
     expect(invoke).toHaveBeenCalledWith("project:reveal-export", { id: "p1" });
   });
 
+  it("changes the speed and cancels a running export", async () => {
+    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, agent: "claude" };
+    const { invoke, emit } = fakeBridge({
+      "app:info": info(),
+      "library:list": [summary],
+      "project:get": project,
+      "ai:status": ready,
+      "project:edit": { ...project, speed: 1.25, revision: 4 },
+      "jobs:cancel": undefined,
+    });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "talk" }));
+    fireEvent.change(await screen.findByLabelText("Speed"), { target: { value: "1.25" } });
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:edit", { id: "p1", revision: 3, op: { type: "speed", speed: 1.25 } }));
+    // 75 s with the speed at 1.25× runs a minute.
+    expect(await screen.findByText("The edit runs 1:00.")).toBeTruthy();
+
+    emit("job", { projectId: "p1", jobId: "j9", kind: "export", label: "Exporting 9:16", state: "running", fraction: 0.3 });
+    fireEvent.click(screen.getByRole("button", { name: "Cancel Exporting 9:16" }));
+    expect(invoke).toHaveBeenCalledWith("jobs:cancel", { id: "p1" });
+  });
+
   it("says when Claude Code isn't installed", async () => {
     const missing = { claude: { status: "not-installed", version: null, detail: "Install Claude Code, then reopen ClipCat." }, codex: { status: "signed-out", version: "0.165.0", detail: "Run `codex login` in a terminal, then try again." }, agent: "claude" };
     fakeBridge({ "app:info": info(), "library:list": [summary], "project:get": project, "ai:status": missing });
