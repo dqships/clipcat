@@ -3,22 +3,18 @@ import type { AgentStatusValue } from "@clipcat/ipc";
 import { Sparkles } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { bridge } from "../bridge";
-import { formatDuration } from "../format";
 import { ICON_STROKE } from "../icons";
 import type { ProjectJobs } from "../useJobs";
 
 const AI_TYPES = new Set<Proposal["type"]>(["retake", "cleanup", "tighten"]);
 
-const TYPE_LABEL: Record<string, string> = { retake: "Retake", cleanup: "Clean-up", tighten: "Tighten" };
-
-type Props = { project: Project; jobs: ProjectJobs; onSeek: (seconds: number) => void };
+type Props = { project: Project; jobs: ProjectJobs };
 
 /**
- * Asks the user's Claude Code for cuts: an optional brief, one button, and the
- * proposals it came back with. Accepting and rejecting them comes with the
- * transcript editor.
+ * Asks the user's Claude Code for cuts: an optional brief and one button. What
+ * comes back is listed with the other suggested cuts to accept or reject.
  */
-export function AiPanel({ project, jobs, onSeek }: Props) {
+export function AiPanel({ project, jobs }: Props) {
   const [claude, setClaude] = useState<AgentStatusValue | null>(null);
   const [brief, setBrief] = useState(project.brief);
   const [error, setError] = useState<string | null>(null);
@@ -35,8 +31,6 @@ export function AiPanel({ project, jobs, onSeek }: Props) {
   const ready = claude?.status === "ready";
   const hasWords = project.transcript.length > 0;
   const proposals = project.proposals.filter((p) => AI_TYPES.has(p.type) && p.status === "pending");
-  const seconds = proposals.reduce((n, p) => n + p.cuts.reduce((m, [a, b]) => m + (b - a), 0), 0);
-  const text = new Map(project.transcript.map((w) => [w.id, w.text]));
 
   const findCuts = () => {
     setError(null);
@@ -82,24 +76,6 @@ export function AiPanel({ project, jobs, onSeek }: Props) {
         </p>
       )}
       {project.suggestedTitle && <p className="ai__hint">Suggested title: {project.suggestedTitle}</p>}
-      {proposals.length > 0 && (
-        <>
-          <p className="project__summary">
-            {proposals.length} {proposals.length === 1 ? "cut" : "cuts"} proposed, {formatDuration(seconds)} in all.
-          </p>
-          <ol className="proposals">
-            {proposals.map((p) => (
-              <li key={p.id}>
-                <button type="button" className="proposal" onClick={() => onSeek(p.cuts[0]?.[0] ?? 0)}>
-                  <span className="proposal__type">{TYPE_LABEL[p.type] ?? p.type}</span>
-                  <span className="proposal__reason">{p.reason}</span>
-                  <span className="proposal__words">“{p.wordIds.map((id) => text.get(id) ?? "").join(" ")}”</span>
-                </button>
-              </li>
-            ))}
-          </ol>
-        </>
-      )}
     </section>
   );
 }

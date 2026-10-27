@@ -4,7 +4,7 @@
 // of reaching the file system.
 
 import { z } from "zod";
-import { Project } from "@clipcat/core";
+import { EditOp, Project } from "@clipcat/core";
 import { CHANNEL_PREFIX, EVENT_PREFIX } from "./channels";
 
 export const ToolInfo = z.object({
@@ -71,6 +71,11 @@ export const methods = {
   "ai:status": { input: z.void(), output: AiStatus },
   /** Saves the brief and queues an AI pass that proposes retake, cleanup and tighten cuts. */
   "project:analyze": { input: ProjectRef.extend({ brief: z.string().max(4000) }), output: z.void() },
+  /**
+   * One transcript-editor change. `revision` is the project the UI is showing;
+   * if anything saved since, the edit is refused and the UI reloads.
+   */
+  "project:edit": { input: ProjectRef.extend({ revision: z.number().int().nonnegative(), op: EditOp }), output: Project },
   /** Cancels the project's queued and running jobs. */
   "jobs:cancel": { input: ProjectRef, output: z.void() },
 } as const;
