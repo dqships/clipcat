@@ -9,6 +9,7 @@ import { AiPanel } from "./AiPanel";
 import { CaptionOverlay } from "./CaptionOverlay";
 import { CaptionsPanel } from "./CaptionsPanel";
 import { ExportPanel } from "./ExportPanel";
+import { FramingPanel } from "./FramingPanel";
 import { type Playhead, Preview, type PreviewHandle } from "./Preview";
 import { Proposals } from "./Proposals";
 import { ShortsPanel } from "./ShortsPanel";
@@ -95,7 +96,7 @@ export function ProjectView({ projectId, jobs, onBack, onOpen }: Props) {
         )}
         <section className="project__preview" aria-label="Preview">
           {project ? (
-            <div className="stage">
+            <div className={project.aspectRatio === "9:16" ? "stage stage--tall" : "stage"}>
               <Preview ref={preview} project={project} onTime={setPlayhead} />
               <CaptionOverlay project={project} playhead={playhead} />
             </div>
@@ -107,6 +108,7 @@ export function ProjectView({ projectId, jobs, onBack, onOpen }: Props) {
           {project && <Proposals project={project} onSeek={seek} onEdit={edit} />}
           {project && <AiPanel project={project} jobs={jobs} />}
           {project && <ShortsPanel project={project} jobs={jobs} onOpen={onOpen} />}
+          {project && <FramingPanel project={project} playhead={playhead} onEdit={edit} />}
           {project && <CaptionsPanel project={project} onEdit={edit} />}
           {project && <ExportPanel project={project} jobs={jobs} onEdit={edit} />}
         </section>

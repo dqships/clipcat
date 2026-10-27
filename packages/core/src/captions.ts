@@ -25,6 +25,12 @@ const MIN_CUE = 0.4;
 /** Caption sizes are given for a 1080-pixel frame and scaled from there. */
 const BASE = 1080;
 
+/** A caption size (given for 1080p) in pixels of `frame`; portrait frames get bigger type, as short-form captions are. */
+export function captionPixels(size: number, frame: Frame): number {
+  const tall = frame.height > frame.width;
+  return Math.round(size * (Math.min(frame.width, frame.height) / BASE) * (tall ? 1.6 : 1));
+}
+
 /** Every kept word in play order, with its times on the output timeline. */
 export function outputWords(project: Pick<Project, "sources" | "transcript" | "segments">, timeline: Timeline): CueWord[] {
   const order = new Map(project.sources.map((s) => [s.id, s.order]));
@@ -121,7 +127,7 @@ export const CAPTION_HIGHLIGHT = "#F2B705";
  */
 export function toAss(cues: Cue[], style: Captions, frame: Frame): string {
   const scale = Math.min(frame.width, frame.height) / BASE;
-  const size = Math.round(style.size * scale * (frame.height > frame.width ? 1.6 : 1));
+  const size = captionPixels(style.size, frame);
   const shadow = style.effect === "shadow";
   const box = style.background === "rounded";
   const outline = box ? Math.round(12 * scale) : shadow ? Math.max(1, Math.round(2 * scale)) : 0;

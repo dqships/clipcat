@@ -19,6 +19,7 @@ import { broadcast, registerIpc } from "./ipc";
 import { JobQueue } from "./jobs/queue";
 import { encoderTestArgs, lazyEncoder, pickEncoder } from "./media/encoders";
 import { runFfmpeg } from "./media/run";
+import { closeFaceDetector, faceDetector, faceDetectorProblem, setFacePage } from "./faceDetector";
 import { realDeps } from "./pipeline/deps";
 import { ExportRunner } from "./pipeline/export";
 import { ImportPipeline } from "./pipeline/import";
@@ -126,6 +127,7 @@ function startPipeline() {
       model: MODEL,
       encoder,
       dictionary: async () => (await settings.get()).dictionary,
+      faceDetector,
     }),
     store,
     queue,
@@ -145,6 +147,9 @@ function startPipeline() {
 
 /** A file name from the video's title: no characters Windows or macOS refuse. */
 const fileName = (title: string) => title.replace(/[\\/:*?"<>|\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim().slice(0, 120) || "ClipCat export";
+
+/** The app's window; the face detector's hidden window is never it. */
+let mainWindow: BrowserWindow | null = null;
 
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -175,6 +180,12 @@ function createWindow(): BrowserWindow {
     if (!url.startsWith(APP_ORIGIN) && !(DEV_URL && url.startsWith(DEV_URL))) event.preventDefault();
   });
 
+  mainWindow = win;
+  win.on("closed", () => {
+    mainWindow = null;
+    closeFaceDetector();
+  });
+
   win.once("ready-to-show", () => {
     if (!isSmokeRun()) win.show();
   });
@@ -193,6 +204,7 @@ if (!squirrelLaunch) {
       return { claude, codex, api: { hasKey: key !== null, model: current.apiModel }, agent: current.agent };
     };
     serveUi(UI_ROOT);
+    setFacePage(DEV_URL ? new URL("faces.html", DEV_URL).toString() : `${APP_ORIGIN}/faces.html`);
     serveMedia((id) => store.dir(id));
     registerIpc(
       {
@@ -202,7 +214,8 @@ if (!squirrelLaunch) {
           const info = await appInfo();
           const file = process.env.CLIPCAT_SMOKE_IMPORT;
           const ai = await aiStatus();
-          finishSmoke({ screen, info, ai, ...(file ? { import: await smokeImport(pipeline, exporter, store, queue, file) } : {}) });
+          const faceDetector = await faceDetectorProblem();
+          finishSmoke({ screen, info, ai, faceDetector, ...(file ? { import: await smokeImport(pipeline, exporter, store, queue, file) } : {}) });
         },
         "library:list": () => store.list(),
         "files:pick": async (_, event) => {
@@ -282,7 +295,7 @@ if (!squirrelLaunch) {
   });
 
   app.on("second-instance", () => {
-    const [win] = BrowserWindow.getAllWindows();
+    const win = mainWindow;
     if (win) {
       if (win.isMinimized()) win.restore();
       win.focus();
@@ -290,7 +303,7 @@ if (!squirrelLaunch) {
   });
 
   app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    if (!mainWindow) createWindow();
   });
 
   app.on("window-all-closed", () => {

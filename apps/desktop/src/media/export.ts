@@ -6,7 +6,7 @@
 // picture and the sound the same length piece by piece, so they stay in sync
 // however many cuts there are.
 
-import type { Project, Source, Timeline, TimelineItem } from "@clipcat/core";
+import { type Project, type Source, type Timeline, type TimelineItem, cropOffset, framingAt } from "@clipcat/core";
 import { type Encoder, encoderArgs } from "./encoders";
 
 export type ExportFormat = "16:9" | "9:16";
@@ -117,12 +117,18 @@ function sourcesUsed(items: FramedItem[]): string[] {
   return [...new Set(items.map((i) => i.sourceId))];
 }
 
-function fitFilter(s: Source, format: ExportFormat, size: Size): string {
+/**
+ * Fits one kept range of `s` to the export. For 9:16 the crop is placed
+ * around the speaker in that range (see framingAt), so it can move at a cut
+ * but never during one.
+ */
+export function fitFilter(s: Source, item: Pick<FramedItem, "sourceStart" | "sourceEnd">, format: ExportFormat, size: Size): string {
   const { width: W, height: H } = size;
   if (format === "9:16") {
     // Fill the frame: crop to its shape around the speaker, then scale.
     const r = (W / H).toFixed(6);
-    const x = Math.min(1, Math.max(0, s.frameX)).toFixed(4);
+    const aspect = s.media.width > 0 && s.media.height > 0 ? s.media.width / s.media.height : 16 / 9;
+    const x = cropOffset(framingAt(s, item.sourceStart, item.sourceEnd), aspect, W / H).toFixed(4);
     return `crop=w='min(iw,ih*${r})':h='min(ih,iw/${r})':x='(iw-ow)*${x}':y='(ih-oh)/2',scale=${W}:${H}:flags=lanczos`;
   }
   // Fit inside the frame, letterboxed if the recording has another shape.
@@ -162,7 +168,7 @@ export function chunkCommand(plan: ChunkPlan): { graph: string; args: string[] }
     // Seeks to the first frame needed (decoding from the keyframe before it) and reads a little past the last.
     args.push("-ss", sec(from * step), "-t", sec((to - from) * step + 1), "-i", plan.inputs.get(id)!);
     const outs = mine.map((_, k) => `[s${i}v${k}]`).join("");
-    lines.push(`[${i}:v:0]fps=fps=${rate}:start_time=0,${fitFilter(sources.get(id)!, format, size)},setsar=1,format=yuv420p,split=${mine.length}${outs}`);
+    lines.push(`[${i}:v:0]fps=fps=${rate}:start_time=0,split=${mine.length}${outs}`);
   });
   const taken = new Map<string, number>();
   const parts: string[] = [];
@@ -171,7 +177,8 @@ export function chunkCommand(plan: ChunkPlan): { graph: string; args: string[] }
     const b = taken.get(item.sourceId) ?? 0;
     taken.set(item.sourceId, b + 1);
     const a = item.from - first.get(item.sourceId)!;
-    lines.push(`[s${i}v${b}]trim=start_frame=${a}:end_frame=${a + item.frames},setpts=PTS-STARTPTS[v${k}]`);
+    const fit = fitFilter(sources.get(item.sourceId)!, item, format, size);
+    lines.push(`[s${i}v${b}]trim=start_frame=${a}:end_frame=${a + item.frames},setpts=PTS-STARTPTS,${fit},setsar=1,format=yuv420p[v${k}]`);
     parts.push(`[v${k}]`);
   });
   lines.push(`${parts.join("")}concat=n=${parts.length}:v=1:a=0[cv]`);

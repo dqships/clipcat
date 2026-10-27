@@ -83,6 +83,15 @@ suggestions; its recordings' prepared media are hard links to the long
 video's, so a short takes no extra disk space. Deleting either one leaves the
 other intact.
 
+The vertical crop follows the speaker. After import, ClipCat samples a frame
+every 2 seconds from the proxy and finds faces with MediaPipe's BlazeFace
+short-range model, run on its WebAssembly runtime in a hidden window
+(apps/ui/faces.html). Both ship with the app, so detection works offline and
+the same on macOS and Windows. Each kept stretch is cropped around the median
+face position in it, so the frame moves only at cuts. Set Shape to Vertical
+9:16 to preview the crop, and untick "Follow the speaker" to place it by hand
+per recording.
+
 Editing happens in the transcript: click a word to jump there, shift-click to
 select a run, and press Delete to cut it (again to restore). Suggested cuts,
 from the pause finder and from Claude, are accepted or rejected under the
@@ -108,3 +117,6 @@ The caption font in `apps/desktop/resources/fonts` is Jost SemiBold (SIL OFL,
 A few files in `apps/desktop` are adapted from Diffusion Studio's editor and keep
 their MPL-2.0 headers. The bundled ffmpeg is a GPL build; ClipCat is a personal
 tool and isn't distributed.
+
+The face detector is MediaPipe Tasks Vision and its BlazeFace short-range model
+(`apps/ui/src/faces/blaze_face_short_range.tflite`), both Apache-2.0.

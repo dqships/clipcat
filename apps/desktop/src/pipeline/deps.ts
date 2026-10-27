@@ -6,6 +6,7 @@
 import { writeFile } from "node:fs/promises";
 import { availableParallelism } from "node:os";
 import type { Encoder } from "../media/encoders";
+import { type FaceDetector, findFaces } from "../media/faces";
 import { prepArgs } from "../media/prep";
 import { probe } from "../media/probe";
 import { runFfmpeg } from "../media/run";
@@ -27,6 +28,8 @@ export type Tools = {
   encoder: () => Promise<Encoder>;
   /** The user's names and terms, passed to whisper as its initial prompt. */
   dictionary?: () => Promise<string[]>;
+  /** The face detector, or null when it can't run. */
+  faceDetector?: () => Promise<FaceDetector | null>;
 };
 
 /** Leaves a couple of cores for the UI and the preview. */
@@ -96,6 +99,11 @@ export function realDeps(tools: Tools): Omit<PipelineDeps, "store" | "queue" | "
         signal: ctx.signal,
       });
       return { json, backend: "whisper.cpp", model: tools.model, ...(fallback ? { fallback } : {}) } satisfies Heard;
+    },
+    faces: async ({ proxy, duration, dir }, ctx) => {
+      const detect = (await tools.faceDetector?.()) ?? null;
+      if (!detect) return null;
+      return findFaces({ ffmpeg: tools.ffmpeg, proxy, duration, dir, detect, ctx });
     },
     readWav,
     writeWav: (path, pcm) => writeFile(path, encodeWav(pcm.samples, pcm.sampleRate)),

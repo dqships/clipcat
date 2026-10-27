@@ -5,7 +5,7 @@
 
 import { z } from "zod";
 import { type IdFactory, setRange, wordSpanRange } from "./edits";
-import { Captions, CaptionsPatch, type Project, ProposalStatus, type Range, type Snapshot, type Word } from "./project";
+import { AspectRatio, Captions, CaptionsPatch, type Project, ProposalStatus, type Range, type Snapshot, type Word } from "./project";
 
 export const EditOp = z.discriminatedUnion("type", [
   /** Cut (included: false) or restore (included: true) these words. */
@@ -16,6 +16,10 @@ export const EditOp = z.discriminatedUnion("type", [
   z.object({ type: z.literal("captions"), captions: CaptionsPatch }),
   /** Playback speed of the finished video. Not an undo step either, for the same reason. */
   z.object({ type: z.literal("speed"), speed: z.number().min(0.5).max(2) }),
+  /** The shape the preview shows and the project is made for. Not an undo step. */
+  z.object({ type: z.literal("aspect"), aspectRatio: AspectRatio }),
+  /** Where a recording's speaker is (0..1 across), set by hand; null goes back to following the faces found. Not an undo step. */
+  z.object({ type: z.literal("frame"), sourceId: z.string(), x: z.number().min(0).max(1).nullable() }),
   z.object({ type: z.literal("undo") }),
   z.object({ type: z.literal("redo") }),
 ]);
@@ -55,7 +59,7 @@ function wordRanges(project: Project, ids: Set<string>): { sourceId: string; ran
 
 /**
  * Applies `op` to a copy of `project` and returns it. Cuts and decisions
- * record an undo step; caption style, speed, undo and redo don't. Unknown word or proposal ids are an error,
+ * record an undo step; caption style, speed, shape, framing, undo and redo don't. Unknown word or proposal ids are an error,
  * not a silent no-op, so a stale UI finds out.
  */
 export function applyEdit(project: Project, op: EditOp, id: IdFactory): Project {
@@ -78,6 +82,19 @@ export function applyEdit(project: Project, op: EditOp, id: IdFactory): Project 
 
   if (op.type === "speed") {
     p.speed = op.speed;
+    return p;
+  }
+
+  if (op.type === "aspect") {
+    p.aspectRatio = op.aspectRatio;
+    return p;
+  }
+
+  if (op.type === "frame") {
+    const source = p.sources.find((s) => s.id === op.sourceId);
+    if (!source) throw new Error(`Unknown source: ${op.sourceId}`);
+    source.framing = op.x === null ? "auto" : "manual";
+    if (op.x !== null) source.frameX = op.x;
     return p;
   }
 

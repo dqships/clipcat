@@ -324,6 +324,13 @@ body {
   background: var(--color-primary);
 }
 
+/* The vertical shape: the picture covers a 9:16 box, slid to where the export crops it. */
+.project__video--tall {
+  display: block;
+  aspect-ratio: 9 / 16;
+  object-fit: cover;
+}
+
 .project__transcript {
   display: grid;
   align-content: start;
@@ -673,6 +680,11 @@ body {
 .stage {
   position: relative;
   container-type: inline-size;
+}
+
+.stage--tall {
+  width: min(100%, calc(70vh * 9 / 16));
+  justify-self: center;
 }
 
 .captions {

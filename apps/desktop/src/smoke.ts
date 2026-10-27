@@ -4,7 +4,9 @@
 // With CLIPCAT_SMOKE_IMPORT=<file> it also imports that file and waits for
 // prep, transcription and silence analysis, then exports it as 9:16 with
 // captions; a failed step is a 1, and so is an empty transcript when
-// CLIPCAT_SMOKE_EXPECT_WORDS=1. CI runs this against the packaged app on macOS and Windows.
+// CLIPCAT_SMOKE_EXPECT_WORDS=1. The report says whether the face detector
+// runs and how many frames had a face. CI runs this against the
+// packaged app on macOS and Windows.
 
 import { app } from "electron";
 import { writeFileSync } from "node:fs";
@@ -45,6 +47,8 @@ export type SmokeImport = {
   pauses: [number, number][];
   /** The speech engine that heard each source ("parakeet", "whisper.cpp"). */
   backends: string[];
+  /** Sampled frames with a face, over all sources; null where nobody looked. */
+  faces: number | null;
   /** Bytes in the exported video; 0 when the export failed. */
   exported: number;
   failed: string[];
@@ -94,16 +98,20 @@ export async function smokeImport(
       span: words > 0 ? [p.transcript[0]!.start, p.transcript[words - 1]!.end] : null,
       pauses: p.proposals.filter((x) => x.type === "silence").flatMap((x) => x.cuts),
       backends: p.sources.map((s) => s.transcription?.backend ?? "none"),
+      faces: p.sources.every((s) => s.faces === null) ? null : p.sources.reduce((n, s) => n + (s.faces?.length ?? 0), 0),
       exported,
       failed: failures,
     };
   } catch (e) {
-    return { ok: false, words: 0, text: "", span: null, pauses: [], backends: [], exported: 0, failed: failures, error: e instanceof Error ? e.message : String(e) };
+    return { ok: false, words: 0, text: "", span: null, pauses: [], backends: [], faces: null, exported: 0, failed: failures, error: e instanceof Error ? e.message : String(e) };
   }
 }
 
-/** `ai` is reported, not required: CI has no signed-in Claude Code. */
-export function finishSmoke(result: { screen: string; info: AppInfoValue; ai: AiStatusValue; import?: SmokeImport }): void {
+/**
+ * `ai` is reported, not required: CI has no signed-in Claude Code. Neither is
+ * `faceDetector` (why there's none, or null), which CI checks per system.
+ */
+export function finishSmoke(result: { screen: string; info: AppInfoValue; ai: AiStatusValue; faceDetector: string | null; import?: SmokeImport }): void {
   const tools = [result.info.ffmpeg, result.info.whisper, result.info.parakeet ?? { available: true }];
   const ok = tools.every((t) => t.available) && (result.import?.ok ?? true);
   report({ ok, ...result });
