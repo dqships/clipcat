@@ -84,6 +84,45 @@ export function trimStretchedWords<W extends Pick<Word, "start" | "end">>(words:
   });
 }
 
+/** Pauses at least this long are taken out of the audio whisper hears. */
+export const SPEECH_GAP = 1;
+/** Quiet kept on each side of a pause that is taken out. */
+export const SPEECH_PAD = 0.2;
+
+/**
+ * The parts of a recording whisper should hear: everything except long
+ * pauses, with a little quiet kept around each cut. Whisper's base model can
+ * drop a whole sentence that comes before a long silence, so the silence goes.
+ */
+export function speechSpans(quiet: Range[], duration: number): Range[] {
+  const spans: Range[] = [];
+  let from = 0;
+  for (const [a, b] of quiet) {
+    if (b - a < SPEECH_GAP) continue;
+    const cutStart = a <= 0 ? 0 : a + SPEECH_PAD;
+    const cutEnd = b >= duration ? duration : b - SPEECH_PAD;
+    if (cutStart > from) spans.push([from, cutStart]);
+    from = Math.max(from, cutEnd);
+  }
+  if (from < duration) spans.push([from, duration]);
+  return spans.length > 0 ? spans : [[0, duration]];
+}
+
+/**
+ * A time in the joined-up speech audio, as a time in the recording. At the
+ * seam between two spans a start belongs to the later span, an end to the earlier.
+ */
+export function fromSpeechTime(t: number, spans: Range[], edge: "start" | "end"): number {
+  let offset = 0;
+  for (const [a, b] of spans) {
+    const length = b - a;
+    if (edge === "start" ? t < offset + length : t <= offset + length) return a + Math.max(0, t - offset);
+    offset += length;
+  }
+  const last = spans[spans.length - 1];
+  return last ? last[1] : t;
+}
+
 /** Trims or splits ranges so none overlaps a word: the transcript wins over the meter. */
 export function protectWords(ranges: Range[], words: Pick<Word, "start" | "end">[]): Range[] {
   let out = ranges;

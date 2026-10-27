@@ -14,9 +14,11 @@ import {
   type Source,
   detectSilence,
   frameLevels,
+  fromSpeechTime,
   initialSegments,
   quietRanges,
   silenceProposals,
+  speechSpans,
   trimStretchedWords,
 } from "@clipcat/core";
 import type { JobContext, JobQueue } from "../jobs/queue";
@@ -33,9 +35,10 @@ export type PipelineDeps = {
   probe: (file: string) => Promise<MediaInfo>;
   prep: (input: string, media: MediaInfo, out: PrepOutputs, ctx: JobContext) => Promise<void>;
   /** Makes sure a speech model is on disk (downloading it if needed) and returns its name and path. */
-  ensureModel: (ctx: JobContext) => Promise<{ model: string; path: string; vad: string | null }>;
-  transcribe: (opts: { model: string; vad: string | null; wav: string; outBase: string; language: string }, ctx: JobContext) => Promise<WhisperJson>;
+  ensureModel: (ctx: JobContext) => Promise<{ model: string; path: string }>;
+  transcribe: (opts: { model: string; wav: string; outBase: string; language: string }, ctx: JobContext) => Promise<WhisperJson>;
   readWav: (path: string) => Promise<Pcm>;
+  writeWav: (path: string, pcm: Pcm) => Promise<void>;
   changed: (project: Project) => void;
 };
 
@@ -160,19 +163,22 @@ export class ImportPipeline {
     const project = await this.deps.store.get(projectId);
     const source = project.sources.find((s) => s.id === sourceId);
     if (!source?.prep) return; // prep failed or the source is gone; nothing to listen to
-    const { model, path, vad } = await this.deps.ensureModel(ctx);
+    const { model, path } = await this.deps.ensureModel(ctx);
     ctx.progress(0, `Transcribing ${source.name}`);
-    const json = await this.deps.transcribe(
-      {
-        model: path,
-        vad,
-        wav: this.abs(projectId, source.prep.wav),
-        outBase: join(this.deps.store.mediaDir(projectId, sourceId), "transcript"),
-        language: project.language,
-      },
-      ctx,
-    );
-    const words = parseWhisper(json, sourceId).map((w, i) => ({ ...w, id: `${sourceId}-${i}` }));
+    // Whisper hears the speech with long pauses taken out, then its times are mapped back.
+    const dir = this.deps.store.mediaDir(projectId, sourceId);
+    const pcm = await this.deps.readWav(this.abs(projectId, source.prep.wav));
+    const spans = speechSpans(quietRanges(frameLevels(pcm.samples, pcm.sampleRate)), pcm.samples.length / pcm.sampleRate);
+    const parts = spans.map(([a, b]) => pcm.samples.subarray(Math.round(a * pcm.sampleRate), Math.round(b * pcm.sampleRate)));
+    const speech = new Float32Array(parts.reduce((n, x) => n + x.length, 0));
+    parts.reduce((at, x) => (speech.set(x, at), at + x.length), 0);
+    const speechWav = join(dir, "speech.wav");
+    await this.deps.writeWav(speechWav, { sampleRate: pcm.sampleRate, samples: speech });
+    const json = await this.deps.transcribe({ model: path, wav: speechWav, outBase: join(dir, "transcript"), language: project.language }, ctx);
+    const words = parseWhisper(json, sourceId).map((w, i) => {
+      const start = fromSpeechTime(w.start, spans, "start");
+      return { ...w, id: `${sourceId}-${i}`, start, end: Math.max(start, fromSpeechTime(w.end, spans, "end")) };
+    });
     await this.save(projectId, (p) => {
       const s = p.sources.find((x) => x.id === sourceId);
       if (!s) return;

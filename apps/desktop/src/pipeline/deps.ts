@@ -1,13 +1,14 @@
 // The real tools behind the import pipeline: bundled ffmpeg, ffprobe and
 // whisper-cli, and the speech model in the app's data folder.
 
+import { writeFile } from "node:fs/promises";
 import { availableParallelism } from "node:os";
 import type { JobContext } from "../jobs/queue";
 import { type Encoder, prepArgs } from "../media/prep";
 import { probe } from "../media/probe";
 import { runFfmpeg } from "../media/run";
-import { readWav } from "../media/wav";
-import { MODELS, type ModelFile, type ModelId, VAD_MODEL, downloadModel, hasModel, modelPath } from "../transcribe/models";
+import { encodeWav, readWav } from "../media/wav";
+import { MODELS, type ModelId, downloadModel, hasModel, modelPath } from "../transcribe/models";
 import { runWhisper, whisperArgs } from "../transcribe/whisper";
 import type { PipelineDeps } from "./import";
 
@@ -36,15 +37,11 @@ export function realDeps(tools: Tools): Omit<PipelineDeps, "store" | "queue" | "
       }
     },
     ensureModel: async (ctx: JobContext) => {
-      const fetchOnce = async (model: ModelFile, what: string) => {
-        if (await hasModel(tools.modelsDir, model)) return;
-        ctx.progress(0, `Downloading ${what} (${model.approxMB} MB, once)`);
-        await downloadModel(tools.modelsDir, model, (f) => ctx.progress(f), ctx.signal);
-      };
-      const speech = MODELS[tools.model];
-      await fetchOnce(speech, "the speech model");
-      await fetchOnce(VAD_MODEL, "the voice detector");
-      return { model: tools.model, path: modelPath(tools.modelsDir, speech), vad: modelPath(tools.modelsDir, VAD_MODEL) };
+      if (!(await hasModel(tools.modelsDir, tools.model))) {
+        ctx.progress(0, `Downloading the speech model (${MODELS[tools.model].approxMB} MB, once)`);
+        await downloadModel(tools.modelsDir, tools.model, (f) => ctx.progress(f), ctx.signal);
+      }
+      return { model: tools.model, path: modelPath(tools.modelsDir, tools.model) };
     },
     transcribe: (opts, ctx) =>
       runWhisper({
@@ -55,5 +52,6 @@ export function realDeps(tools: Tools): Omit<PipelineDeps, "store" | "queue" | "
         signal: ctx.signal,
       }),
     readWav,
+    writeWav: (path, pcm) => writeFile(path, encodeWav(pcm.samples, pcm.sampleRate)),
   };
 }

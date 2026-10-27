@@ -94,7 +94,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ matrix.models }}
-          key: whisper-model-base-vad-v2
+          key: whisper-model-base-v1
       - name: Make a spoken test clip
         id: clip
         run: |
@@ -150,14 +150,6 @@ jobs:
               if (!r.pauses.some(([a, b]) => b - a > 1.5)) bad.push("the pause between the sentences was not found");
               if (bad.length) { console.error(bad.join("; ")); process.exit(1); }' "$out"
           fi
-      - name: Time whisper-cli with and without voice detection
-        run: |
-          w="vendor/bin/${{ matrix.target }}/whisper-cli"; d="$(cd ${{ matrix.models }} && pwd -W 2>/dev/null || pwd)"
-          ff="${{ matrix.ffmpeg }}"
-          "$ff" -v error -y -stream_loop 7 -i "${{ steps.clip.outputs.file }}" -vn -ac 1 -ar 16000 -c:a pcm_s16le "$RUNNER_TEMP/long.wav"
-          echo "== without VAD"; time "$w" -m "$d/ggml-base.bin" -f "$RUNNER_TEMP/long.wav" -l en -np -ml 1 -sow > /dev/null 2>&1
-          echo "== with VAD"; time "$w" -m "$d/ggml-base.bin" -f "$RUNNER_TEMP/long.wav" -l en -np -ml 1 -sow --vad -vm "$d/ggml-silero-v5.1.2.bin" > /dev/null 2>&1
-          echo "== with VAD, timings"; "$w" -m "$d/ggml-base.bin" -f "$RUNNER_TEMP/long.wav" -l en -ml 1 -sow --vad -vm "$d/ggml-silero-v5.1.2.bin" 2>&1 | grep -iE "time|vad" | tail -25
       - uses: actions/upload-artifact@v4
         with:
           name: ClipCat-${{ matrix.target }}

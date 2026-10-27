@@ -1,8 +1,6 @@
 // Local transcription with whisper.cpp's `whisper-cli`. Each word becomes its
 // own segment (`-ml 1 -sow`), so the JSON output already carries word-level
 // times; we only glue punctuation and sub-word pieces back onto their word.
-// With a VAD model whisper only hears the speech, and the times it reports are
-// mapped back onto the original audio.
 
 import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
@@ -11,16 +9,8 @@ import type { Word } from "@clipcat/core";
 export type WhisperSegment = { offsets: { from: number; to: number }; text: string };
 export type WhisperJson = { transcription?: WhisperSegment[] };
 
-export function whisperArgs(opts: {
-  model: string;
-  vad?: string | null;
-  wav: string;
-  outBase: string;
-  language: string;
-  threads: number;
-}): string[] {
+export function whisperArgs(opts: { model: string; wav: string; outBase: string; language: string; threads: number }): string[] {
   return [
-    ...(opts.vad ? ["--vad", "-vm", opts.vad] : []),
     "-m", opts.model,
     "-f", opts.wav,
     "-l", opts.language,
