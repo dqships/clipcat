@@ -9,8 +9,15 @@ import type { Word } from "@clipcat/core";
 export type WhisperSegment = { offsets: { from: number; to: number }; text: string };
 export type WhisperJson = { transcription?: WhisperSegment[] };
 
-export function whisperArgs(opts: { model: string; wav: string; outBase: string; language: string; threads: number }): string[] {
+/** whisper's initial prompt from the user's names and terms: it nudges spelling toward them. */
+export function termsPrompt(terms: string[]): string | null {
+  const list = terms.map((t) => t.trim()).filter(Boolean);
+  return list.length > 0 ? `Names and terms: ${list.join(", ")}.`.slice(0, 600) : null;
+}
+
+export function whisperArgs(opts: { model: string; wav: string; outBase: string; language: string; threads: number; prompt?: string | null }): string[] {
   return [
+    ...(opts.prompt ? ["--prompt", opts.prompt] : []),
     "-m", opts.model,
     "-f", opts.wav,
     "-l", opts.language,

@@ -1,15 +1,13 @@
 // Claude Code through the Agent SDK, using the user's own signed-in `claude`.
-// Each analysis is one short query with no built-in tools at all: the only
-// thing the agent can do is call ClipCat's submit_analysis, which runs here
+// Each task is one short query with no built-in tools at all: the only
+// thing the agent can do is call ClipCat's submit tool, which runs here
 // in-process, so there is no port to open and nothing on disk it can touch.
 // Finding and checking the CLI follows Diffusion Studio's editor
 // (packages/agent-chat/src/host/claude.ts).
 
 import { createSdkMcpServer, query, tool } from "@anthropic-ai/claude-agent-sdk";
-import { AgentAnalysis } from "@clipcat/core";
 import type { Agent, AgentRun } from "./analyze";
 import { type HostEnv, compareVersions, parseVersion, resolveBinary, resolveClaudeExecutable, runOnce } from "./env";
-import { SUBMIT_TOOL } from "./prompt";
 
 const MIN_VERSION = "2.0.0";
 const SERVER = "clipcat";
@@ -61,17 +59,13 @@ export function claudeAgent(host: HostEnv, appVersion: string): Agent {
       const binary = resolveBinary("claude", host);
       if (!binary) throw new Error("Claude Code is not installed");
       let done = false;
-      const submit = tool(
-        SUBMIT_TOOL,
-        "Submit the cut proposals for this video. Call once with every proposal; if problems come back, fix them and call again.",
-        AgentAnalysis.shape,
-        async (args) => {
-          run.activity("Checking Claude's cuts");
+      const { task } = run;
+      const submit = tool(task.tool, task.description, task.shape, async (args) => {
+          run.activity("Checking Claude's answer");
           const reply = await run.submit(args);
           done ||= reply.done;
-          return { content: [{ type: "text", text: reply.text }], isError: !reply.done };
-        },
-      );
+          return { content: [{ type: "text" as const, text: reply.text }], isError: !reply.done };
+        });
       const abort = new AbortController();
       const stop = () => abort.abort();
       run.signal.addEventListener("abort", stop, { once: true });
@@ -81,10 +75,10 @@ export function claudeAgent(host: HostEnv, appVersion: string): Agent {
           prompt: run.prompt,
           options: {
             pathToClaudeCodeExecutable: resolveClaudeExecutable(binary),
-            systemPrompt: run.system,
+            systemPrompt: `${run.system}\n\n${task.toolAnswer}`,
             tools: [],
             mcpServers: { [SERVER]: createSdkMcpServer({ name: SERVER, version: appVersion, tools: [submit], alwaysLoad: true }) },
-            allowedTools: [`mcp__${SERVER}__${SUBMIT_TOOL}`],
+            allowedTools: [`mcp__${SERVER}__${task.tool}`],
             permissionMode: "dontAsk",
             strictMcpConfig: true,
             settingSources: [],

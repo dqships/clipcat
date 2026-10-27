@@ -41,6 +41,8 @@ export const Word = z.object({
   start: z.number().nonnegative(),
   end: z.number().nonnegative(),
   confidence: z.number().min(0).max(1).optional(),
+  /** What speech recognition heard, when a correction changed the text. */
+  heard: z.string().optional(),
 });
 
 export const Segment = z.object({

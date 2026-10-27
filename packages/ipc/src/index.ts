@@ -37,9 +37,13 @@ export const AgentName = z.enum(["claude", "codex"]);
 export const AiStatus = z.object({ claude: AgentStatus, codex: AgentStatus, agent: AgentName });
 
 /** App-wide settings. */
+const Term = z.string().trim().min(1).max(60);
+
 export const Settings = z.object({
   /** Which of the user's agents finds cuts. */
   agent: AgentName.default("claude"),
+  /** Names and terms the user says a lot, spelled right: a hint for transcription and corrections. */
+  dictionary: z.array(Term).max(200).default([]),
 });
 
 export const ProjectSummary = z.object({
@@ -79,9 +83,14 @@ export const methods = {
   /** Whether the user's AI editor is installed and signed in. Probing runs the CLI, so it takes a moment. */
   "ai:status": { input: z.void(), output: AiStatus },
   /** Changes app-wide settings; resolves with all of them. */
-  "settings:set": { input: z.object({ agent: AgentName }).partial(), output: Settings },
+  "settings:get": { input: z.void(), output: Settings },
+  "settings:set": { input: z.object({ agent: AgentName, dictionary: z.array(Term).max(200) }).partial(), output: Settings },
   /** Saves the brief and queues an AI pass that proposes retake, cleanup and tighten cuts. */
   "project:analyze": { input: ProjectRef.extend({ brief: z.string().max(4000) }), output: z.void() },
+  /** Queues cuts for one request ("cut the part about pricing"), added to the ones waiting. */
+  "project:request": { input: ProjectRef.extend({ request: z.string().trim().min(1).max(1000) }), output: z.void() },
+  /** Queues a pass that fixes misheard names and terms, using the dictionary. */
+  "project:correct": { input: ProjectRef, output: z.void() },
   /**
    * One transcript-editor change. `revision` is the project the UI is showing;
    * if anything saved since, the edit is refused and the UI reloads.

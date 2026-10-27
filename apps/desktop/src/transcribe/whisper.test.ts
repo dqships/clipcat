@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseWhisper, whisperArgs, whisperProgress } from "./whisper";
+import { parseWhisper, termsPrompt, whisperArgs, whisperProgress } from "./whisper";
 
 describe("parseWhisper", () => {
   it("joins punctuation and contractions to their word and drops noise", () => {
@@ -20,6 +20,17 @@ describe("parseWhisper", () => {
     expect(words.map((w) => w.text)).toEqual(["I", "don't", "know.", "Okay"]);
     expect(words[2]).toMatchObject({ start: 0.7, end: 1.25 });
     expect(words.every((w) => w.sourceId === "src1")).toBe(true);
+  });
+});
+
+describe("termsPrompt", () => {
+  it("lists the user's terms as whisper's initial prompt, or nothing", () => {
+    expect(termsPrompt([" ClipCat ", "", "DaQuan"])).toBe("Names and terms: ClipCat, DaQuan.");
+    expect(termsPrompt([])).toBeNull();
+    expect(whisperArgs({ model: "m", wav: "w", outBase: "o", language: "en", threads: 1, prompt: "Names and terms: X." }).slice(0, 2)).toEqual([
+      "--prompt",
+      "Names and terms: X.",
+    ]);
   });
 });
 

@@ -1,28 +1,52 @@
-// AI cut proposals. The agent reads the numbered transcript and answers with
-// one `submit_analysis` call. Its answer is checked against the real words: a
-// first answer with problems goes back to it once with the list, after which
-// whatever checked out is saved as pending proposals for the user to decide.
+// The AI jobs: cut proposals for the whole video, cuts for one request ("cut
+// the part about pricing"), and transcript corrections. The agent reads the
+// numbered transcript and answers through its task's submit tool (or JSON).
+// Every answer is checked against the real words: a first answer with
+// problems goes back once with the list, after which whatever checked out is
+// saved. Cuts arrive as pending proposals for the user to decide.
 
 import { randomUUID } from "node:crypto";
-import { AI_TYPES, AgentAnalysis, type Project, type Proposal, replacePending, validateProposals } from "@clipcat/core";
+import {
+  AI_TYPES,
+  AgentAnalysis,
+  AgentCorrections,
+  type Project,
+  type Proposal,
+  applyCorrections,
+  cutsOverlap,
+  replacePending,
+  validateCorrections,
+  validateProposals,
+} from "@clipcat/core";
 import type { JobContext, JobQueue } from "../jobs/queue";
 import type { ProjectStore } from "../store/projects";
-import { SYSTEM_PROMPT, analysisPrompt, orderedWords } from "./prompt";
+import {
+  ANALYSIS_TASK,
+  type AgentTask,
+  CORRECTIONS_TASK,
+  CORRECTOR_PROMPT,
+  EDITOR_PROMPT,
+  analysisPrompt,
+  correctionsPrompt,
+  orderedWords,
+} from "./prompt";
 
-/** What a submit_analysis call tells the agent, and whether that ends the run. */
+/** What a submit tells the agent, and whether that ends the run. */
 export type SubmitReply = { text: string; done: boolean };
 
 export type AgentRun = {
+  task: AgentTask;
+  /** The system prompt, without the task's answer instructions (each agent adds its own). */
   system: string;
   prompt: string;
-  /** Called with the agent's raw submit_analysis input. */
+  /** Called with the agent's raw answer. */
   submit: (input: unknown) => Promise<SubmitReply>;
   /** A short line for the progress UI ("Claude is reading the transcript"). */
   activity: (label: string) => void;
   signal: AbortSignal;
 };
 
-/** An AI provider that can run one analysis: Claude Code now, Codex and the API later. */
+/** An AI provider that can run one task: Claude Code, Codex, and the API later. */
 export type Agent = { label: string; run: (run: AgentRun) => Promise<void> };
 
 export type AnalysisDeps = {
@@ -30,6 +54,8 @@ export type AnalysisDeps = {
   queue: JobQueue;
   /** The agent to use, or an error saying why there is none (not installed, signed out). */
   agent: () => Promise<Agent>;
+  /** The user's names and terms, for corrections. */
+  dictionary: () => Promise<string[]>;
   changed: (project: Project) => void;
 };
 
@@ -37,6 +63,9 @@ export type AnalysisDeps = {
 const ATTEMPTS = 2;
 
 const shortId = () => randomUUID().slice(0, 8);
+
+/** What checking one answer found: the result to save, or problems to send back. */
+type Checked<T> = { result: T; problems: string[]; summary: string; saved: string };
 
 export class AnalysisRunner {
   constructor(private readonly deps: AnalysisDeps) {}
@@ -50,54 +79,119 @@ export class AnalysisRunner {
     this.deps.queue.add(projectId, "analyze", "Finding cuts", (ctx) => this.run(projectId, ctx)).catch(() => {});
   }
 
-  async run(projectId: string, ctx: JobContext): Promise<void> {
+  /** Queues cuts for one request, added to the proposals already waiting. */
+  request(projectId: string, request: string): void {
+    this.deps.queue.add(projectId, "analyze", "Following your request", (ctx) => this.run(projectId, ctx, request)).catch(() => {});
+  }
+
+  /** Queues a pass that fixes misheard names and terms in the transcript. */
+  correct(projectId: string): void {
+    this.deps.queue.add(projectId, "correct", "Checking the transcript", (ctx) => this.runCorrections(projectId, ctx)).catch(() => {});
+  }
+
+  /**
+   * Runs `task` with the user's agent: each answer is checked, the first one
+   * with problems goes back with them, and the last checked result is returned.
+   */
+  private async ask<T>(
+    ctx: JobContext,
+    run: { task: AgentTask; system: string; prompt: string },
+    check: (input: unknown) => Checked<T> | { invalid: string[] },
+  ): Promise<{ result: T; attempts: number; agent: string }> {
+    const agent = await this.deps.agent();
+    ctx.progress(null, `Starting ${agent.label}`);
+    let attempts = 0;
+    let saved: { result: T } | null = null;
+    const submit = async (input: unknown): Promise<SubmitReply> => {
+      attempts++;
+      const last = attempts >= ATTEMPTS;
+      const checked = check(input);
+      if ("invalid" in checked) {
+        return last
+          ? { text: "The answer still doesn't match the schema, so nothing was saved. Stop here.", done: true }
+          : { text: `The answer doesn't match the schema:\n${checked.invalid.join("\n")}\nFix it and answer again.`, done: false };
+      }
+      if (checked.problems.length > 0 && !last) {
+        return { text: `${checked.summary}\n${checked.problems.join("\n")}\nFix them and answer again with the whole list.`, done: false };
+      }
+      saved = { result: checked.result };
+      return { text: `${checked.saved} Stop here.`, done: true };
+    };
+    await agent.run({ ...run, submit, activity: (label) => ctx.progress(null, label), signal: ctx.signal });
+    if (ctx.signal.aborted) throw new Error("cancelled");
+    const done = saved as { result: T } | null;
+    if (!done) throw new Error(`${agent.label} finished without an answer`);
+    return { result: done.result, attempts, agent: agent.label };
+  }
+
+  async run(projectId: string, ctx: JobContext, request?: string): Promise<void> {
     const project = await this.deps.store.get(projectId);
     const words = orderedWords(project);
     if (words.length === 0) throw new Error("There is no transcript to read yet");
-    const agent = await this.deps.agent();
-    ctx.progress(null, `Starting ${agent.label}`);
 
-    let attempts = 0;
-    let saved: { proposals: Proposal[]; title: string } | null = null;
-    const submit = async (input: unknown): Promise<SubmitReply> => {
-      attempts++;
-      const parsed = AgentAnalysis.safeParse(input);
-      if (!parsed.success) {
-        const problems = parsed.error.issues.map((i) => `${i.path.join(".") || "input"}: ${i.message}`);
-        return attempts < ATTEMPTS
-          ? { text: `The analysis doesn't match the schema:\n${problems.join("\n")}\nFix it and call submit_analysis again.`, done: false }
-          : { text: "The analysis still doesn't match the schema, so nothing was saved. Stop here.", done: true };
-      }
-      const { proposals, errors } = validateProposals(parsed.data, words, project.sources, () => `a${shortId()}`);
-      if (errors.length > 0 && attempts < ATTEMPTS) {
+    const { result, attempts, agent } = await this.ask<{ proposals: Proposal[]; title: string }>(
+      ctx,
+      { task: ANALYSIS_TASK, system: EDITOR_PROMPT, prompt: analysisPrompt(project, request) },
+      (input) => {
+        const parsed = AgentAnalysis.safeParse(input);
+        if (!parsed.success) return { invalid: parsed.error.issues.map((i) => `${i.path.join(".") || "input"}: ${i.message}`) };
+        const { proposals, errors } = validateProposals(parsed.data, words, project.sources, () => `a${shortId()}`);
         return {
-          text: `${errors.length} of ${parsed.data.proposals.length} proposals have problems:\n${errors.join("\n")}\nFix them and call submit_analysis again with the whole analysis.`,
-          done: false,
+          result: { proposals, title: parsed.data.suggestedTitle ?? "" },
+          problems: errors,
+          summary: `${errors.length} of ${parsed.data.proposals.length} proposals have problems:`,
+          saved: `Saved ${proposals.length} ${proposals.length === 1 ? "proposal" : "proposals"}.`,
         };
-      }
-      saved = { proposals, title: parsed.data.suggestedTitle ?? "" };
-      return { text: `Saved ${proposals.length} ${proposals.length === 1 ? "proposal" : "proposals"}. Stop here.`, done: true };
-    };
-
-    await agent.run({
-      system: SYSTEM_PROMPT,
-      prompt: analysisPrompt(project),
-      submit,
-      activity: (label) => ctx.progress(null, label),
-      signal: ctx.signal,
-    });
-    if (ctx.signal.aborted) throw new Error("cancelled");
-    const result = saved as { proposals: Proposal[]; title: string } | null;
-    if (!result) throw new Error(`${agent.label} finished without proposing any cuts`);
+      },
+    );
 
     const updated = await this.deps.store.update(projectId, null, (p) => {
       // Words the user has since removed from the project can't be cut.
       const known = new Set(p.transcript.map((w) => w.id));
       const fresh = result.proposals.filter((x) => x.wordIds.every((id) => known.has(id)));
-      p.proposals = replacePending(p.proposals, fresh, (x) => AI_TYPES.includes(x.type));
-      if (result.title) p.suggestedTitle = result.title;
+      p.proposals = request ? addRequested(p.proposals, fresh) : replacePending(p.proposals, fresh, (x) => AI_TYPES.includes(x.type));
+      if (result.title && !request) p.suggestedTitle = result.title;
     });
-    await this.deps.store.log(projectId, { type: "analyzed", agent: agent.label, proposals: result.proposals.length, attempts });
+    await this.deps.store.log(projectId, { type: request ? "requested" : "analyzed", agent, proposals: result.proposals.length, attempts });
     this.deps.changed(updated);
   }
+
+  async runCorrections(projectId: string, ctx: JobContext): Promise<void> {
+    const project = await this.deps.store.get(projectId);
+    const words = orderedWords(project);
+    if (words.length === 0) throw new Error("There is no transcript to check yet");
+    const dictionary = await this.deps.dictionary();
+
+    const { result, attempts, agent } = await this.ask<Map<string, string>>(
+      ctx,
+      { task: CORRECTIONS_TASK, system: CORRECTOR_PROMPT, prompt: correctionsPrompt(project, dictionary) },
+      (input) => {
+        const parsed = AgentCorrections.safeParse(input);
+        if (!parsed.success) return { invalid: parsed.error.issues.map((i) => `${i.path.join(".") || "input"}: ${i.message}`) };
+        const { fixes, errors } = validateCorrections(parsed.data, words);
+        return {
+          result: fixes,
+          problems: errors,
+          summary: `${errors.length} of ${parsed.data.corrections.length} corrections have problems:`,
+          saved: `Saved ${fixes.size} ${fixes.size === 1 ? "correction" : "corrections"}.`,
+        };
+      },
+    );
+
+    const updated = await this.deps.store.update(projectId, null, (p) => {
+      p.transcript = applyCorrections(p.transcript, result);
+    });
+    await this.deps.store.log(projectId, { type: "corrected", agent, corrections: result.size, attempts });
+    this.deps.changed(updated);
+  }
+}
+
+/**
+ * Proposals from a request join the ones waiting. A pending AI proposal they
+ * overlap is replaced; decided ones stay, since the user asked for this one.
+ */
+export function addRequested(current: Proposal[], fresh: Proposal[]): Proposal[] {
+  const replaced = (p: Proposal) =>
+    p.status === "pending" && AI_TYPES.includes(p.type) && fresh.some((f) => f.sourceId === p.sourceId && cutsOverlap(f.cuts, p.cuts));
+  return [...current.filter((p) => !replaced(p)), ...fresh];
 }

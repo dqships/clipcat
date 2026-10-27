@@ -122,7 +122,7 @@ export function validateProposals(
 /** The proposal types the AI editor makes; silence comes from the meter. */
 export const AI_TYPES: readonly Proposal["type"][] = ["retake", "cleanup", "tighten"];
 
-function cutsOverlap(a: Range[], b: Range[]): boolean {
+export function cutsOverlap(a: Range[], b: Range[]): boolean {
   return a.some(([a0, a1]) => b.some(([b0, b1]) => a0 < b1 && b0 < a1));
 }
 

@@ -9,10 +9,19 @@ import { probe } from "../media/probe";
 import { runFfmpeg } from "../media/run";
 import { encodeWav, readWav } from "../media/wav";
 import { MODELS, type ModelId, downloadModel, hasModel, modelPath } from "../transcribe/models";
-import { runWhisper, whisperArgs } from "../transcribe/whisper";
+import { runWhisper, termsPrompt, whisperArgs } from "../transcribe/whisper";
 import type { PipelineDeps } from "./import";
 
-export type Tools = { ffmpeg: string; ffprobe: string; whisper: string; modelsDir: string; model: ModelId; encoder: Encoder };
+export type Tools = {
+  ffmpeg: string;
+  ffprobe: string;
+  whisper: string;
+  modelsDir: string;
+  model: ModelId;
+  encoder: Encoder;
+  /** The user's names and terms, passed to whisper as its initial prompt. */
+  dictionary?: () => Promise<string[]>;
+};
 
 /** Leaves a couple of cores for the UI and the preview. */
 const threads = () => Math.max(1, Math.min(8, availableParallelism() - 2));
@@ -43,10 +52,10 @@ export function realDeps(tools: Tools): Omit<PipelineDeps, "store" | "queue" | "
       }
       return { model: tools.model, path: modelPath(tools.modelsDir, tools.model) };
     },
-    transcribe: (opts, ctx) =>
+    transcribe: async (opts, ctx) =>
       runWhisper({
         binary: tools.whisper,
-        args: whisperArgs({ ...opts, threads: threads() }),
+        args: whisperArgs({ ...opts, threads: threads(), prompt: termsPrompt((await tools.dictionary?.()) ?? []) }),
         outBase: opts.outBase,
         onProgress: (f) => ctx.progress(f),
         signal: ctx.signal,

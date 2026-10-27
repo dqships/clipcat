@@ -103,6 +103,7 @@ export function Transcript({ project, playhead, onSeek, onEdit }: Props) {
                 type="button"
                 className={classes.join(" ")}
                 aria-pressed={i >= from && i <= to}
+                title={w.heard ? `Heard as “${w.heard}”` : undefined}
                 onClick={(e) => {
                   if (e.shiftKey && anchor !== null) {
                     setFocus(i);

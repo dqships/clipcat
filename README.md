@@ -51,6 +51,12 @@ Codex works too: install the Codex CLI, run `codex login`, and pick Codex under
 read-only sandbox in an empty temporary folder, with the prompt on stdin and
 the answer held to a JSON schema; it is checked exactly like Claude's.
 
+The AI editor also takes one-off requests ("cut the part about pricing"), which
+add proposals next to the ones waiting, and fixes misheard names: list the
+names and terms you use, and "Fix transcript" corrects only the words it is
+sure of, keeping their timing (hover a corrected word to see what was heard).
+The same list is passed to whisper as a prompt when transcribing.
+
 Editing happens in the transcript: click a word to jump there, shift-click to
 select a run, and press Delete to cut it (again to restore). Suggested cuts,
 from the pause finder and from Claude, are accepted or rejected under the

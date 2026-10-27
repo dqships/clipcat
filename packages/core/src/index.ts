@@ -5,3 +5,4 @@ export * from "./proposals";
 export * from "./silence";
 export * from "./editor";
 export * from "./captions";
+export * from "./corrections";
