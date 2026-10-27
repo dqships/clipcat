@@ -51,6 +51,12 @@ Codex works too: install the Codex CLI, run `codex login`, and pick Codex under
 read-only sandbox in an empty temporary folder, with the prompt on stdin and
 the answer held to a JSON schema; it is checked exactly like Claude's.
 
+Or use the Claude API with your own key: pick "Claude API (your key)", paste a
+key from console.anthropic.com (it is checked with one call, then stored
+encrypted with the system keychain, never in the settings file or the window),
+and choose Opus 5.5, Sonnet 5.5 or Haiku 5.5. The answer tool is the only tool
+the model gets; a declined request falls back to Anthropic's recommended model.
+
 The AI editor also takes one-off requests ("cut the part about pricing"), which
 add proposals next to the ones waiting, and fixes misheard names: list the
 names and terms you use, and "Fix transcript" corrects only the words it is

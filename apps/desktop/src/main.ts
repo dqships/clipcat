@@ -2,13 +2,14 @@
 // on media://, and the IPC handlers. All media work lives here, never in the
 // renderer.
 
-import { BrowserWindow, app, dialog, nativeTheme, shell } from "electron";
+import { BrowserWindow, app, dialog, nativeTheme, safeStorage, shell } from "electron";
 import { randomUUID } from "node:crypto";
 import { applyEdit } from "@clipcat/core";
 import tokens from "../../../design/tokens.json";
 import { extname, join, resolve } from "node:path";
 import type { AppInfoValue } from "@clipcat/ipc";
 import { AnalysisRunner } from "./ai/analyze";
+import { apiAgent, verifyKey } from "./ai/api";
 import { claudeAgent, probeClaude } from "./ai/claude";
 import { codexAgent, probeCodex } from "./ai/codex";
 import { hydrateEnv } from "./ai/env";
@@ -23,6 +24,7 @@ import { ImportPipeline } from "./pipeline/import";
 import { APP_ORIGIN, registerSchemes, serveMedia, serveUi } from "./protocol";
 import { handleSquirrelEvent } from "./squirrel";
 import { ProjectStore } from "./store/projects";
+import { KeyStore } from "./store/keys";
 import { SettingsStore } from "./store/settings";
 import type { ModelId } from "./transcribe/models";
 import { startSmokeTimer, finishSmoke, isSmokeRun, recordSmokeJob, smokeImport } from "./smoke";
@@ -76,6 +78,11 @@ function startPipeline() {
   const data = app.getPath("userData");
   const store = new ProjectStore(join(data, "projects"));
   const settings = new SettingsStore(join(data, "settings.json"));
+  const keys = new KeyStore(join(data, "claude-api-key"), {
+    available: () => safeStorage.isEncryptionAvailable(),
+    encrypt: (plain) => safeStorage.encryptString(plain),
+    decrypt: (data) => safeStorage.decryptString(data),
+  });
   const queue = new JobQueue((event) => {
     if (isSmokeRun()) recordSmokeJob(event);
     broadcast("job", event);
@@ -86,7 +93,9 @@ function startPipeline() {
     queue,
     agent: async () => {
       const host = await hostEnv;
-      if ((await settings.get()).agent === "codex") {
+      const { agent } = await settings.get();
+      if (agent === "api") return apiAgent({ key: () => keys.get(), model: async () => (await settings.get()).apiModel });
+      if (agent === "codex") {
         const status = await probeCodex(host);
         if (status.status !== "ready") throw new Error(status.detail ?? "Codex isn't ready");
         return codexAgent(host);
@@ -122,7 +131,7 @@ function startPipeline() {
     encoder,
     fontsDir: app.isPackaged ? join(process.resourcesPath, "fonts") : join(REPO_ROOT, "apps", "desktop", "resources", "fonts"),
   });
-  return { store, settings, queue, pipeline, analysis, exporter };
+  return { store, settings, keys, queue, pipeline, analysis, exporter };
 }
 
 /** A file name from the video's title: no characters Windows or macOS refuse. */
@@ -168,11 +177,11 @@ if (!squirrelLaunch) {
   if (!app.requestSingleInstanceLock()) app.quit();
 
   app.whenReady().then(() => {
-    const { store, settings, queue, pipeline, analysis, exporter } = startPipeline();
+    const { store, settings, keys, queue, pipeline, analysis, exporter } = startPipeline();
     const aiStatus = async () => {
       const host = await hostEnv;
-      const [claude, codex, current] = await Promise.all([probeClaude(host), probeCodex(host), settings.get()]);
-      return { claude, codex, agent: current.agent };
+      const [claude, codex, current, key] = await Promise.all([probeClaude(host), probeCodex(host), settings.get(), keys.get()]);
+      return { claude, codex, api: { hasKey: key !== null, model: current.apiModel }, agent: current.agent };
     };
     serveUi(UI_ROOT);
     serveMedia((id) => store.dir(id));
@@ -209,6 +218,13 @@ if (!squirrelLaunch) {
         "ai:status": () => aiStatus(),
         "settings:get": () => settings.get(),
         "settings:set": (patch) => settings.set(patch),
+        "settings:api-key": async ({ key }) => {
+          const { apiModel } = await settings.get();
+          // A key is tried before it's kept, so a typo shows up here rather than mid-analysis.
+          if (key) await verifyKey(key, apiModel);
+          await keys.set(key);
+          return { hasKey: key !== null, model: apiModel };
+        },
         "project:analyze": ({ id, brief }) => analysis.analyze(id, brief),
         "project:request": async ({ id, request }) => analysis.request(id, request),
         "project:correct": async ({ id }) => analysis.correct(id),

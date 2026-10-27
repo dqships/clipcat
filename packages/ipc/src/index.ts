@@ -32,11 +32,17 @@ export const AgentStatus = z.object({
   detail: z.string().nullable(),
 });
 
-/** The AI editors ClipCat can drive. Claude Code first; Codex follows. */
-export const AgentName = z.enum(["claude", "codex"]);
+/** The AI editors ClipCat can drive: Claude Code, Codex, or the Claude API with the user's key. */
+export const AgentName = z.enum(["claude", "codex", "api"]);
+
+/** Claude models for the API; Opus first. */
+export const ApiModel = z.enum(["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"]);
+
+/** The Claude API's state: whether a key is saved, and which model it uses. */
+export const ApiStatus = z.object({ hasKey: z.boolean(), model: ApiModel });
 
 /** Each agent's state, and which one finds cuts. */
-export const AiStatus = z.object({ claude: AgentStatus, codex: AgentStatus, agent: AgentName });
+export const AiStatus = z.object({ claude: AgentStatus, codex: AgentStatus, api: ApiStatus, agent: AgentName });
 
 /** App-wide settings. */
 const Term = z.string().trim().min(1).max(60);
@@ -46,6 +52,8 @@ export const Settings = z.object({
   agent: AgentName.default("claude"),
   /** Names and terms the user says a lot, spelled right: a hint for transcription and corrections. */
   dictionary: z.array(Term).max(200).default([]),
+  /** The model the Claude API runs; the key itself is kept apart, encrypted. */
+  apiModel: ApiModel.default("claude-opus-5-5"),
 });
 
 export const ProjectSummary = z.object({
@@ -86,7 +94,9 @@ export const methods = {
   "ai:status": { input: z.void(), output: AiStatus },
   /** Changes app-wide settings; resolves with all of them. */
   "settings:get": { input: z.void(), output: Settings },
-  "settings:set": { input: z.object({ agent: AgentName, dictionary: z.array(Term).max(200) }).partial(), output: Settings },
+  "settings:set": { input: z.object({ agent: AgentName, dictionary: z.array(Term).max(200), apiModel: ApiModel }).partial(), output: Settings },
+  /** Checks and saves a Claude API key (encrypted), or removes it with null. */
+  "settings:api-key": { input: z.object({ key: z.string().trim().min(10).max(500).nullable() }), output: ApiStatus },
   /** Saves the brief and queues an AI pass that proposes retake, cleanup and tighten cuts. */
   "project:analyze": { input: ProjectRef.extend({ brief: z.string().max(4000) }), output: z.void() },
   /** Queues cuts for one request ("cut the part about pricing"), added to the ones waiting. */
@@ -146,4 +156,6 @@ export type JobEventValue = z.output<typeof JobEvent>;
 export type AgentStatusValue = z.output<typeof AgentStatus>;
 export type AiStatusValue = z.output<typeof AiStatus>;
 export type AgentNameValue = z.output<typeof AgentName>;
+export type ApiModelValue = z.output<typeof ApiModel>;
+export type ApiStatusValue = z.output<typeof ApiStatus>;
 export type SettingsValue = z.output<typeof Settings>;
