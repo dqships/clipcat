@@ -29,15 +29,20 @@ import type { ProjectStore } from "../store/projects";
 import type { WhisperJson } from "../transcribe/whisper";
 import { parseWhisper } from "../transcribe/whisper";
 
-/** The outside world the pipeline needs; main wires in ffmpeg and whisper, tests wire in fakes. */
+/** What heard the speech: its words (as whisper-style JSON), the engine and model, and why a faster engine was passed over. */
+export type Heard = { json: WhisperJson; backend: string; model: string; fallback?: string };
+
+/** The outside world the pipeline needs; main wires in ffmpeg, Parakeet and whisper, tests wire in fakes. */
 export type PipelineDeps = {
   store: ProjectStore;
   queue: JobQueue;
   probe: (file: string) => Promise<MediaInfo>;
   prep: (input: string, media: MediaInfo, out: PrepOutputs, ctx: JobContext) => Promise<void>;
-  /** Makes sure a speech model is on disk (downloading it if needed) and returns its name and path. */
-  ensureModel: (ctx: JobContext) => Promise<{ model: string; path: string }>;
-  transcribe: (opts: { model: string; wav: string; outBase: string; language: string }, ctx: JobContext) => Promise<WhisperJson>;
+  /**
+   * Hears the speech in `wav`, downloading a speech model on first use. `label`
+   * is the job's own label, shown again once a download is done.
+   */
+  transcribe: (opts: { wav: string; outBase: string; language: string; label: string }, ctx: JobContext) => Promise<Heard>;
   readWav: (path: string) => Promise<Pcm>;
   writeWav: (path: string, pcm: Pcm) => Promise<void>;
   changed: (project: Project) => void;
@@ -164,9 +169,7 @@ export class ImportPipeline {
     const project = await this.deps.store.get(projectId);
     const source = project.sources.find((s) => s.id === sourceId);
     if (!source?.prep) return; // prep failed or the source is gone; nothing to listen to
-    const { model, path } = await this.deps.ensureModel(ctx);
-    ctx.progress(0, `Transcribing ${source.name}`);
-    // Whisper hears the speech with long pauses taken out, then its times are mapped back.
+    // The speech engine hears the speech with long pauses taken out, then its times are mapped back.
     const dir = this.deps.store.mediaDir(projectId, sourceId);
     const pcm = await this.deps.readWav(this.abs(projectId, source.prep.wav));
     const spans = speechSpans(quietRanges(frameLevels(pcm.samples, pcm.sampleRate)), pcm.samples.length / pcm.sampleRate);
@@ -175,20 +178,25 @@ export class ImportPipeline {
     parts.reduce((at, x) => (speech.set(x, at), at + x.length), 0);
     const speechWav = join(dir, "speech.wav");
     await this.deps.writeWav(speechWav, { sampleRate: pcm.sampleRate, samples: speech });
-    const json = await this.deps.transcribe({ model: path, wav: speechWav, outBase: join(dir, "transcript"), language: project.language }, ctx);
-    const words = parseWhisper(json, sourceId).map((w, i) => {
+    const heard = await this.deps.transcribe(
+      { wav: speechWav, outBase: join(dir, "transcript"), language: project.language, label: `Transcribing ${source.name}` },
+      ctx,
+    );
+    const words = parseWhisper(heard.json, sourceId).map((w, i) => {
       const start = fromSpeechTime(w.start, spans, "start");
       return { ...w, id: `${sourceId}-${i}`, start, end: Math.max(start, fromSpeechTime(w.end, spans, "end")) };
     });
     await this.save(projectId, (p) => {
       const s = p.sources.find((x) => x.id === sourceId);
       if (!s) return;
-      s.transcription = { backend: "whisper.cpp", model };
+      s.transcription = { backend: heard.backend, model: heard.model };
       const order = new Map(p.sources.map((x) => [x.id, x.order]));
       p.transcript = [...p.transcript.filter((w) => w.sourceId !== sourceId), ...words].sort(
         (a, b) => (order.get(a.sourceId) ?? 0) - (order.get(b.sourceId) ?? 0) || a.start - b.start,
       );
     });
+    const { backend, model, fallback } = heard;
+    await this.deps.store.log(projectId, { type: "transcribed", source: sourceId, backend, model, words: words.length, ...(fallback ? { fallback } : {}) });
   }
 
   async runSilence(projectId: string, sourceId: string): Promise<void> {

@@ -21,6 +21,8 @@ export const AppInfo = z.object({
   arch: z.string(),
   ffmpeg: ToolInfo,
   whisper: ToolInfo,
+  /** The Parakeet helper on Apple Silicon; null where ClipCat doesn't use it. */
+  parakeet: ToolInfo.nullable(),
   /** The H.264 encoder exports use: a hardware one, or libx264. */
   encoder: z.string(),
 });

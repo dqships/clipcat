@@ -16,7 +16,8 @@
     "lint:tokens": "node scripts/check-tokens.mjs",
     "fetch:ffmpeg": "node scripts/fetch-ffmpeg.mjs",
     "make": "npm run make --workspace=@clipcat/desktop",
-    "build:whisper": "node scripts/build-whisper.mjs"
+    "build:whisper": "node scripts/build-whisper.mjs",
+    "build:parakeet": "node scripts/build-parakeet.mjs"
   },
   "devDependencies": {
     "jsdom": "^30.0.0",

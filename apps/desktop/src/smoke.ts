@@ -43,6 +43,8 @@ export type SmokeImport = {
   /** Source seconds of the first and last word, to see whether speech at either end was missed. */
   span: [number, number] | null;
   pauses: [number, number][];
+  /** The speech engine that heard each source ("parakeet", "whisper.cpp"). */
+  backends: string[];
   /** Bytes in the exported video; 0 when the export failed. */
   exported: number;
   failed: string[];
@@ -91,17 +93,19 @@ export async function smokeImport(
       text: p.transcript.map((w) => w.text).join(" ").slice(0, 300),
       span: words > 0 ? [p.transcript[0]!.start, p.transcript[words - 1]!.end] : null,
       pauses: p.proposals.filter((x) => x.type === "silence").flatMap((x) => x.cuts),
+      backends: p.sources.map((s) => s.transcription?.backend ?? "none"),
       exported,
       failed: failures,
     };
   } catch (e) {
-    return { ok: false, words: 0, text: "", span: null, pauses: [], exported: 0, failed: failures, error: e instanceof Error ? e.message : String(e) };
+    return { ok: false, words: 0, text: "", span: null, pauses: [], backends: [], exported: 0, failed: failures, error: e instanceof Error ? e.message : String(e) };
   }
 }
 
 /** `ai` is reported, not required: CI has no signed-in Claude Code. */
 export function finishSmoke(result: { screen: string; info: AppInfoValue; ai: AiStatusValue; import?: SmokeImport }): void {
-  const ok = result.info.ffmpeg.available && result.info.whisper.available && (result.import?.ok ?? true);
+  const tools = [result.info.ffmpeg, result.info.whisper, result.info.parakeet ?? { available: true }];
+  const ok = tools.every((t) => t.available) && (result.import?.ok ?? true);
   report({ ok, ...result });
   app.exit(ok ? 0 : 1);
 }

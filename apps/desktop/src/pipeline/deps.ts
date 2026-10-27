@@ -1,22 +1,26 @@
-// The real tools behind the import pipeline: bundled ffmpeg, ffprobe and
-// whisper-cli, and the speech model in the app's data folder.
+// The real tools behind the import pipeline: bundled ffmpeg, ffprobe,
+// clipcat-parakeet (Apple Silicon) and whisper-cli, and the speech models in
+// the app's data folder. Parakeet hears the languages it knows; whisper hears
+// the rest, and takes over whenever Parakeet can't run.
 
 import { writeFile } from "node:fs/promises";
 import { availableParallelism } from "node:os";
-import type { JobContext } from "../jobs/queue";
 import type { Encoder } from "../media/encoders";
 import { prepArgs } from "../media/prep";
 import { probe } from "../media/probe";
 import { runFfmpeg } from "../media/run";
 import { encodeWav, readWav } from "../media/wav";
 import { MODELS, type ModelId, downloadModel, hasModel, modelPath } from "../transcribe/models";
+import { PARAKEET_LANGUAGES, PARAKEET_MODEL, runParakeet } from "../transcribe/parakeet";
 import { runWhisper, termsPrompt, whisperArgs } from "../transcribe/whisper";
-import type { PipelineDeps } from "./import";
+import type { Heard, PipelineDeps } from "./import";
 
 export type Tools = {
   ffmpeg: string;
   ffprobe: string;
   whisper: string;
+  /** clipcat-parakeet, or null where it isn't bundled (anything but Apple Silicon) or is turned off. */
+  parakeet: string | null;
   modelsDir: string;
   model: ModelId;
   /** The H.264 encoder to try first (probed once); libx264 is the fallback. */
@@ -48,21 +52,51 @@ export function realDeps(tools: Tools): Omit<PipelineDeps, "store" | "queue" | "
         await pass("libx264");
       }
     },
-    ensureModel: async (ctx: JobContext) => {
+    transcribe: async (opts, ctx) => {
+      let fallback: string | undefined;
+      if (tools.parakeet && PARAKEET_LANGUAGES.has(opts.language)) {
+        try {
+          const json = await runParakeet({
+            binary: tools.parakeet,
+            modelsDir: tools.modelsDir,
+            wav: opts.wav,
+            outBase: opts.outBase,
+            onProgress: ({ phase, fraction }) => {
+              if (phase === "downloading") ctx.progress(fraction, "Downloading the speech model (once)");
+              else if (phase === "compiling") ctx.progress(null, "Preparing the speech model");
+              else ctx.progress(fraction, opts.label);
+            },
+            signal: ctx.signal,
+          });
+          return { json, backend: "parakeet", model: PARAKEET_MODEL };
+        } catch (e) {
+          // An older macOS, a failed download or a broken model: whisper still works, just slower.
+          if (ctx.signal.aborted) throw e;
+          fallback = e instanceof Error ? e.message : String(e);
+          ctx.progress(0, opts.label);
+        }
+      }
       if (!(await hasModel(tools.modelsDir, tools.model))) {
         ctx.progress(0, `Downloading the speech model (${MODELS[tools.model].approxMB} MB, once)`);
         await downloadModel(tools.modelsDir, tools.model, (f) => ctx.progress(f), ctx.signal);
+        ctx.progress(0, opts.label);
       }
-      return { model: tools.model, path: modelPath(tools.modelsDir, tools.model) };
-    },
-    transcribe: async (opts, ctx) =>
-      runWhisper({
+      const json = await runWhisper({
         binary: tools.whisper,
-        args: whisperArgs({ ...opts, threads: threads(), prompt: termsPrompt((await tools.dictionary?.()) ?? []) }),
+        args: whisperArgs({
+          model: modelPath(tools.modelsDir, tools.model),
+          wav: opts.wav,
+          outBase: opts.outBase,
+          language: opts.language,
+          threads: threads(),
+          prompt: termsPrompt((await tools.dictionary?.()) ?? []),
+        }),
         outBase: opts.outBase,
         onProgress: (f) => ctx.progress(f),
         signal: ctx.signal,
-      }),
+      });
+      return { json, backend: "whisper.cpp", model: tools.model, ...(fallback ? { fallback } : {}) } satisfies Heard;
+    },
     readWav,
     writeWav: (path, pcm) => writeFile(path, encodeWav(pcm.samples, pcm.sampleRate)),
   };
