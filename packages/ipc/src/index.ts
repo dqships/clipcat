@@ -76,6 +76,13 @@ export const methods = {
    * if anything saved since, the edit is refused and the UI reloads.
    */
   "project:edit": { input: ProjectRef.extend({ revision: z.number().int().nonnegative(), op: EditOp }), output: Project },
+  /**
+   * Asks where to save, then queues an export in that shape. Resolves with
+   * the chosen path, or null when the save dialog was cancelled.
+   */
+  "project:export": { input: ProjectRef.extend({ format: z.enum(["16:9", "9:16"]) }), output: z.object({ path: z.string().nullable() }) },
+  /** Shows the project's last export in Finder or Explorer. */
+  "project:reveal-export": { input: ProjectRef, output: z.void() },
   /** Cancels the project's queued and running jobs. */
   "jobs:cancel": { input: ProjectRef, output: z.void() },
 } as const;

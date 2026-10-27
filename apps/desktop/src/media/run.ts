@@ -6,10 +6,10 @@ import { progressFrom } from "./prep";
 export function runFfmpeg(
   ffmpeg: string,
   args: string[],
-  opts: { duration: number; onProgress?: (fraction: number) => void; signal?: AbortSignal },
+  opts: { duration: number; onProgress?: (fraction: number) => void; signal?: AbortSignal; cwd?: string },
 ): Promise<void> {
   return new Promise((resolve, reject) => {
-    const child = spawn(ffmpeg, args, { windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(ffmpeg, args, { cwd: opts.cwd, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
     let tail = "";
     const abort = () => child.kill();
     opts.signal?.addEventListener("abort", abort, { once: true });

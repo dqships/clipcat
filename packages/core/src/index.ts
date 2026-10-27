@@ -4,3 +4,4 @@ export * from "./edits";
 export * from "./proposals";
 export * from "./silence";
 export * from "./editor";
+export * from "./captions";

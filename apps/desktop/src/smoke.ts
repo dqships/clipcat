@@ -2,13 +2,17 @@
 // report its first screen, prints one JSON line and exits: 0 when the UI drew
 // and the bundled tools ran, 1 when one didn't, 2 when the UI never drew.
 // With CLIPCAT_SMOKE_IMPORT=<file> it also imports that file and waits for
-// prep, transcription and silence analysis; a failed step is a 1, and so is
-// an empty transcript when CLIPCAT_SMOKE_EXPECT_WORDS=1. CI runs this against the packaged app on macOS and Windows.
+// prep, transcription and silence analysis, then exports it as 9:16 with
+// captions; a failed step is a 1, and so is an empty transcript when
+// CLIPCAT_SMOKE_EXPECT_WORDS=1. CI runs this against the packaged app on macOS and Windows.
 
 import { app } from "electron";
 import { writeFileSync } from "node:fs";
+import { stat } from "node:fs/promises";
+import { join } from "node:path";
 import type { AiStatusValue, AppInfoValue, JobEventValue } from "@clipcat/ipc";
 import type { JobQueue } from "./jobs/queue";
+import type { ExportRunner } from "./pipeline/export";
 import type { ImportPipeline } from "./pipeline/import";
 import type { ProjectStore } from "./store/projects";
 
@@ -39,6 +43,8 @@ export type SmokeImport = {
   /** Source seconds of the first and last word, to see whether speech at either end was missed. */
   span: [number, number] | null;
   pauses: [number, number][];
+  /** Bytes in the exported video; 0 when the export failed. */
+  exported: number;
   failed: string[];
   error?: string;
 };
@@ -49,23 +55,47 @@ export function recordSmokeJob(event: JobEventValue): void {
   if (event.state === "failed") failures.push(`${event.kind}: ${event.error ?? "failed"}`);
 }
 
-export async function smokeImport(pipeline: ImportPipeline, store: ProjectStore, queue: JobQueue, file: string): Promise<SmokeImport> {
+/** Exports with the packaged ffmpeg, encoder and caption fonts; the size of the file, or 0. */
+async function smokeExport(exporter: ExportRunner, projectId: string): Promise<number> {
+  const out = join(app.getPath("temp"), `clipcat-smoke-${process.pid}.mp4`);
+  try {
+    await exporter.run(projectId, "9:16", out, { signal: new AbortController().signal, progress: () => {} });
+    return (await stat(out)).size;
+  } catch (e) {
+    failures.push(`export: ${e instanceof Error ? e.message : String(e)}`);
+    return 0;
+  }
+}
+
+export async function smokeImport(
+  pipeline: ImportPipeline,
+  exporter: ExportRunner,
+  store: ProjectStore,
+  queue: JobQueue,
+  file: string,
+): Promise<SmokeImport> {
   try {
     const created = await pipeline.import([file], null);
     await queue.idle(created.id);
+    const exported = await smokeExport(exporter, created.id);
     const p = await store.get(created.id);
     const words = p.transcript.length;
     return {
       // A machine without a text-to-speech voice imports a silent clip, so words are only required when asked for.
-      ok: failures.length === 0 && (words > 0 || process.env.CLIPCAT_SMOKE_EXPECT_WORDS !== "1") && p.sources.every((s) => s.prep !== null),
+      ok:
+        failures.length === 0 &&
+        (words > 0 || process.env.CLIPCAT_SMOKE_EXPECT_WORDS !== "1") &&
+        p.sources.every((s) => s.prep !== null) &&
+        exported > 0,
       words,
       text: p.transcript.map((w) => w.text).join(" ").slice(0, 300),
       span: words > 0 ? [p.transcript[0]!.start, p.transcript[words - 1]!.end] : null,
       pauses: p.proposals.filter((x) => x.type === "silence").flatMap((x) => x.cuts),
+      exported,
       failed: failures,
     };
   } catch (e) {
-    return { ok: false, words: 0, text: "", span: null, pauses: [], failed: failures, error: e instanceof Error ? e.message : String(e) };
+    return { ok: false, words: 0, text: "", span: null, pauses: [], exported: 0, failed: failures, error: e instanceof Error ? e.message : String(e) };
   }
 }
 

@@ -6,7 +6,7 @@ import { BrowserWindow, app, dialog, nativeTheme, shell } from "electron";
 import { randomUUID } from "node:crypto";
 import { applyEdit } from "@clipcat/core";
 import tokens from "../../../design/tokens.json";
-import { join, resolve } from "node:path";
+import { extname, join, resolve } from "node:path";
 import type { AppInfoValue } from "@clipcat/ipc";
 import { AnalysisRunner } from "./ai/analyze";
 import { claudeAgent, probeClaude } from "./ai/claude";
@@ -15,7 +15,9 @@ import { type Binary, binaryPath, probeVersion } from "./tools";
 import { broadcast, registerIpc } from "./ipc";
 import { JobQueue } from "./jobs/queue";
 import { defaultEncoder } from "./media/prep";
+import { runFfmpeg } from "./media/run";
 import { realDeps } from "./pipeline/deps";
+import { ExportRunner } from "./pipeline/export";
 import { ImportPipeline } from "./pipeline/import";
 import { APP_ORIGIN, registerSchemes, serveMedia, serveUi } from "./protocol";
 import { handleSquirrelEvent } from "./squirrel";
@@ -91,8 +93,20 @@ function startPipeline() {
     queue,
     changed,
   });
-  return { store, queue, pipeline, analysis };
+  const exporter = new ExportRunner({
+    store,
+    queue,
+    changed,
+    ffmpeg: (args, { cwd, duration, ctx }) =>
+      runFfmpeg(tool("ffmpeg"), args, { cwd, duration, onProgress: (f) => ctx.progress(f), signal: ctx.signal }),
+    encoder: defaultEncoder(process.platform),
+    fontsDir: app.isPackaged ? join(process.resourcesPath, "fonts") : join(REPO_ROOT, "apps", "desktop", "resources", "fonts"),
+  });
+  return { store, queue, pipeline, analysis, exporter };
 }
+
+/** A file name from the video's title: no characters Windows or macOS refuse. */
+const fileName = (title: string) => title.replace(/[\\/:*?"<>|\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim().slice(0, 120) || "ClipCat export";
 
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -134,7 +148,7 @@ if (!squirrelLaunch) {
   if (!app.requestSingleInstanceLock()) app.quit();
 
   app.whenReady().then(() => {
-    const { store, queue, pipeline, analysis } = startPipeline();
+    const { store, queue, pipeline, analysis, exporter } = startPipeline();
     serveUi(UI_ROOT);
     serveMedia((id) => store.dir(id));
     registerIpc(
@@ -145,7 +159,7 @@ if (!squirrelLaunch) {
           const info = await appInfo();
           const file = process.env.CLIPCAT_SMOKE_IMPORT;
           const ai = { claude: await probeClaude(await hostEnv) };
-          finishSmoke({ screen, info, ai, ...(file ? { import: await smokeImport(pipeline, store, queue, file) } : {}) });
+          finishSmoke({ screen, info, ai, ...(file ? { import: await smokeImport(pipeline, exporter, store, queue, file) } : {}) });
         },
         "library:list": () => store.list(),
         "files:pick": async (_, event) => {
@@ -173,6 +187,25 @@ if (!squirrelLaunch) {
           const next = await store.update(id, revision, (p) => applyEdit(p, op, () => `g${randomUUID().slice(0, 8)}`));
           broadcast("project:changed", { id, revision: next.revision });
           return next;
+        },
+        "project:export": async ({ id, format }, event) => {
+          const project = await store.get(id);
+          const win = BrowserWindow.fromWebContents(event.sender);
+          const suffix = format === "9:16" ? " (vertical)" : "";
+          const options: Electron.SaveDialogOptions = {
+            title: `Export ${format}`,
+            defaultPath: join(app.getPath("videos"), `${fileName(project.suggestedTitle || project.name)}${suffix}.mp4`),
+            filters: [{ name: "MP4 video", extensions: ["mp4"] }],
+          };
+          const result = win ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options);
+          if (result.canceled || !result.filePath) return { path: null };
+          const path = extname(result.filePath).toLowerCase() === ".mp4" ? result.filePath : `${result.filePath}.mp4`;
+          exporter.export(id, format, path);
+          return { path };
+        },
+        "project:reveal-export": async ({ id }) => {
+          const last = (await store.get(id)).lastExport;
+          if (last) shell.showItemInFolder(last.path);
         },
         "jobs:cancel": ({ id }) => queue.cancel(id),
       },

@@ -3,14 +3,17 @@
 // (CI points it at the bundled build; locally, any ffmpeg 6+ with libflite).
 
 import { execFile } from "node:child_process";
-import { mkdtemp, readdir, rm, stat } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
+import { applyEdit } from "@clipcat/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { JobQueue, type JobEvent } from "../jobs/queue";
+import { runFfmpeg } from "../media/run";
 import { ProjectStore } from "../store/projects";
 import { realDeps } from "./deps";
+import { ExportRunner, srtPath } from "./export";
 import { ImportPipeline } from "./import";
 
 const binDir = process.env.CLIPCAT_TEST_FFMPEG;
@@ -20,6 +23,8 @@ const run = promisify(execFile);
 describe.skipIf(!binDir)("prep with real ffmpeg", () => {
   let root: string;
   let clip: string;
+  let store: ProjectStore;
+  let projectId = "";
 
   beforeAll(async () => {
     root = await mkdtemp(join(tmpdir(), "clipcat-int-"));
@@ -43,7 +48,7 @@ describe.skipIf(!binDir)("prep with real ffmpeg", () => {
 
   it("probes, preps and finds the pause", async () => {
     const events: JobEvent[] = [];
-    const store = new ProjectStore(join(root, "projects"));
+    store = new ProjectStore(join(root, "projects"));
     const pipeline = new ImportPipeline({
       ...realDeps({ ffmpeg: exe("ffmpeg"), ffprobe: exe("ffprobe"), whisper: "", modelsDir: "", model: "base", encoder: "libx264" }),
       // No speech model in CI: stand in for whisper with the words we generated, timed
@@ -60,6 +65,7 @@ describe.skipIf(!binDir)("prep with real ffmpeg", () => {
       changed: () => {},
     });
     const created = await pipeline.import([clip], null);
+    projectId = created.id;
     for (let i = 0; i < 600 && events.filter((e) => e.state === "done" || e.state === "failed").length < 3; i++) {
       await new Promise((r) => setTimeout(r, 50));
     }
@@ -83,4 +89,41 @@ describe.skipIf(!binDir)("prep with real ffmpeg", () => {
     expect(cuts.some(([a, b]) => a > 1.4 && a < 1.8 && b > 3.8 && b < 4.2)).toBe(true);
     expect(events.some((e) => e.kind === "prep" && e.state === "running" && (e.fraction ?? 0) > 0.5)).toBe(true);
   }, 120_000);
+
+  it("exports both shapes with captions and an SRT", async () => {
+    expect(projectId).not.toBe("");
+    const p = await store.get(projectId);
+    const pause = p.proposals.find((x) => x.type === "silence")!;
+    let n = 0;
+    await store.update(projectId, null, (q) => applyEdit(q, { type: "decide", ids: [pause.id], status: "accepted" }, () => `e${++n}`));
+    const exporter = new ExportRunner({
+      store,
+      queue: new JobQueue(() => {}),
+      changed: () => {},
+      ffmpeg: (args, { cwd, duration, ctx }) => runFfmpeg(exe("ffmpeg"), args, { cwd, duration, signal: ctx.signal }),
+      encoder: "libx264",
+      fontsDir: join(__dirname, "..", "..", "resources", "fonts"),
+    });
+    const ctx = { signal: new AbortController().signal, progress: () => {} };
+    const probe = realDeps({ ffmpeg: "", ffprobe: exe("ffprobe"), whisper: "", modelsDir: "", model: "base", encoder: "libx264" }).probe;
+
+    const wide = join(root, "wide.mp4");
+    await exporter.run(projectId, "16:9", wide, ctx);
+    const w = await probe(wide);
+    expect([w.width, w.height]).toEqual([1280, 720]);
+    // 6 s with the 2.1 s pause cut.
+    expect(w.duration).toBeGreaterThan(3.4);
+    expect(w.duration).toBeLessThan(4.4);
+    expect(w.audioCodec).toBe("aac");
+    const srt = await readFile(srtPath(wide), "utf8");
+    expect(srt).toContain("one");
+    expect(srt).toContain("two");
+
+    const tall = join(root, "tall.mp4");
+    await exporter.run(projectId, "9:16", tall, ctx);
+    const t = await probe(tall);
+    expect([t.width, t.height]).toEqual([1080, 1920]);
+    expect((await store.get(projectId)).lastExport).toMatchObject({ path: tall, format: "9:16" });
+    expect((await readdir(root)).some((f) => f.includes("partial"))).toBe(false);
+  }, 180_000);
 });

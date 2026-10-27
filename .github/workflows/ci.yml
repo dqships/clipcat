@@ -87,6 +87,7 @@ jobs:
               if (!/first take/i.test(r.text) || !/second take/i.test(r.text)) bad.push("a sentence is missing");
               if (!r.span || r.span[0] > 1) bad.push("the transcript does not start with the first sentence");
               if (!r.pauses.some(([a, b]) => b - a > 1.5)) bad.push("the pause between the sentences was not found");
+              if (!(r.exported > 100000)) bad.push("the 9:16 export is missing or empty");
               if (bad.length) { console.error(bad.join("; ")); process.exit(1); }' "$out"
           fi
           grep -q '"screen":"library"' "$out"
@@ -127,7 +128,7 @@ jobs:
           fi
           echo "file=$dir/clip.mp4" >> "$GITHUB_OUTPUT"
           echo "words=$words" >> "$GITHUB_OUTPUT"
-      - name: Import, transcribe and find pauses in the packaged app
+      - name: Import, transcribe, find pauses and export in the packaged app
         run: |
           out="$RUNNER_TEMP/smoke-import.json"
           mkdir -p ${{ matrix.models }}
@@ -148,6 +149,7 @@ jobs:
               if (!/first take/i.test(r.text) || !/second take/i.test(r.text)) bad.push("a sentence is missing");
               if (!r.span || r.span[0] > 1) bad.push("the transcript does not start with the first sentence");
               if (!r.pauses.some(([a, b]) => b - a > 1.5)) bad.push("the pause between the sentences was not found");
+              if (!(r.exported > 100000)) bad.push("the 9:16 export is missing or empty");
               if (bad.length) { console.error(bad.join("; ")); process.exit(1); }' "$out"
           fi
       - uses: actions/upload-artifact@v4

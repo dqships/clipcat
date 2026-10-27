@@ -76,3 +76,12 @@ describe("applyEdit", () => {
     expect(() => applyEdit(project(), { type: "decide", ids: ["nope"], status: "accepted" }, id)).toThrow("Unknown proposals: nope");
   });
 });
+
+describe("caption edits", () => {
+  it("changes the style without an undo step", () => {
+    let p = applyEdit(project(), { type: "captions", captions: { mode: "word", case: "upper" } }, id);
+    p = applyEdit(p, { type: "captions", captions: { enabled: false } }, id);
+    expect(p.captions).toMatchObject({ mode: "word", case: "upper", enabled: false });
+    expect(p.history.past).toHaveLength(0);
+  });
+});

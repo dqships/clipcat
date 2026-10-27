@@ -67,18 +67,33 @@ export const Proposal = z.object({
   status: ProposalStatus,
 });
 
-export const Captions = z.object({
-  enabled: z.boolean().default(true),
-  mode: z.enum(["word", "sentence"]).default("sentence"),
-  font: z.string().default("Jost"),
-  size: z.number().positive().default(54),
-  color: z.string().default("#FFFFFF"),
-  effect: z.enum(["none", "shadow"]).default("shadow"),
-  case: z.enum(["regular", "upper", "lower"]).default("regular"),
-  background: z.enum(["none", "rounded"]).default("none"),
+const captionFields = {
+  enabled: z.boolean(),
+  mode: z.enum(["word", "sentence"]),
+  font: z.string().min(1).max(100),
+  size: z.number().min(8).max(400),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+  effect: z.enum(["none", "shadow"]),
+  case: z.enum(["regular", "upper", "lower"]),
+  background: z.enum(["none", "rounded"]),
   /** Vertical position of the caption block's baseline, 0 (top) .. 1 (bottom). */
-  position: z.number().min(0).max(1).default(0.82),
+  position: z.number().min(0).max(1),
+};
+
+export const Captions = z.object({
+  enabled: captionFields.enabled.default(true),
+  mode: captionFields.mode.default("sentence"),
+  font: captionFields.font.default("Jost"),
+  size: captionFields.size.default(54),
+  color: captionFields.color.default("#FFFFFF"),
+  effect: captionFields.effect.default("shadow"),
+  case: captionFields.case.default("regular"),
+  background: captionFields.background.default("none"),
+  position: captionFields.position.default(0.82),
 });
+
+/** Some caption settings, with no defaults filled in, for changing just those. */
+export const CaptionsPatch = z.object(captionFields).partial();
 
 /** What undo puts back: the edit itself and the user's decisions, never the words or the proposals' content. */
 export const Snapshot = z.object({
@@ -89,6 +104,13 @@ export const Snapshot = z.object({
 export const History = z.object({
   past: z.array(Snapshot).default([]),
   future: z.array(Snapshot).default([]),
+});
+
+/** The last file exported, so the project can point back to it. */
+export const LastExport = z.object({
+  path: z.string(),
+  format: z.enum(["16:9", "9:16"]),
+  at: z.string(),
 });
 
 export const Project = z.object({
@@ -110,6 +132,7 @@ export const Project = z.object({
   proposals: z.array(Proposal),
   captions: Captions,
   history: History.default({ past: [], future: [] }),
+  lastExport: LastExport.nullable().default(null),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -122,5 +145,6 @@ export type Segment = z.infer<typeof Segment>;
 export type Proposal = z.infer<typeof Proposal>;
 export type Captions = z.infer<typeof Captions>;
 export type Snapshot = z.infer<typeof Snapshot>;
+export type LastExport = z.infer<typeof LastExport>;
 export type Project = z.infer<typeof Project>;
 export type Range = [number, number];
