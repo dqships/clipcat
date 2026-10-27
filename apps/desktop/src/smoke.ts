@@ -7,7 +7,7 @@
 
 import { app } from "electron";
 import { writeFileSync } from "node:fs";
-import type { AppInfoValue, JobEventValue } from "@clipcat/ipc";
+import type { AiStatusValue, AppInfoValue, JobEventValue } from "@clipcat/ipc";
 import type { JobQueue } from "./jobs/queue";
 import type { ImportPipeline } from "./pipeline/import";
 import type { ProjectStore } from "./store/projects";
@@ -69,7 +69,8 @@ export async function smokeImport(pipeline: ImportPipeline, store: ProjectStore,
   }
 }
 
-export function finishSmoke(result: { screen: string; info: AppInfoValue; import?: SmokeImport }): void {
+/** `ai` is reported, not required: CI has no signed-in Claude Code. */
+export function finishSmoke(result: { screen: string; info: AppInfoValue; ai: AiStatusValue; import?: SmokeImport }): void {
   const ok = result.info.ffmpeg.available && result.info.whisper.available && (result.import?.ok ?? true);
   report({ ok, ...result });
   app.exit(ok ? 0 : 1);

@@ -27,6 +27,7 @@ const project = {
   speed: 1,
   revision: 3,
   brief: "",
+  suggestedTitle: "",
   sources: [
     {
       id: "s1",
@@ -134,7 +135,7 @@ describe("App", () => {
   });
 
   it("opens a project with its transcript and pauses", async () => {
-    fakeBridge({ "app:info": info(), "library:list": [summary], "project:get": project });
+    fakeBridge({ "app:info": info(), "library:list": [summary], "project:get": project, "ai:status": { claude: { status: "ready", version: null, detail: null } } });
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "talk" }));
     expect(await screen.findByRole("heading", { level: 1, name: "talk" })).toBeTruthy();
@@ -142,6 +143,45 @@ describe("App", () => {
     expect(screen.getByText("1 pause found, 0:02 to cut.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Back to library" }));
     expect(await screen.findByRole("heading", { level: 1, name: "Library" })).toBeTruthy();
+  });
+
+  it("asks Claude for cuts with the brief and lists what came back", async () => {
+    const ready = { claude: { status: "ready", version: "2.1.0", detail: null } };
+    const { invoke } = fakeBridge({ "app:info": info(), "library:list": [summary], "project:get": project, "ai:status": ready, "project:analyze": undefined });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "talk" }));
+    const find = await screen.findByRole("button", { name: "Find cuts" });
+    await vi.waitFor(() => expect((find as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.change(screen.getByLabelText("Brief (optional)"), { target: { value: "Keep it short" } });
+    fireEvent.click(find);
+    expect(invoke).toHaveBeenCalledWith("project:analyze", { id: "p1", brief: "Keep it short" });
+  });
+
+  it("shows proposed cuts struck through in the transcript", async () => {
+    const cut = { id: "a1", type: "cleanup", sourceId: "s1", cuts: [[0.5, 0.9]], wordIds: ["s1-0"], keepWordIds: [], reason: "Filler", confidence: 0.8, status: "pending" };
+    const ready = { claude: { status: "ready", version: "2.1.0", detail: null } };
+    fakeBridge({
+      "app:info": info(),
+      "library:list": [summary],
+      "project:get": { ...project, proposals: [...project.proposals, cut], suggestedTitle: "Hello again" },
+      "ai:status": ready,
+    });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "talk" }));
+    expect(await screen.findByText("Filler")).toBeTruthy();
+    expect(screen.getByText("1 cut proposed, 0:00 in all.")).toBeTruthy();
+    expect(screen.getByText("Suggested title: Hello again")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Hello" }).className).toContain("word--proposed");
+    expect(screen.getByRole("button", { name: "Find cuts again" })).toBeTruthy();
+  });
+
+  it("says when Claude Code isn't installed", async () => {
+    const missing = { claude: { status: "not-installed", version: null, detail: "Install Claude Code, then reopen ClipCat." } };
+    fakeBridge({ "app:info": info(), "library:list": [summary], "project:get": project, "ai:status": missing });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "talk" }));
+    expect(await screen.findByText(/Install Claude Code, then reopen ClipCat/)).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Find cuts" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("asks before deleting a project", async () => {

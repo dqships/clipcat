@@ -118,3 +118,21 @@ export function validateProposals(
   proposals.sort((x, y) => words.findIndex((w) => w.id === x.wordIds[0]) - words.findIndex((w) => w.id === y.wordIds[0]));
   return { proposals, errors };
 }
+
+/** The proposal types the AI editor makes; silence comes from the meter. */
+export const AI_TYPES: readonly Proposal["type"][] = ["retake", "cleanup", "tighten"];
+
+function cutsOverlap(a: Range[], b: Range[]): boolean {
+  return a.some(([a0, a1]) => b.some(([b0, b1]) => a0 < b1 && b0 < a1));
+}
+
+/**
+ * Fresh proposals replace the pending ones `replaces` picks out. Ones the user
+ * already accepted or rejected stay, and a fresh one that overlaps any of them
+ * is dropped, so a rerun never asks the same question twice.
+ */
+export function replacePending(current: Proposal[], fresh: Proposal[], replaces: (p: Proposal) => boolean): Proposal[] {
+  const kept = current.filter((p) => !(replaces(p) && p.status === "pending"));
+  const decided = kept.filter((p) => replaces(p) && p.status !== "pending");
+  return [...kept, ...fresh.filter((f) => !decided.some((d) => d.sourceId === f.sourceId && cutsOverlap(d.cuts, f.cuts)))];
+}

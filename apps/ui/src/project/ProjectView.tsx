@@ -6,12 +6,14 @@ import { formatDuration, mediaUrl } from "../format";
 import { ICON_STROKE } from "../icons";
 import { JobLine } from "../JobLine";
 import { type ProjectJobs, useProjectChanges } from "../useJobs";
+import { AiPanel } from "./AiPanel";
 
 type Props = { projectId: string; jobs: ProjectJobs; onBack: () => void };
 
 /**
- * A project as it comes out of import: the proxy, the transcript and the
- * pauses found. Read-only for now; the transcript editor replaces the right
+ * A project as it comes out of import: the proxy, the transcript, the pauses
+ * found and the AI's proposed cuts, which show struck through in the
+ * transcript. Read-only for now; the transcript editor replaces the right
  * column in milestone 1c.
  */
 export function ProjectView({ projectId, jobs, onBack }: Props) {
@@ -35,6 +37,10 @@ export function ProjectView({ projectId, jobs, onBack }: Props) {
   const words = project?.transcript.filter((w) => w.sourceId === source?.id) ?? [];
   const pauses = project?.proposals.filter((p) => p.type === "silence" && p.sourceId === source?.id) ?? [];
   const cutSeconds = pauses.reduce((n, p) => n + p.cuts.reduce((m, [a, b]) => m + (b - a), 0), 0);
+  const proposed = new Set(project?.proposals.filter((p) => p.type !== "silence" && p.status === "pending").flatMap((p) => p.wordIds));
+  const seek = (t: number) => {
+    if (video.current) video.current.currentTime = t;
+  };
 
   return (
     <>
@@ -57,6 +63,7 @@ export function ProjectView({ projectId, jobs, onBack }: Props) {
             <div className="project__video project__video--pending" />
           )}
           <JobLine jobs={jobs} />
+          {project && <AiPanel project={project} jobs={jobs} onSeek={seek} />}
         </section>
         <section className="project__transcript" aria-labelledby="transcript-title">
           <h2 id="transcript-title" className="section-title">
@@ -73,10 +80,8 @@ export function ProjectView({ projectId, jobs, onBack }: Props) {
                 <button
                   key={w.id}
                   type="button"
-                  className="word"
-                  onClick={() => {
-                    if (video.current) video.current.currentTime = w.start;
-                  }}
+                  className={proposed.has(w.id) ? "word word--proposed" : "word"}
+                  onClick={() => seek(w.start)}
                 >
                   {w.text}
                 </button>

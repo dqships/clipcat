@@ -40,6 +40,12 @@ Projects live in the app's data folder (`~/Library/Application Support/ClipCat/p
 on macOS, `%APPDATA%\ClipCat\projects` on Windows); the speech model downloads
 once into `models/` beside them.
 
+AI cuts use your own Claude Code: install it and run `claude auth login` once.
+ClipCat finds `claude` on your login shell's PATH (or `CLIPCAT_CLAUDE_PATH`) and
+gives it a single tool, `submit_analysis`, which runs inside the app; it gets no
+file, shell or web access. Proposals are checked against the transcript and
+nothing is cut until you accept it.
+
 ## Licenses
 
 A few files in `apps/desktop` are adapted from Diffusion Studio's editor and keep
