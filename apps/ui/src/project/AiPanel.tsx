@@ -1,6 +1,6 @@
 import type { Project, Proposal } from "@clipcat/core";
-import type { AgentNameValue, AiStatusValue } from "@clipcat/ipc";
-import { MessageSquare, Sparkles, SpellCheck } from "lucide-react";
+import type { AgentNameValue, AiStatusValue, ApiModelValue } from "@clipcat/ipc";
+import { KeyRound, MessageSquare, Sparkles, SpellCheck } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { bridge } from "../bridge";
 import { ICON_STROKE } from "../icons";
@@ -8,14 +8,27 @@ import type { ProjectJobs } from "../useJobs";
 
 const AI_TYPES = new Set<Proposal["type"]>(["retake", "cleanup", "tighten"]);
 
-const AGENT_LABEL: Record<AgentNameValue, string> = { claude: "Claude Code", codex: "Codex" };
+const AGENT_LABEL: Record<AgentNameValue, string> = { claude: "Claude Code", codex: "Codex", api: "Claude API (your key)" };
+
+const MODEL_LABEL: Record<ApiModelValue, string> = {
+  "claude-opus-5-5": "Opus 5.5 (best)",
+  "claude-sonnet-5-5": "Sonnet 5.5",
+  "claude-haiku-5-5": "Haiku 5.5 (cheapest)",
+};
+
+/** Whether an agent can run now, and what to do if not. */
+function readiness(ai: AiStatusValue, name: AgentNameValue): { ready: boolean; installed: boolean; detail: string | null } {
+  if (name === "api") return { ready: ai.api.hasKey, installed: ai.api.hasKey, detail: ai.api.hasKey ? null : "Add a key from console.anthropic.com below." };
+  const s = ai[name];
+  return { ready: s.status === "ready", installed: s.status !== "not-installed", detail: s.detail };
+}
 
 type Props = { project: Project; jobs: ProjectJobs };
 
 /**
- * Asks the user's Claude Code or Codex for cuts: which one, an optional brief
- * and one button. What comes back is listed with the other suggested cuts to
- * accept or reject.
+ * Asks the user's Claude Code, Codex or Claude API key for cuts: which one,
+ * an optional brief and one button. What comes back is listed with the other
+ * suggested cuts to accept or reject.
  */
 export function AiPanel({ project, jobs }: Props) {
   const [ai, setAi] = useState<AiStatusValue | null>(null);
@@ -40,15 +53,37 @@ export function AiPanel({ project, jobs }: Props) {
       .then((s) => setTerms(s.dictionary.join(", ")), () => setTerms(""));
   }, []);
   const agent = ai?.agent ?? "claude";
-  const status = ai?.[agent] ?? null;
-  const ready = status?.status === "ready";
+  const status = ai ? readiness(ai, agent) : null;
+  const ready = status?.ready ?? false;
   const label = AGENT_LABEL[agent];
+  const [key, setKey] = useState("");
+  const [savingKey, setSavingKey] = useState(false);
 
   const choose = (next: AgentNameValue) => {
     setError(null);
     setAi((prev) => (prev ? { ...prev, agent: next } : prev));
     bridge()
       ?.invoke("settings:set", { agent: next })
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
+  };
+  const saveKey = (next: string | null) => {
+    setError(null);
+    setSavingKey(true);
+    bridge()
+      ?.invoke("settings:api-key", { key: next })
+      .then(
+        (api) => {
+          setAi((prev) => (prev ? { ...prev, api } : prev));
+          setKey("");
+        },
+        (e: unknown) => setError(e instanceof Error ? e.message : String(e)),
+      )
+      .finally(() => setSavingKey(false));
+  };
+  const chooseModel = (model: ApiModelValue) => {
+    setAi((prev) => (prev ? { ...prev, api: { ...prev.api, model } } : prev));
+    bridge()
+      ?.invoke("settings:set", { apiModel: model })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
   };
   const hasWords = project.transcript.length > 0;
@@ -88,19 +123,57 @@ export function AiPanel({ project, jobs }: Props) {
           {(Object.keys(AGENT_LABEL) as AgentNameValue[]).map((name) => (
             <option key={name} value={name}>
               {AGENT_LABEL[name]}
-              {ai && ai[name].status !== "ready" ? " (not set up)" : ""}
+              {ai && !readiness(ai, name).ready ? " (not set up)" : ""}
             </option>
           ))}
         </select>
       </label>
-      {status && !ready && (
+      {status && !ready && agent !== "api" && (
         <div className="notice ai__notice" role="status">
           <span>
-            {status.status === "not-installed" ? `ClipCat uses your ${label} to find cuts.` : `${label} isn't ready.`} {status.detail}
+            {status.installed ? `${label} isn't ready.` : `ClipCat uses your ${label} to find cuts.`} {status.detail}
           </span>
           <button type="button" className="button" onClick={check}>
             Check again
           </button>
+        </div>
+      )}
+      {ai && agent === "api" && (
+        <div className="ai__api">
+          <label className="field">
+            <span className="field__label">Model</span>
+            <select className="field__control" value={ai.api.model} disabled={running} onChange={(e) => chooseModel(e.target.value as ApiModelValue)}>
+              {(Object.keys(MODEL_LABEL) as ApiModelValue[]).map((m) => (
+                <option key={m} value={m}>
+                  {MODEL_LABEL[m]}
+                </option>
+              ))}
+            </select>
+          </label>
+          {ai.api.hasKey ? (
+            <p className="ai__hint ai__row">
+              <span>Your API key is saved, encrypted, on this computer. Each run is billed to it.</span>
+              <button type="button" className="button" disabled={savingKey || running} onClick={() => saveKey(null)}>
+                Remove key
+              </button>
+            </p>
+          ) : (
+            <div className="ai__row">
+              <input
+                className="ai__brief"
+                type="password"
+                autoComplete="off"
+                aria-label="Claude API key"
+                placeholder="sk-ant-…"
+                value={key}
+                onChange={(e) => setKey(e.target.value)}
+              />
+              <button type="button" className="button" disabled={savingKey || key.trim().length < 10} onClick={() => saveKey(key.trim())}>
+                <KeyRound className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
+                {savingKey ? "Checking…" : "Save key"}
+              </button>
+            </div>
+          )}
         </div>
       )}
       <label className="ai__label" htmlFor="ai-brief">

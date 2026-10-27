@@ -138,7 +138,7 @@ describe("App", () => {
   });
 
   it("opens a project with its transcript and pauses", async () => {
-    fakeBridge({ "app:info": info(), "library:list": [summary], "project:get": project, "ai:status": { claude: { status: "ready", version: null, detail: null }, codex: { status: "not-installed", version: null, detail: "Install the Codex CLI, then reopen ClipCat." }, agent: "claude" } });
+    fakeBridge({ "app:info": info(), "library:list": [summary], "project:get": project, "ai:status": { claude: { status: "ready", version: null, detail: null }, codex: { status: "not-installed", version: null, detail: "Install the Codex CLI, then reopen ClipCat." }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude" } });
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "talk" }));
     expect(await screen.findByRole("heading", { level: 1, name: "talk" })).toBeTruthy();
@@ -149,7 +149,7 @@ describe("App", () => {
   });
 
   it("asks Claude for cuts with the brief and lists what came back", async () => {
-    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, agent: "claude" };
+    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude" };
     const { invoke } = fakeBridge({ "app:info": info(), "library:list": [summary], "project:get": project, "ai:status": ready, "project:analyze": undefined });
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "talk" }));
@@ -162,7 +162,7 @@ describe("App", () => {
 
   it("shows proposed cuts struck through in the transcript", async () => {
     const cut = { id: "a1", type: "cleanup", sourceId: "s1", cuts: [[0.5, 0.9]], wordIds: ["s1-0"], keepWordIds: [], reason: "Filler", confidence: 0.8, status: "pending" };
-    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, agent: "claude" };
+    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude" };
     fakeBridge({
       "app:info": info(),
       "library:list": [summary],
@@ -179,7 +179,7 @@ describe("App", () => {
   });
 
   it("cuts the selected words and restores them", async () => {
-    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, agent: "claude" };
+    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude" };
     const cut = { ...project, revision: 4, segments: [{ ...project.segments[0], sourceEnd: 1.95 }, { id: "g2", sourceId: "s1", sourceStart: 1.95, sourceEnd: 75, included: false }] };
     const { invoke } = fakeBridge({ "app:info": info(), "library:list": [summary], "project:get": project, "ai:status": ready, "project:edit": cut });
     render(<App />);
@@ -197,7 +197,7 @@ describe("App", () => {
   });
 
   it("accepts a suggested cut and undoes with the keyboard", async () => {
-    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, agent: "claude" };
+    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude" };
     const { invoke } = fakeBridge({
       "app:info": info(),
       "library:list": [summary],
@@ -217,7 +217,7 @@ describe("App", () => {
   });
 
   it("styles captions, shows them over the preview and exports", async () => {
-    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, agent: "claude" };
+    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude" };
     const exported = { ...project, lastExport: { path: "/Movies/talk.mp4", format: "16:9", at: "" } };
     const { invoke } = fakeBridge({
       "app:info": info(),
@@ -246,7 +246,7 @@ describe("App", () => {
   });
 
   it("changes the speed and cancels a running export", async () => {
-    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, agent: "claude" };
+    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude" };
     const { invoke, emit } = fakeBridge({
       "app:info": info(),
       "library:list": [summary],
@@ -268,7 +268,7 @@ describe("App", () => {
   });
 
   it("says when Claude Code isn't installed", async () => {
-    const missing = { claude: { status: "not-installed", version: null, detail: "Install Claude Code, then reopen ClipCat." }, codex: { status: "signed-out", version: "0.165.0", detail: "Run `codex login` in a terminal, then try again." }, agent: "claude" };
+    const missing = { claude: { status: "not-installed", version: null, detail: "Install Claude Code, then reopen ClipCat." }, codex: { status: "signed-out", version: "0.165.0", detail: "Run `codex login` in a terminal, then try again." }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude" };
     fakeBridge({ "app:info": info(), "library:list": [summary], "project:get": project, "ai:status": missing });
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "talk" }));
@@ -277,7 +277,7 @@ describe("App", () => {
   });
 
   it("switches the AI to Codex", async () => {
-    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, agent: "claude" };
+    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude" };
     const { invoke } = fakeBridge({
       "app:info": info(),
       "library:list": [summary],
@@ -295,8 +295,31 @@ describe("App", () => {
     expect((screen.getByRole("button", { name: "Find cuts" }) as HTMLButtonElement).disabled).toBe(false);
   });
 
+  it("runs the AI with the user's own Claude API key", async () => {
+    const ready = { claude: { status: "not-installed", version: null, detail: "Install Claude Code, then reopen ClipCat." }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "api" };
+    const { invoke } = fakeBridge({
+      "app:info": info(),
+      "library:list": [summary],
+      "project:get": project,
+      "ai:status": ready,
+      "settings:set": { agent: "api" },
+      "settings:api-key": { hasKey: true, model: "claude-opus-5-5" },
+    });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "talk" }));
+    const keyField = await screen.findByLabelText("Claude API key");
+    expect((screen.getByRole("button", { name: "Find cuts" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(keyField, { target: { value: " sk-ant-test-key " } });
+    fireEvent.click(screen.getByRole("button", { name: "Save key" }));
+    expect(invoke).toHaveBeenCalledWith("settings:api-key", { key: "sk-ant-test-key" });
+    expect(await screen.findByText(/Your API key is saved, encrypted/)).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Find cuts" }) as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.change(screen.getByLabelText("Model"), { target: { value: "claude-sonnet-5-5" } });
+    expect(invoke).toHaveBeenCalledWith("settings:set", { apiModel: "claude-sonnet-5-5" });
+  });
+
   it("asks for one change and fixes the transcript with the user's terms", async () => {
-    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, agent: "claude" };
+    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude" };
     const { invoke } = fakeBridge({
       "app:info": info(),
       "library:list": [summary],
