@@ -137,9 +137,9 @@ jobs:
         run: |
           w="vendor/bin/${{ matrix.target }}/whisper-cli"; m="$(cd ${{ matrix.models }} && pwd -W 2>/dev/null || pwd)/ggml-base.bin"
           "${{ matrix.ffmpeg }}" -v error -y -i "${{ steps.clip.outputs.file }}" -vn -ac 1 -ar 16000 -c:a pcm_s16le "$RUNNER_TEMP/clip.wav"
-          for flags in "" "-ml 1 -sow" "-ml 1 -sow -nf" "-mc 0" "-mc 0 -ml 1 -sow" "-dtw base"; do
+          for flags in "" "-ng" "-nfa" "-ng -ml 1 -sow"; do
             echo "== flags: [$flags]"
-            "$w" -m "$m" -f "$RUNNER_TEMP/clip.wav" -l en -np $flags 2>&1 | grep -E '^\[' | head -20 || true
+            "$w" -m "$m" -f "$RUNNER_TEMP/clip.wav" -l en -np $flags 2>&1 | grep -E '^\[' | head -40 || true
           done
       - uses: actions/upload-artifact@v4
         with:
