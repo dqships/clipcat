@@ -43,7 +43,7 @@ async function setup(agent: Agent) {
     p.sources.push(source("a", 10));
     p.transcript = words("a", "so so I think I think we start");
   });
-  const runner = new AnalysisRunner({ store, queue, agent: async () => agent, changed: () => {} });
+  const runner = new AnalysisRunner({ store, queue, agent: async () => agent, dictionary: async () => ["Kubernetes"], changed: () => {} });
   return { store, queue, events, runner, id: created.id };
 }
 
@@ -113,6 +113,41 @@ describe("AnalysisRunner", () => {
     const { queue, events, runner, id } = await setup(agent);
     await runner.analyze(id, "");
     await queue.idle(id);
-    expect(events.find((e) => e.state === "failed")?.error).toBe("Fake finished without proposing any cuts");
+    expect(events.find((e) => e.state === "failed")?.error).toBe("Fake finished without an answer");
+  });
+
+  it("adds cuts for a request to the ones waiting, replacing only what they overlap", async () => {
+    // One answer per run.
+    const answers: unknown[] = [{ proposals: [stutter, retake] }, { proposals: [{ ...stutter, reason: "Asked for" }] }];
+    const runs: AgentRun[] = [];
+    const agent: Agent = {
+      label: "Fake",
+      run: async (run) => {
+        runs.push(run);
+        await run.submit(answers.shift());
+      },
+    };
+    const { store, queue, runner, id } = await setup(agent);
+    await runner.analyze(id, "");
+    await queue.idle(id);
+    runner.request(id, "cut the first so");
+    await queue.idle(id);
+
+    expect(runs[1]!.prompt).toMatch(/^The user asks for one change:\ncut the first so\n/);
+    const p = await store.get(id);
+    expect(p.proposals.map((x) => x.reason).sort()).toEqual(["Asked for", "Restarted"]);
+  });
+
+  it("corrects misheard words with the dictionary, keeping what was heard", async () => {
+    const { agent, runs, replies } = scripted([{ corrections: [{ index: 7, text: "started." }, { index: 3, text: "think" }] }]);
+    const { store, queue, runner, id } = await setup(agent);
+    runner.correct(id);
+    await queue.idle(id);
+
+    expect(runs[0]!.task.tool).toBe("submit_corrections");
+    expect(runs[0]!.prompt).toContain("Kubernetes");
+    expect(replies).toEqual(["Saved 1 correction. Stop here."]);
+    const w = (await store.get(id)).transcript[7]!;
+    expect(w).toMatchObject({ text: "started.", heard: "start" });
   });
 });

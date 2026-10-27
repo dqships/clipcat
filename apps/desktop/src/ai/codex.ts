@@ -11,43 +11,12 @@ import { join } from "node:path";
 import type { Agent, AgentRun } from "./analyze";
 import type { AgentStatus } from "./claude";
 import { type HostEnv, compareVersions, killTree, needsShell, parseVersion, quoteArg, resolveBinary, runOnce } from "./env";
-import { JSON_ANSWER, TOOL_ANSWER } from "./prompt";
 
 /** The first release with `exec --output-schema` and `--ephemeral`. */
 const MIN_VERSION = "0.100.0";
 const ATTEMPTS = 2;
 
 export const CODEX_SIGN_IN_HINT = "Run `codex login` in a terminal, then try again.";
-
-/**
- * The answer's JSON Schema, in the strict form OpenAI structured output wants:
- * every property required and no extras, so the optional keep range is null.
- */
-export const ANALYSIS_SCHEMA = {
-  type: "object",
-  additionalProperties: false,
-  required: ["proposals", "suggestedTitle"],
-  properties: {
-    proposals: {
-      type: "array",
-      items: {
-        type: "object",
-        additionalProperties: false,
-        required: ["type", "from", "to", "keepFrom", "keepTo", "reason", "confidence"],
-        properties: {
-          type: { type: "string", enum: ["retake", "cleanup", "tighten"] },
-          from: { type: "integer" },
-          to: { type: "integer" },
-          keepFrom: { type: ["integer", "null"] },
-          keepTo: { type: ["integer", "null"] },
-          reason: { type: "string" },
-          confidence: { type: "number" },
-        },
-      },
-    },
-    suggestedTitle: { type: "string" },
-  },
-} as const;
 
 export function isCodexAuthFailure(text: string): boolean {
   return /not logged in|log ?in required|please log ?in|unauthori[sz]ed|401|authentication|expired.*token|token.*expired/i.test(text);
@@ -126,13 +95,13 @@ export function codexAgent(host: HostEnv): Agent {
       const binary = resolveBinary("codex", host);
       if (!binary) throw new Error("Codex is not installed");
       // Codex reads the instructions at the top of the prompt; its answer comes back as JSON, not a tool call.
-      const instructions = run.system.replace(TOOL_ANSWER, JSON_ANSWER);
+      const instructions = `${run.system}\n\n${run.task.jsonAnswer}`;
       const dir = await mkdtemp(join(tmpdir(), "clipcat-codex-"));
       try {
-        await writeFile(join(dir, "schema.json"), JSON.stringify(ANALYSIS_SCHEMA));
+        await writeFile(join(dir, "schema.json"), JSON.stringify(run.task.jsonSchema));
         let prompt = `${instructions}\n\n${run.prompt}`;
         for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
-          run.activity(attempt === 1 ? "Codex is reading the transcript" : "Codex is fixing its cuts");
+          run.activity(attempt === 1 ? "Codex is reading the transcript" : "Codex is fixing its answer");
           await rm(join(dir, "answer.json"), { force: true });
           await exec(binary, dir, prompt, host, run.signal);
           const raw = await readFile(join(dir, "answer.json"), "utf8").catch(() => "");
@@ -143,10 +112,10 @@ export function codexAgent(host: HostEnv): Agent {
           } catch {
             answer = { invalid: raw.slice(0, 200) };
           }
-          run.activity("Checking Codex's cuts");
+          run.activity("Checking Codex's answer");
           const reply = await run.submit(answer);
           if (reply.done) return;
-          prompt = `${instructions}\n\n${run.prompt}\n\nYour previous answer was:\n${raw.trim()}\n\nClipCat found problems with it:\n${reply.text}\n\nAnswer again with the whole corrected analysis.`;
+          prompt = `${instructions}\n\n${run.prompt}\n\nYour previous answer was:\n${raw.trim()}\n\nClipCat found problems with it:\n${reply.text}\n\nAnswer again with the whole corrected answer.`;
         }
       } finally {
         await rm(dir, { recursive: true, force: true });

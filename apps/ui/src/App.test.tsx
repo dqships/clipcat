@@ -57,7 +57,8 @@ const project = {
 };
 
 /** A stand-in for the preload bridge: canned answers per method, and a way to push events. */
-function fakeBridge(answers: Record<string, unknown>) {
+function fakeBridge(given: Record<string, unknown>) {
+  const answers: Record<string, unknown> = { "settings:get": { agent: "claude", dictionary: ["ClipCat"] }, ...given };
   const listeners = new Map<string, Set<(p: unknown) => void>>();
   const invoke = vi.fn(async (method: string, _input?: unknown) => {
     const answer = answers[method];
@@ -270,6 +271,33 @@ describe("App", () => {
     fireEvent.change(pick, { target: { value: "codex" } });
     expect(invoke).toHaveBeenCalledWith("settings:set", { agent: "codex" });
     expect((screen.getByRole("button", { name: "Find cuts" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("asks for one change and fixes the transcript with the user's terms", async () => {
+    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, agent: "claude" };
+    const { invoke } = fakeBridge({
+      "app:info": info(),
+      "library:list": [summary],
+      "project:get": project,
+      "ai:status": ready,
+      "project:request": undefined,
+      "project:correct": undefined,
+      "settings:set": { agent: "claude", dictionary: ["ClipCat", "DaQuan"] },
+    });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "talk" }));
+    const ask = await screen.findByRole("button", { name: "Ask" });
+    await vi.waitFor(() => expect((screen.getByLabelText("Find cuts with") as HTMLSelectElement).disabled).toBe(false));
+    fireEvent.change(screen.getByLabelText("Ask for a change"), { target: { value: "Cut the part about pricing" } });
+    fireEvent.click(ask);
+    expect(invoke).toHaveBeenCalledWith("project:request", { id: "p1", request: "Cut the part about pricing" });
+
+    const terms = screen.getByLabelText(/Names and terms/) as HTMLInputElement;
+    await vi.waitFor(() => expect(terms.value).toBe("ClipCat"));
+    fireEvent.change(terms, { target: { value: "ClipCat, DaQuan,, ClipCat" } });
+    fireEvent.click(screen.getByRole("button", { name: "Fix transcript" }));
+    expect(invoke).toHaveBeenCalledWith("settings:set", { dictionary: ["ClipCat", "DaQuan"] });
+    expect(invoke).toHaveBeenCalledWith("project:correct", { id: "p1" });
   });
 
   it("asks before deleting a project", async () => {

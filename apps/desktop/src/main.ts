@@ -85,6 +85,7 @@ function startPipeline() {
       if (status.status !== "ready") throw new Error(status.detail ?? "Claude Code isn't ready");
       return claudeAgent(host, app.getVersion());
     },
+    dictionary: async () => (await settings.get()).dictionary,
     changed,
   });
   const pipeline = new ImportPipeline({
@@ -96,6 +97,7 @@ function startPipeline() {
       modelsDir: process.env.CLIPCAT_MODELS_DIR ?? join(data, "models"),
       model: MODEL,
       encoder: defaultEncoder(process.platform),
+      dictionary: async () => (await settings.get()).dictionary,
     }),
     store,
     queue,
@@ -195,8 +197,11 @@ if (!squirrelLaunch) {
           await store.remove(id);
         },
         "ai:status": () => aiStatus(),
+        "settings:get": () => settings.get(),
         "settings:set": (patch) => settings.set(patch),
         "project:analyze": ({ id, brief }) => analysis.analyze(id, brief),
+        "project:request": async ({ id, request }) => analysis.request(id, request),
+        "project:correct": async ({ id }) => analysis.correct(id),
         "project:edit": async ({ id, revision, op }) => {
           const next = await store.update(id, revision, (p) => applyEdit(p, op, () => `g${randomUUID().slice(0, 8)}`));
           broadcast("project:changed", { id, revision: next.revision });

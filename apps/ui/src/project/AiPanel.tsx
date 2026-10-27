@@ -1,6 +1,6 @@
 import type { Project, Proposal } from "@clipcat/core";
 import type { AgentNameValue, AiStatusValue } from "@clipcat/ipc";
-import { Sparkles } from "lucide-react";
+import { MessageSquare, Sparkles, SpellCheck } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { bridge } from "../bridge";
 import { ICON_STROKE } from "../icons";
@@ -30,7 +30,15 @@ export function AiPanel({ project, jobs }: Props) {
   }, []);
   useEffect(check, [check]);
 
-  const running = jobs.active?.kind === "analyze";
+  const running = jobs.active?.kind === "analyze" || jobs.active?.kind === "correct";
+  const [request, setRequest] = useState("");
+  const [terms, setTerms] = useState<string | null>(null);
+
+  useEffect(() => {
+    bridge()
+      ?.invoke("settings:get")
+      .then((s) => setTerms(s.dictionary.join(", ")), () => setTerms(""));
+  }, []);
   const agent = ai?.agent ?? "claude";
   const status = ai?.[agent] ?? null;
   const ready = status?.status === "ready";
@@ -46,17 +54,33 @@ export function AiPanel({ project, jobs }: Props) {
   const hasWords = project.transcript.length > 0;
   const proposals = project.proposals.filter((p) => AI_TYPES.has(p.type) && p.status === "pending");
 
+  const fail = (e: unknown) => setError(e instanceof Error ? e.message : String(e));
   const findCuts = () => {
     setError(null);
+    bridge()?.invoke("project:analyze", { id: project.id, brief }).catch(fail);
+  };
+  const ask = () => {
+    if (!request.trim()) return;
+    setError(null);
     bridge()
-      ?.invoke("project:analyze", { id: project.id, brief })
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
+      ?.invoke("project:request", { id: project.id, request })
+      .then(() => setRequest(""), fail);
+  };
+  const saveTerms = () => {
+    if (terms === null) return;
+    const dictionary = [...new Set(terms.split(/[,\n]/).map((t) => t.trim()).filter(Boolean))].slice(0, 200).map((t) => t.slice(0, 60));
+    bridge()?.invoke("settings:set", { dictionary }).catch(fail);
+  };
+  const fixTranscript = () => {
+    setError(null);
+    saveTerms();
+    bridge()?.invoke("project:correct", { id: project.id }).catch(fail);
   };
 
   return (
     <section className="ai" aria-labelledby="ai-title">
       <h2 id="ai-title" className="section-title">
-        AI cuts
+        AI editor
       </h2>
       <label className="field">
         <span className="field__label">Find cuts with</span>
@@ -96,6 +120,44 @@ export function AiPanel({ project, jobs }: Props) {
           {running ? "Finding cuts…" : proposals.length > 0 ? "Find cuts again" : "Find cuts"}
         </button>
         {!hasWords && <span className="ai__hint">Available once the transcript is ready.</span>}
+      </div>
+      <label className="ai__label" htmlFor="ai-request">
+        Ask for a change
+      </label>
+      <div className="ai__row">
+        <input
+          id="ai-request"
+          className="ai__brief"
+          placeholder="Cut the part about pricing"
+          value={request}
+          maxLength={1000}
+          onChange={(e) => setRequest(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") ask();
+          }}
+        />
+        <button type="button" className="button" disabled={!ready || !hasWords || running || !request.trim()} onClick={ask}>
+          <MessageSquare className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
+          Ask
+        </button>
+      </div>
+      <label className="ai__label" htmlFor="ai-terms">
+        Names and terms you use (help transcription spell them)
+      </label>
+      <div className="ai__row">
+        <input
+          id="ai-terms"
+          className="ai__brief"
+          placeholder="ClipCat, DaQuan, Vercel"
+          value={terms ?? ""}
+          disabled={terms === null}
+          onChange={(e) => setTerms(e.target.value)}
+          onBlur={saveTerms}
+        />
+        <button type="button" className="button" disabled={!ready || !hasWords || running} onClick={fixTranscript}>
+          <SpellCheck className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
+          Fix transcript
+        </button>
       </div>
       {error && (
         <p className="notice notice--danger" role="alert">

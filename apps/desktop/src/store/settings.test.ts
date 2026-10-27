@@ -13,14 +13,14 @@ describe("SettingsStore", () => {
   it("starts from the defaults and keeps what is set", async () => {
     dir = await mkdtemp(join(tmpdir(), "clipcat-settings-"));
     const store = new SettingsStore(join(dir, "settings.json"));
-    expect(await store.get()).toEqual({ agent: "claude" });
+    expect(await store.get()).toEqual({ agent: "claude", dictionary: [] });
     await store.set({ agent: "codex" });
-    expect(await new SettingsStore(join(dir, "settings.json")).get()).toEqual({ agent: "codex" });
+    expect(await new SettingsStore(join(dir, "settings.json")).get()).toEqual({ agent: "codex", dictionary: [] });
   });
 
   it("falls back to the defaults when the file is broken", async () => {
     dir = await mkdtemp(join(tmpdir(), "clipcat-settings-"));
     await writeFile(join(dir, "settings.json"), "{nope");
-    expect(await new SettingsStore(join(dir, "settings.json")).get()).toEqual({ agent: "claude" });
+    expect(await new SettingsStore(join(dir, "settings.json")).get()).toEqual({ agent: "claude", dictionary: [] });
   });
 });

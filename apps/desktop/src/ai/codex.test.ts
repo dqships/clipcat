@@ -3,9 +3,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { AgentRun, SubmitReply } from "./analyze";
-import { ANALYSIS_SCHEMA, codexAgent, isCodexAuthFailure, parseAnswer, probeCodex } from "./codex";
+import { codexAgent, isCodexAuthFailure, parseAnswer, probeCodex } from "./codex";
 import { inheritedEnv } from "./env";
-import { SYSTEM_PROMPT } from "./prompt";
+import { ANALYSIS_TASK, type AgentTask, CORRECTIONS_TASK, EDITOR_PROMPT } from "./prompt";
 
 let dir: string;
 beforeEach(async () => {
@@ -52,7 +52,8 @@ fs.writeFileSync(out, JSON.stringify(answers[lines.length]));
 function run(replies: SubmitReply[]) {
   const seen: unknown[] = [];
   const r: AgentRun = {
-    system: SYSTEM_PROMPT,
+    task: ANALYSIS_TASK,
+    system: EDITOR_PROMPT,
     prompt: "TRANSCRIPT",
     submit: async (input) => {
       seen.push(input);
@@ -65,11 +66,17 @@ function run(replies: SubmitReply[]) {
 }
 
 describe("codex", () => {
-  it("asks for a strict schema: every property required, nothing extra", () => {
-    const item = ANALYSIS_SCHEMA.properties.proposals.items;
-    expect([...item.required].sort()).toEqual(Object.keys(item.properties).sort());
-    expect(item.additionalProperties).toBe(false);
-    expect([...ANALYSIS_SCHEMA.required].sort()).toEqual(Object.keys(ANALYSIS_SCHEMA.properties).sort());
+  it("asks for strict schemas: every property required, nothing extra", () => {
+    type Node = { type?: unknown; properties?: Record<string, Node>; required?: string[]; additionalProperties?: boolean; items?: Node };
+    const strict = (node: Node): void => {
+      if (node.properties) {
+        expect([...(node.required ?? [])].sort()).toEqual(Object.keys(node.properties).sort());
+        expect(node.additionalProperties).toBe(false);
+        Object.values(node.properties).forEach(strict);
+      }
+      if (node.items) strict(node.items);
+    };
+    for (const task of [ANALYSIS_TASK, CORRECTIONS_TASK] as AgentTask[]) strict(task.jsonSchema as Node);
   });
 
   it("reads the answer, dropping nulls and code fences", () => {
