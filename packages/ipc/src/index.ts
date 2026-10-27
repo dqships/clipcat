@@ -65,6 +65,8 @@ export const ProjectSummary = z.object({
   duration: z.number(),
   sources: z.number().int(),
   thumb: z.string().nullable(),
+  /** For a short, the name of the project it was cut from. */
+  origin: z.string().nullable(),
 });
 
 export const JobEvent = z.object({
@@ -105,6 +107,11 @@ export const methods = {
   "project:request": { input: ProjectRef.extend({ request: z.string().trim().min(1).max(1000) }), output: z.void() },
   /** Queues a pass that fixes misheard names and terms, using the dictionary. */
   "project:correct": { input: ProjectRef, output: z.void() },
+  /** Queues an AI pass that picks up to `count` shorts of at most `seconds` each, each saved as its own vertical project. */
+  "project:shorts": {
+    input: ProjectRef.extend({ count: z.number().int().min(1).max(10), seconds: z.union([z.literal(30), z.literal(60), z.literal(90)]) }),
+    output: z.void(),
+  },
   /**
    * One transcript-editor change. `revision` is the project the UI is showing;
    * if anything saved since, the edit is refused and the UI reloads.

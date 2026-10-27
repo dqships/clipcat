@@ -48,6 +48,8 @@ const project = {
   segments: [{ id: "g1", sourceId: "s1", sourceStart: 0, sourceEnd: 75, included: true }],
   history: { past: [], future: [] },
   lastExport: null,
+  origin: null,
+  shorts: [],
   proposals: [
     { id: "x1", type: "silence", sourceId: "s1", cuts: [[1, 2.5]], wordIds: [], keepWordIds: [], reason: "", confidence: 1, status: "pending" },
   ],
@@ -343,6 +345,33 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "Fix transcript" }));
     expect(invoke).toHaveBeenCalledWith("settings:set", { dictionary: ["ClipCat", "DaQuan"] });
     expect(invoke).toHaveBeenCalledWith("project:correct", { id: "p1" });
+  });
+
+  it("makes shorts and opens one, which links back to the long video", async () => {
+    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: null, detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude" };
+    const withShort = { ...project, revision: 4, shorts: [{ id: "sh1", title: "The hook", seconds: 42 }] };
+    const short = { ...project, id: "sh1", name: "The hook", aspectRatio: "9:16", origin: { projectId: "p1", name: "talk", reason: "Bold claim up front." } };
+    const { invoke, emit } = fakeBridge({
+      "app:info": info(),
+      "library:list": [summary],
+      "project:get": ({ id }: { id: string }) => (id === "sh1" ? short : withShort),
+      "ai:status": ready,
+      "project:shorts": undefined,
+    });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "talk" }));
+    fireEvent.change(await screen.findByLabelText("How many"), { target: { value: "5" } });
+    fireEvent.change(screen.getByLabelText("Length"), { target: { value: "30" } });
+    fireEvent.click(screen.getByRole("button", { name: "Make shorts" }));
+    expect(invoke).toHaveBeenCalledWith("project:shorts", { id: "p1", count: 5, seconds: 30 });
+    emit("job", { projectId: "p1", jobId: "j5", kind: "shorts", label: "Finding shorts", state: "running", fraction: null });
+    expect(screen.getByRole("button", { name: "Finding shorts…" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open The hook" }));
+    expect(await screen.findByRole("heading", { level: 1, name: "The hook" })).toBeTruthy();
+    expect(screen.getByText(/Cut from talk\. Bold claim up front\./)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Open the long video" }));
+    expect(await screen.findByRole("heading", { level: 1, name: "talk" })).toBeTruthy();
   });
 
   it("asks before deleting a project", async () => {

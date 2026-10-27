@@ -25,7 +25,7 @@ export function App() {
   return (
     <div className="app">
       {open ? (
-        <ProjectView projectId={open} jobs={jobsFor(open)} onBack={() => setOpen(null)} />
+        <ProjectView key={open} projectId={open} jobs={jobsFor(open)} onBack={() => setOpen(null)} onOpen={setOpen} />
       ) : (
         <Library jobsFor={jobsFor} onOpen={setOpen} />
       )}

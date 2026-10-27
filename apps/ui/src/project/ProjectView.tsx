@@ -11,11 +11,12 @@ import { CaptionsPanel } from "./CaptionsPanel";
 import { ExportPanel } from "./ExportPanel";
 import { type Playhead, Preview, type PreviewHandle } from "./Preview";
 import { Proposals } from "./Proposals";
+import { ShortsPanel } from "./ShortsPanel";
 import { Waveform } from "./Waveform";
 import { Transcript } from "./Transcript";
 import { useEditor } from "./useEditor";
 
-type Props = { projectId: string; jobs: ProjectJobs; onBack: () => void };
+type Props = { projectId: string; jobs: ProjectJobs; onBack: () => void; onOpen: (id: string) => void };
 
 /**
  * The editor: the preview plays the edit, the strip shows where the cuts
@@ -23,7 +24,7 @@ type Props = { projectId: string; jobs: ProjectJobs; onBack: () => void };
  * pause finder and from Claude, wait below the preview for a decision;
  * caption style and export come after.
  */
-export function ProjectView({ projectId, jobs, onBack }: Props) {
+export function ProjectView({ projectId, jobs, onBack, onOpen }: Props) {
   const [project, setProjectState] = useState<Project | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [playhead, setPlayhead] = useState<Playhead | null>(null);
@@ -105,6 +106,7 @@ export function ProjectView({ projectId, jobs, onBack }: Props) {
           <JobLine jobs={jobs} onCancel={() => void bridge()?.invoke("jobs:cancel", { id: projectId })} />
           {project && <Proposals project={project} onSeek={seek} onEdit={edit} />}
           {project && <AiPanel project={project} jobs={jobs} />}
+          {project && <ShortsPanel project={project} jobs={jobs} onOpen={onOpen} />}
           {project && <CaptionsPanel project={project} onEdit={edit} />}
           {project && <ExportPanel project={project} jobs={jobs} onEdit={edit} />}
         </section>

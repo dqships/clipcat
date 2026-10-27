@@ -222,7 +222,17 @@ if (!squirrelLaunch) {
         "project:get": ({ id }) => store.get(id),
         "project:remove": async ({ id }) => {
           queue.cancel(id);
+          const origin = (await store.get(id).catch(() => null))?.origin;
           await store.remove(id);
+          // A deleted short leaves its long video's list of shorts.
+          if (origin) {
+            const parent = await store
+              .update(origin.projectId, null, (p) => {
+                p.shorts = p.shorts.filter((x) => x.id !== id);
+              })
+              .catch(() => null);
+            if (parent) broadcast("project:changed", { id: parent.id, revision: parent.revision });
+          }
         },
         "ai:status": () => aiStatus(),
         "settings:get": () => settings.get(),
@@ -237,6 +247,7 @@ if (!squirrelLaunch) {
         "project:analyze": ({ id, brief }) => analysis.analyze(id, brief),
         "project:request": async ({ id, request }) => analysis.request(id, request),
         "project:correct": async ({ id }) => analysis.correct(id),
+        "project:shorts": async ({ id, count, seconds }) => analysis.shorts(id, count, seconds),
         "project:edit": async ({ id, revision, op }) => {
           const next = await store.update(id, revision, (p) => applyEdit(p, op, () => `g${randomUUID().slice(0, 8)}`));
           broadcast("project:changed", { id, revision: next.revision });

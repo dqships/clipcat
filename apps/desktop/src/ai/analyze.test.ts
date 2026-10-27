@@ -1,8 +1,9 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { source, words } from "@clipcat/core/fixtures";
+import { initialSegments, setRange } from "@clipcat/core";
+import { counter, source, words } from "@clipcat/core/fixtures";
 import { JobQueue, type JobEvent } from "../jobs/queue";
 import { ProjectStore } from "../store/projects";
 import { type Agent, type AgentRun, AnalysisRunner } from "./analyze";
@@ -149,5 +150,62 @@ describe("AnalysisRunner", () => {
     expect(replies).toEqual(["Saved 1 correction. Stop here."]);
     const w = (await store.get(id)).transcript[7]!;
     expect(w).toMatchObject({ text: "started.", heard: "start" });
+  });
+});
+
+describe("AnalysisRunner shorts", () => {
+  // 20 words, 12 s, in one recording with its prepared media on disk.
+  async function long(agent: Agent) {
+    const store = new ProjectStore(root);
+    const queue = new JobQueue(() => {});
+    const created = await store.create("Long talk");
+    const media = store.mediaDir(created.id, "a");
+    await mkdir(join(media, "thumbs"), { recursive: true });
+    await writeFile(join(media, "proxy.mp4"), "video");
+    await writeFile(join(media, "thumbs", "0001.jpg"), "jpg");
+    await store.update(created.id, null, (p) => {
+      p.sources.push({ ...source("a", 12.5), prep: { proxy: "media/a/proxy.mp4", wav: "media/a/audio.wav", waveform: "media/a/waveform.png", thumbs: "media/a/thumbs/%04d.jpg" } });
+      p.transcript = words("a", Array.from({ length: 20 }, (_, i) => `w${i}`).join(" "));
+      // The long edit already cut 3 s to 4 s.
+      p.segments = setRange(initialSegments("a", 12.5, counter("s")), "a", [3, 4], false, counter("t"));
+    });
+    const runner = new AnalysisRunner({ store, queue, agent: async () => agent, dictionary: async () => [], changed: () => {} });
+    return { store, queue, runner, id: created.id };
+  }
+
+  it("makes each short its own vertical project sharing the long video's media", async () => {
+    const { agent, runs, replies } = scripted([
+      {
+        shorts: [
+          { title: "The hook", reason: "Bold claim up front", ranges: [{ from: 0, to: 12 }] },
+          { title: "Nope", reason: "x", ranges: [{ from: 50, to: 60 }] },
+        ],
+      },
+      { shorts: [{ title: "The hook", reason: "Bold claim up front", ranges: [{ from: 0, to: 12 }] }] },
+    ]);
+    const { store, queue, runner, id } = await long(agent);
+    runner.shorts(id, 2, 30);
+    await queue.idle(id);
+
+    expect(runs[0]!.prompt).toContain("Pick up to 2 shorts, each 15 to 30 seconds long");
+    // Words the long edit cut are marked.
+    expect(runs[0]!.prompt).toContain("[5]~w5~");
+    expect(replies[0]).toMatch(/1 of 2 shorts have problems/);
+    expect(replies[1]).toBe("Saved 1 short. Stop here.");
+
+    const parent = await store.get(id);
+    expect(parent.shorts).toHaveLength(1);
+    const short = await store.get(parent.shorts[0]!.id);
+    expect(short).toMatchObject({ name: "The hook", aspectRatio: "9:16", origin: { projectId: id, name: "Long talk" } });
+    expect(short.segments.filter((s) => s.included).map((s) => [s.sourceStart, s.sourceEnd])).toEqual([
+      [0, 3],
+      [4, expect.closeTo(7.75)],
+    ]);
+    const proxy = join(store.mediaDir(short.id, "a"), "proxy.mp4");
+    expect(await readFile(proxy, "utf8")).toBe("video");
+    expect(await readFile(join(store.mediaDir(short.id, "a"), "thumbs", "0001.jpg"), "utf8")).toBe("jpg");
+    // A hard link where the disk allows it: the same file, not a copy.
+    if (process.platform !== "win32") expect((await stat(proxy)).ino).toBe((await stat(join(store.mediaDir(id, "a"), "proxy.mp4"))).ino);
+    expect((await store.list()).find((x) => x.id === short.id)?.origin).toBe("Long talk");
   });
 });

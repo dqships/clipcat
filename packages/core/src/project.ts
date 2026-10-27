@@ -115,6 +115,16 @@ export const LastExport = z.object({
   at: z.string(),
 });
 
+/** Where a short came from: the long video's project and why the AI editor picked this stretch. */
+export const Origin = z.object({
+  projectId: z.string(),
+  name: z.string(),
+  reason: z.string(),
+});
+
+/** A short made from this project, by its own project id. */
+export const ShortRef = z.object({ id: z.string(), title: z.string(), seconds: z.number().nonnegative() });
+
 export const Project = z.object({
   version: z.literal(1),
   id: z.string(),
@@ -135,6 +145,10 @@ export const Project = z.object({
   captions: Captions,
   history: History.default({ past: [], future: [] }),
   lastExport: LastExport.nullable().default(null),
+  /** Set on a short: the project it was cut from. */
+  origin: Origin.nullable().default(null),
+  /** Shorts made from this project, newest last. */
+  shorts: z.array(ShortRef).default([]),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -148,5 +162,7 @@ export type Proposal = z.infer<typeof Proposal>;
 export type Captions = z.infer<typeof Captions>;
 export type Snapshot = z.infer<typeof Snapshot>;
 export type LastExport = z.infer<typeof LastExport>;
+export type Origin = z.infer<typeof Origin>;
+export type ShortRef = z.infer<typeof ShortRef>;
 export type Project = z.infer<typeof Project>;
 export type Range = [number, number];
