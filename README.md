@@ -75,6 +75,14 @@ sure of, keeping their timing (hover a corrected word to see what was heard).
 The same list is passed to whisper as a prompt when transcribing (Parakeet
 takes no prompt, so "Fix transcript" is how names get fixed there).
 
+Shorts come from the same AI editor: choose how many and how long (up to 30,
+60 or 90 seconds) and "Make shorts" picks the moments that open with a hook and
+stand on their own. Each becomes its own vertical project, listed under the
+long video and in the library, that keeps the long edit's cuts and its waiting
+suggestions; its recordings' prepared media are hard links to the long
+video's, so a short takes no extra disk space. Deleting either one leaves the
+other intact.
+
 Editing happens in the transcript: click a word to jump there, shift-click to
 select a run, and press Delete to cut it (again to restore). Suggested cuts,
 from the pause finder and from Claude, are accepted or rejected under the

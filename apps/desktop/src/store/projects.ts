@@ -4,7 +4,7 @@
 // each other's edits.
 
 import { randomUUID } from "node:crypto";
-import { appendFile, mkdir, readFile, readdir, rm } from "node:fs/promises";
+import { appendFile, copyFile, link, mkdir, readFile, readdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { Project } from "@clipcat/core";
 import { writeFileAtomic } from "../atomic";
@@ -26,6 +26,8 @@ export type ProjectSummary = {
   sources: number;
   /** First thumbnail of the first prepared source, relative to the project folder. */
   thumb: string | null;
+  /** For a short, the name of the project it was cut from. */
+  origin: string | null;
 };
 
 const SAFE_ID = /^[a-zA-Z0-9-]+$/;
@@ -60,6 +62,7 @@ export class ProjectStore {
           duration: p.sources.reduce((n, s) => n + s.media.duration, 0),
           sources: p.sources.length,
           thumb: p.sources.find((s) => s.prep)?.prep?.thumbs.replace("%04d", "0001") ?? null,
+          origin: p.origin?.name ?? null,
         });
       } catch {
         // A half-written or foreign folder: skip it rather than hide the rest.
@@ -94,6 +97,25 @@ export class ProjectStore {
   }
 
   /**
+   * Saves `project` as a new project whose sources' prepared media come from
+   * project `from`: hard links, so a short costs no disk space (copies where
+   * the disk can't link).
+   */
+  async createFrom(project: Project, from: string): Promise<Project> {
+    const parsed = Project.parse(project);
+    if (parsed.id === from) throw new Error("A project can't be made from itself");
+    try {
+      for (const s of parsed.sources) await linkTree(this.mediaDir(from, s.id), this.mediaDir(parsed.id, s.id));
+      await writeFileAtomic(join(this.dir(parsed.id), "project.json"), JSON.stringify(parsed, null, 2));
+    } catch (e) {
+      await rm(this.dir(parsed.id), { recursive: true, force: true });
+      throw e;
+    }
+    await this.log(parsed.id, { type: "created", name: parsed.name, from });
+    return parsed;
+  }
+
+  /**
    * Applies `change` to the latest saved project, if it is still at `based`
    * (or always, when `based` is null: main-process jobs that only add to it).
    */
@@ -124,5 +146,16 @@ export class ProjectStore {
   async log(id: string, event: Record<string, unknown>): Promise<void> {
     const line = JSON.stringify({ at: new Date().toISOString(), ...event });
     await appendFile(join(this.dir(id), "events.jsonl"), `${line}\n`, { mode: 0o600 }).catch(() => {});
+  }
+}
+
+/** Mirrors the files under `from` into `to` as hard links, or copies when linking fails (another disk, FAT). */
+async function linkTree(from: string, to: string): Promise<void> {
+  await mkdir(to, { recursive: true });
+  for (const entry of await readdir(from, { withFileTypes: true }).catch(() => [])) {
+    const a = join(from, entry.name);
+    const b = join(to, entry.name);
+    if (entry.isDirectory()) await linkTree(a, b);
+    else if (entry.isFile()) await link(a, b).catch(() => copyFile(a, b));
   }
 }

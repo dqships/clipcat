@@ -1,5 +1,6 @@
 // The AI jobs: cut proposals for the whole video, cuts for one request ("cut
-// the part about pricing"), and transcript corrections. The agent reads the
+// the part about pricing"), transcript corrections, and shorts (each saved as
+// its own vertical project). The agent reads the
 // numbered transcript and answers through its task's submit tool (or JSON).
 // Every answer is checked against the real words: a first answer with
 // problems goes back once with the list, after which whatever checked out is
@@ -10,13 +11,17 @@ import {
   AI_TYPES,
   AgentAnalysis,
   AgentCorrections,
+  AgentShorts,
   type Project,
   type Proposal,
+  type ShortPlan,
   applyCorrections,
   cutsOverlap,
   replacePending,
+  shortProject,
   validateCorrections,
   validateProposals,
+  validateShorts,
 } from "@clipcat/core";
 import type { JobContext, JobQueue } from "../jobs/queue";
 import type { ProjectStore } from "../store/projects";
@@ -26,9 +31,12 @@ import {
   CORRECTIONS_TASK,
   CORRECTOR_PROMPT,
   EDITOR_PROMPT,
+  SHORTS_PROMPT,
+  SHORTS_TASK,
   analysisPrompt,
   correctionsPrompt,
   orderedWords,
+  shortsPrompt,
 } from "./prompt";
 
 /** What a submit tells the agent, and whether that ends the run. */
@@ -87,6 +95,11 @@ export class AnalysisRunner {
   /** Queues a pass that fixes misheard names and terms in the transcript. */
   correct(projectId: string): void {
     this.deps.queue.add(projectId, "correct", "Checking the transcript", (ctx) => this.runCorrections(projectId, ctx)).catch(() => {});
+  }
+
+  /** Queues a pass that picks up to `count` shorts of about `seconds` each and makes a project of each. */
+  shorts(projectId: string, count: number, seconds: number): void {
+    this.deps.queue.add(projectId, "shorts", "Finding shorts", (ctx) => this.runShorts(projectId, ctx, { count, seconds })).catch(() => {});
   }
 
   /**
@@ -182,6 +195,41 @@ export class AnalysisRunner {
       p.transcript = applyCorrections(p.transcript, result);
     });
     await this.deps.store.log(projectId, { type: "corrected", agent, corrections: result.size, attempts });
+    this.deps.changed(updated);
+  }
+
+  async runShorts(projectId: string, ctx: JobContext, limits: { count: number; seconds: number }): Promise<void> {
+    const project = await this.deps.store.get(projectId);
+    const words = orderedWords(project);
+    if (words.length === 0) throw new Error("There is no transcript to read yet");
+
+    const { result, attempts, agent } = await this.ask<ShortPlan[]>(
+      ctx,
+      { task: SHORTS_TASK, system: SHORTS_PROMPT, prompt: shortsPrompt(project, limits) },
+      (input) => {
+        const parsed = AgentShorts.safeParse(input);
+        if (!parsed.success) return { invalid: parsed.error.issues.map((i) => `${i.path.join(".") || "input"}: ${i.message}`) };
+        const { shorts, errors } = validateShorts(parsed.data, words, project.sources, project.segments, limits);
+        return {
+          result: shorts,
+          problems: errors,
+          summary: `${errors.length} of ${parsed.data.shorts.length} shorts have problems:`,
+          saved: `Saved ${shorts.length} ${shorts.length === 1 ? "short" : "shorts"}.`,
+        };
+      },
+    );
+
+    ctx.progress(null, "Making the shorts");
+    const made: Project["shorts"] = [];
+    for (const plan of result) {
+      const short = shortProject(project, plan, { id: randomUUID(), now: new Date().toISOString(), segmentId: shortId });
+      await this.deps.store.createFrom(short, projectId);
+      made.push({ id: short.id, title: plan.title, seconds: plan.seconds });
+    }
+    const updated = await this.deps.store.update(projectId, null, (p) => {
+      p.shorts = [...p.shorts, ...made];
+    });
+    await this.deps.store.log(projectId, { type: "shorts", agent, shorts: made.map((m) => m.id), attempts });
     this.deps.changed(updated);
   }
 }

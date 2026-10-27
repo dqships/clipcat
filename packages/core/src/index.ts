@@ -6,3 +6,4 @@ export * from "./silence";
 export * from "./editor";
 export * from "./captions";
 export * from "./corrections";
+export * from "./shorts";

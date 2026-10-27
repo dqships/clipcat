@@ -20,7 +20,7 @@ export function ProjectCard({ project, jobs, onOpen, onRemove }: Props) {
         </button>
       </h2>
       <p className="card__meta">
-        {formatDuration(project.duration)} · {videos}
+        {project.origin ? `Short from ${project.origin}` : `${formatDuration(project.duration)} · ${videos}`}
       </p>
       <JobLine jobs={jobs} />
       <div className="card__actions">
