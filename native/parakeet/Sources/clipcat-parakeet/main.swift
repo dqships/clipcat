@@ -8,6 +8,7 @@
 // The output is {"model", "text", "words": [{"text", "start", "end"}]}, times
 // in seconds. Errors go to stderr with a non-zero exit.
 
+import CoreML
 import FluidAudio
 import Foundation
 
@@ -43,20 +44,41 @@ func report(_ phase: String, _ fraction: Double) {
     print("phase=\(phase) progress=\(String(format: "%.4f", min(1, max(0, fraction))))")
 }
 
-/// Downloads the models into `dir` once (later runs find them there) and loads them.
+/// Downloads the models into `dir` once (later runs find them there) and loads them,
+/// on the Neural Engine by default or on the CPU alone with `cpuOnly`.
 /// FluidAudio keeps each model in a folder named after its Hugging Face repo.
-func loadModels(_ dir: URL) async throws -> AsrModels {
+func loadModels(_ dir: URL, cpuOnly: Bool = false) async throws -> AsrModels {
     let repo = dir.appendingPathComponent("parakeet-tdt-0.6b-v3-coreml", isDirectory: true)
-    return try await AsrModels.downloadAndLoad(to: repo, version: .v3, progressHandler: { progress in
-        switch progress.phase {
-        case .compiling: report("compiling", progress.fractionCompleted)
-        default: report("downloading", progress.fractionCompleted)
-        }
-    })
+    var configuration: MLModelConfiguration? = nil
+    if cpuOnly {
+        let cpu = MLModelConfiguration()
+        cpu.computeUnits = .cpuOnly
+        configuration = cpu
+    }
+    return try await AsrModels.downloadAndLoad(
+        to: repo, configuration: configuration, version: .v3,
+        encoderComputeUnits: cpuOnly ? .cpuOnly : nil,
+        progressHandler: { progress in
+            switch progress.phase {
+            case .compiling: report("compiling", progress.fractionCompleted)
+            default: report("downloading", progress.fractionCompleted)
+            }
+        })
 }
 
 func transcribe(models dir: URL, input: URL, output: URL) async throws {
-    let models = try await loadModels(dir)
+    do {
+        try await transcribe(models: dir, input: input, output: output, cpuOnly: false)
+    } catch {
+        // Machines without a usable Neural Engine (virtual Macs among them) fail the
+        // first prediction; the CPU is slower but always there.
+        FileHandle.standardError.write(Data("clipcat-parakeet: retrying on the CPU: \(error.localizedDescription)\n".utf8))
+        try await transcribe(models: dir, input: input, output: output, cpuOnly: true)
+    }
+}
+
+func transcribe(models dir: URL, input: URL, output: URL, cpuOnly: Bool) async throws {
+    let models = try await loadModels(dir, cpuOnly: cpuOnly)
     // v3 long-form audio drifts with the mel-context seams; silence-aligned chunks avoid it.
     let asr = AsrManager(config: ASRConfig(melChunkContext: false))
     try await asr.loadModels(models)
