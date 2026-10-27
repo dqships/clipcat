@@ -1,5 +1,5 @@
 import type { Project, Proposal } from "@clipcat/core";
-import type { AgentStatusValue } from "@clipcat/ipc";
+import type { AgentNameValue, AiStatusValue } from "@clipcat/ipc";
 import { Sparkles } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { bridge } from "../bridge";
@@ -8,27 +8,41 @@ import type { ProjectJobs } from "../useJobs";
 
 const AI_TYPES = new Set<Proposal["type"]>(["retake", "cleanup", "tighten"]);
 
+const AGENT_LABEL: Record<AgentNameValue, string> = { claude: "Claude Code", codex: "Codex" };
+
 type Props = { project: Project; jobs: ProjectJobs };
 
 /**
- * Asks the user's Claude Code for cuts: an optional brief and one button. What
- * comes back is listed with the other suggested cuts to accept or reject.
+ * Asks the user's Claude Code or Codex for cuts: which one, an optional brief
+ * and one button. What comes back is listed with the other suggested cuts to
+ * accept or reject.
  */
 export function AiPanel({ project, jobs }: Props) {
-  const [claude, setClaude] = useState<AgentStatusValue | null>(null);
+  const [ai, setAi] = useState<AiStatusValue | null>(null);
   const [brief, setBrief] = useState(project.brief);
   const [error, setError] = useState<string | null>(null);
 
   const check = useCallback(() => {
-    setClaude(null);
+    setAi(null);
     bridge()
       ?.invoke("ai:status")
-      .then((s) => setClaude(s.claude), (e: unknown) => setError(e instanceof Error ? e.message : String(e)));
+      .then(setAi, (e: unknown) => setError(e instanceof Error ? e.message : String(e)));
   }, []);
   useEffect(check, [check]);
 
   const running = jobs.active?.kind === "analyze";
-  const ready = claude?.status === "ready";
+  const agent = ai?.agent ?? "claude";
+  const status = ai?.[agent] ?? null;
+  const ready = status?.status === "ready";
+  const label = AGENT_LABEL[agent];
+
+  const choose = (next: AgentNameValue) => {
+    setError(null);
+    setAi((prev) => (prev ? { ...prev, agent: next } : prev));
+    bridge()
+      ?.invoke("settings:set", { agent: next })
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
+  };
   const hasWords = project.transcript.length > 0;
   const proposals = project.proposals.filter((p) => AI_TYPES.has(p.type) && p.status === "pending");
 
@@ -44,9 +58,22 @@ export function AiPanel({ project, jobs }: Props) {
       <h2 id="ai-title" className="section-title">
         AI cuts
       </h2>
-      {claude && !ready && (
+      <label className="field">
+        <span className="field__label">Find cuts with</span>
+        <select className="field__control" value={agent} disabled={!ai || running} onChange={(e) => choose(e.target.value as AgentNameValue)}>
+          {(Object.keys(AGENT_LABEL) as AgentNameValue[]).map((name) => (
+            <option key={name} value={name}>
+              {AGENT_LABEL[name]}
+              {ai && ai[name].status !== "ready" ? " (not set up)" : ""}
+            </option>
+          ))}
+        </select>
+      </label>
+      {status && !ready && (
         <div className="notice ai__notice" role="status">
-          <span>{claude.status === "not-installed" ? "ClipCat uses your Claude Code to find cuts." : "Claude Code isn't ready."} {claude.detail}</span>
+          <span>
+            {status.status === "not-installed" ? `ClipCat uses your ${label} to find cuts.` : `${label} isn't ready.`} {status.detail}
+          </span>
           <button type="button" className="button" onClick={check}>
             Check again
           </button>

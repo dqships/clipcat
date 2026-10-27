@@ -46,6 +46,11 @@ gives it a single tool, `submit_analysis`, which runs inside the app; it gets no
 file, shell or web access. Proposals are checked against the transcript and
 nothing is cut until you accept it.
 
+Codex works too: install the Codex CLI, run `codex login`, and pick Codex under
+"Find cuts with" (or set `CLIPCAT_CODEX_PATH`). ClipCat runs `codex exec` in a
+read-only sandbox in an empty temporary folder, with the prompt on stdin and
+the answer held to a JSON schema; it is checked exactly like Claude's.
+
 Editing happens in the transcript: click a word to jump there, shift-click to
 select a run, and press Delete to cut it (again to restore). Suggested cuts,
 from the pause finder and from Claude, are accepted or rejected under the

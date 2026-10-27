@@ -10,6 +10,7 @@ import { extname, join, resolve } from "node:path";
 import type { AppInfoValue } from "@clipcat/ipc";
 import { AnalysisRunner } from "./ai/analyze";
 import { claudeAgent, probeClaude } from "./ai/claude";
+import { codexAgent, probeCodex } from "./ai/codex";
 import { hydrateEnv } from "./ai/env";
 import { type Binary, binaryPath, probeVersion } from "./tools";
 import { broadcast, registerIpc } from "./ipc";
@@ -22,6 +23,7 @@ import { ImportPipeline } from "./pipeline/import";
 import { APP_ORIGIN, registerSchemes, serveMedia, serveUi } from "./protocol";
 import { handleSquirrelEvent } from "./squirrel";
 import { ProjectStore } from "./store/projects";
+import { SettingsStore } from "./store/settings";
 import type { ModelId } from "./transcribe/models";
 import { startSmokeTimer, finishSmoke, isSmokeRun, recordSmokeJob, smokeImport } from "./smoke";
 
@@ -63,6 +65,7 @@ const hostEnv = hydrateEnv();
 function startPipeline() {
   const data = app.getPath("userData");
   const store = new ProjectStore(join(data, "projects"));
+  const settings = new SettingsStore(join(data, "settings.json"));
   const queue = new JobQueue((event) => {
     if (isSmokeRun()) recordSmokeJob(event);
     broadcast("job", event);
@@ -73,6 +76,11 @@ function startPipeline() {
     queue,
     agent: async () => {
       const host = await hostEnv;
+      if ((await settings.get()).agent === "codex") {
+        const status = await probeCodex(host);
+        if (status.status !== "ready") throw new Error(status.detail ?? "Codex isn't ready");
+        return codexAgent(host);
+      }
       const status = await probeClaude(host);
       if (status.status !== "ready") throw new Error(status.detail ?? "Claude Code isn't ready");
       return claudeAgent(host, app.getVersion());
@@ -102,7 +110,7 @@ function startPipeline() {
     encoder: defaultEncoder(process.platform),
     fontsDir: app.isPackaged ? join(process.resourcesPath, "fonts") : join(REPO_ROOT, "apps", "desktop", "resources", "fonts"),
   });
-  return { store, queue, pipeline, analysis, exporter };
+  return { store, settings, queue, pipeline, analysis, exporter };
 }
 
 /** A file name from the video's title: no characters Windows or macOS refuse. */
@@ -148,7 +156,12 @@ if (!squirrelLaunch) {
   if (!app.requestSingleInstanceLock()) app.quit();
 
   app.whenReady().then(() => {
-    const { store, queue, pipeline, analysis, exporter } = startPipeline();
+    const { store, settings, queue, pipeline, analysis, exporter } = startPipeline();
+    const aiStatus = async () => {
+      const host = await hostEnv;
+      const [claude, codex, current] = await Promise.all([probeClaude(host), probeCodex(host), settings.get()]);
+      return { claude, codex, agent: current.agent };
+    };
     serveUi(UI_ROOT);
     serveMedia((id) => store.dir(id));
     registerIpc(
@@ -158,7 +171,7 @@ if (!squirrelLaunch) {
           if (!isSmokeRun()) return;
           const info = await appInfo();
           const file = process.env.CLIPCAT_SMOKE_IMPORT;
-          const ai = { claude: await probeClaude(await hostEnv) };
+          const ai = await aiStatus();
           finishSmoke({ screen, info, ai, ...(file ? { import: await smokeImport(pipeline, exporter, store, queue, file) } : {}) });
         },
         "library:list": () => store.list(),
@@ -181,7 +194,8 @@ if (!squirrelLaunch) {
           queue.cancel(id);
           await store.remove(id);
         },
-        "ai:status": async () => ({ claude: await probeClaude(await hostEnv) }),
+        "ai:status": () => aiStatus(),
+        "settings:set": (patch) => settings.set(patch),
         "project:analyze": ({ id, brief }) => analysis.analyze(id, brief),
         "project:edit": async ({ id, revision, op }) => {
           const next = await store.update(id, revision, (p) => applyEdit(p, op, () => `g${randomUUID().slice(0, 8)}`));
