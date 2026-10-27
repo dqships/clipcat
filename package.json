@@ -1,0 +1,25 @@
+{
+  "name": "clipcat",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/desktop",
+    "apps/ui"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=@clipcat/desktop",
+    "build": "npm run build --workspaces --if-present",
+    "check": "npm run check --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "lint:tokens": "node scripts/check-tokens.mjs",
+    "fetch:ffmpeg": "node scripts/fetch-ffmpeg.mjs",
+    "make": "npm run make --workspace=@clipcat/desktop"
+  },
+  "devDependencies": {
+    "jsdom": "^30.0.0",
+    "typescript": "~5.9.3",
+    "vitest": "^5.0.5"
+  }
+}

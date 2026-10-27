@@ -1,0 +1,33 @@
+{
+  "name": "@clipcat/desktop",
+  "productName": "ClipCat",
+  "version": "0.1.0",
+  "description": "Personal AI video editor for talking-head videos",
+  "private": true,
+  "license": "UNLICENSED",
+  "main": "dist/main.cjs",
+  "scripts": {
+    "build:main": "esbuild src/main.ts --bundle --platform=node --format=cjs --target=node22 --external:electron --outfile=dist/main.cjs",
+    "build:preload": "esbuild src/preload.ts --bundle --platform=node --format=cjs --target=node22 --external:electron --outfile=dist/preload.cjs",
+    "build:ui": "npm run build --workspace=@clipcat/ui && node scripts/stage-ui.mjs",
+    "build": "npm run build:main && npm run build:preload",
+    "check": "tsc --noEmit",
+    "test": "vitest run",
+    "dev": "npm run build && node scripts/dev.mjs",
+    "package": "npm run build && npm run build:ui && electron-forge package",
+    "make": "npm run build && npm run build:ui && electron-forge make"
+  },
+  "dependencies": {
+    "@clipcat/ipc": "*"
+  },
+  "devDependencies": {
+    "@electron-forge/cli": "7.11.2",
+    "@electron-forge/maker-dmg": "7.11.2",
+    "@electron-forge/maker-squirrel": "7.11.2",
+    "@electron-forge/maker-zip": "7.11.2",
+    "@electron-forge/shared-types": "7.11.2",
+    "@types/node": "^22.18.0",
+    "electron": "44.7.2",
+    "esbuild": "^0.28.1"
+  }
+}
