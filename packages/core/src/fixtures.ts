@@ -14,6 +14,8 @@ export function source(id: string, duration: number, order = 0): Source {
     order,
     media: { duration, width: 1920, height: 1080, fps: 30, vfr: false, videoCodec: "h264", audioCodec: "aac" },
     frameX: 0.5,
+    framing: "auto",
+    faces: null,
     prep: null,
     transcription: null,
     silenceRanges: [],

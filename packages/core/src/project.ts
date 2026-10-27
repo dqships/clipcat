@@ -23,8 +23,12 @@ export const Source = z.object({
   path: z.string(),
   order: z.number().int(),
   media: MediaInfo,
-  /** Horizontal crop centre for narrow aspect ratios, 0..1 of the frame width. */
+  /** Where the speaker is across the frame (0..1) when no faces were found, or as the user set it. */
   frameX: z.number().min(0).max(1).default(0.5),
+  /** "auto" follows the faces found; "manual" uses frameX everywhere. */
+  framing: z.enum(["auto", "manual"]).default("auto"),
+  /** The speaker's centre (0..1 across) in frames sampled through the recording; null until looked for. */
+  faces: z.array(z.object({ t: z.number().nonnegative(), x: z.number().min(0).max(1) })).nullable().default(null),
   prep: z
     .object({ proxy: z.string(), wav: z.string(), waveform: z.string(), thumbs: z.string() })
     .nullable()

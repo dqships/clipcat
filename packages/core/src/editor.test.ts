@@ -92,3 +92,16 @@ describe("caption edits", () => {
     expect(EditOp.safeParse({ type: "speed", speed: 3 }).success).toBe(false);
   });
 });
+
+describe("applyEdit framing", () => {
+  it("sets the shape and a hand-set framing without an undo step, and goes back to auto", () => {
+    const p = project();
+    const tall = applyEdit(p, { type: "aspect", aspectRatio: "9:16" }, counter("g"));
+    expect(tall.aspectRatio).toBe("9:16");
+    const set = applyEdit(tall, { type: "frame", sourceId: "a", x: 0.3 }, counter("g"));
+    expect(set.sources[0]).toMatchObject({ framing: "manual", frameX: 0.3 });
+    expect(applyEdit(set, { type: "frame", sourceId: "a", x: null }, counter("g")).sources[0]!.framing).toBe("auto");
+    expect(set.history.past).toHaveLength(0);
+    expect(() => applyEdit(p, { type: "frame", sourceId: "nope", x: 0.5 }, counter("g"))).toThrow("Unknown source");
+  });
+});

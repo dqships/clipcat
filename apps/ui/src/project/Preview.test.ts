@@ -1,6 +1,6 @@
 import { buildTimeline } from "@clipcat/core";
 import { describe, expect, it } from "vitest";
-import { nextKept } from "./Preview";
+import { nextKept, previewOffset } from "./Preview";
 
 const seg = (id: string, sourceId: string, sourceStart: number, sourceEnd: number, included = true) => ({ id, sourceId, sourceStart, sourceEnd, included });
 const sources = [
@@ -28,5 +28,21 @@ describe("nextKept", () => {
 
   it("is null at the end of the edit", () => {
     expect(nextKept(timeline, "b", 4, order)).toBeNull();
+  });
+});
+
+describe("previewOffset", () => {
+  const faces = { framing: "auto", frameX: 0.5, media: { width: 1920, height: 1080 } } as const;
+  const a = { ...faces, id: "a", faces: [{ t: 0.5, x: 0.2 }, { t: 6, x: 0.8 }] } as never;
+
+  it("puts the crop where the export does for the kept range at the playhead", () => {
+    // 9:16 of a 16:9 frame is 0.316 of its width; a face at 0.8 puts its left edge at 0.642, 94% of the way it can move.
+    expect(previewOffset(timeline, a, 6.5)).toBeCloseTo((0.8 - 0.31640625 / 2) / (1 - 0.31640625), 4);
+    expect(previewOffset(timeline, a, 1)).toBeCloseTo((0.2 - 0.31640625 / 2) / (1 - 0.31640625), 4);
+  });
+
+  it("follows a hand-set position everywhere", () => {
+    const manual = { ...faces, id: "a", framing: "manual", frameX: 0, faces: [{ t: 6, x: 0.8 }] } as never;
+    expect(previewOffset(timeline, manual, 6)).toBe(0);
   });
 });

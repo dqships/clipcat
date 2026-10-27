@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assColor, assTime, captionCues, outputWords, srtTime, toAss, toSrt } from "./captions";
+import { assColor, assTime, captionCues, captionPixels, outputWords, srtTime, toAss, toSrt } from "./captions";
 import { initialSegments, setRange } from "./edits";
 import { counter, source, words } from "./fixtures";
 import { Captions } from "./project";
@@ -70,5 +70,13 @@ describe("formats", () => {
   it("writes numbered SRT cues", () => {
     const srt = toSrt([{ start: 1, end: 2.5, words: [{ text: "Hi.", start: 1, end: 1.4 }] }], "regular");
     expect(srt).toBe("1\n00:00:01,000 --> 00:00:02,500\nHi.\n");
+  });
+});
+
+describe("captionPixels", () => {
+  it("scales from 1080p and sets portrait type larger", () => {
+    expect(captionPixels(60, { width: 1920, height: 1080 })).toBe(60);
+    expect(captionPixels(60, { width: 3840, height: 2160 })).toBe(120);
+    expect(captionPixels(60, { width: 1080, height: 1920 })).toBe(96);
   });
 });

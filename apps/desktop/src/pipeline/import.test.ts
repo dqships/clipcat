@@ -58,6 +58,7 @@ function setup(over: Partial<PipelineDeps> = {}) {
         },
       };
     },
+    faces: async () => [{ t: 0, x: 0.7 }],
     readWav: async () => pcm(),
     writeWav: async (_path, written) => {
       seconds.push(written.samples.length / written.sampleRate);
@@ -80,7 +81,7 @@ describe("ImportPipeline", () => {
     const created = await pipeline.import(["/videos/talk.mp4"], null);
     expect(created.name).toBe("talk");
     expect(created.segments).toHaveLength(1);
-    await settle(events, 3);
+    await settle(events, 4);
 
     const p = await store.get(created.id);
     const s = p.sources[0]!;
@@ -99,7 +100,8 @@ describe("ImportPipeline", () => {
     const [[a, b]] = silence[0]!.cuts as [[number, number]];
     expect(a).toBeCloseTo(3.12, 1);
     expect(b).toBeCloseTo(5.88, 1);
-    expect(events.filter((e) => e.state === "done").map((e) => e.kind)).toEqual(["prep", "transcribe", "silence"]);
+    expect(events.filter((e) => e.state === "done").map((e) => e.kind)).toEqual(["prep", "transcribe", "silence", "faces"]);
+    expect(s.faces).toEqual([{ t: 0, x: 0.7 }]);
   });
 
   it("refuses a file it can't read before creating anything", async () => {
@@ -116,22 +118,23 @@ describe("ImportPipeline", () => {
       },
     });
     const created = await pipeline.import(["/videos/talk.mp4"], null);
-    await settle(events, 3);
+    await settle(events, 4);
     expect(events.find((e) => e.state === "failed")?.error).toBe("disk full");
     expect((await store.get(created.id)).sources[0]?.transcription).toBeNull();
 
     fail = false;
     events.length = 0;
     await pipeline.resume();
-    await settle(events, 3);
+    await settle(events, 4);
     expect((await store.get(created.id)).transcript).toHaveLength(2);
+    expect((await store.get(created.id)).sources[0]?.faces).toHaveLength(1);
   });
 
   it("adds files to an existing project in order", async () => {
     const { pipeline, store, events } = setup();
     const created = await pipeline.import(["/videos/one.mp4"], null);
     await pipeline.import(["/videos/two.mp4"], created.id);
-    await settle(events, 6);
+    await settle(events, 8);
     const p = await store.get(created.id);
     expect(p.sources.map((s) => [s.name, s.order])).toEqual([
       ["one.mp4", 0],
@@ -143,7 +146,7 @@ describe("ImportPipeline", () => {
   it("keeps a silence cut the user already decided on", async () => {
     const { pipeline, store, events } = setup();
     const created = await pipeline.import(["/videos/talk.mp4"], null);
-    await settle(events, 3);
+    await settle(events, 4);
     const p = await store.update(created.id, null, (d) => {
       d.proposals[0]!.status = "rejected";
     });
@@ -152,5 +155,26 @@ describe("ImportPipeline", () => {
     await settle(events, 2);
     const after = await store.get(created.id);
     expect(after.proposals.map((x) => x.status)).toEqual(["rejected"]);
+  });
+
+  it("looks for faces again on resume only where it never finished, and leaves them unknown without a detector", async () => {
+    let looked = 0;
+    const { pipeline, store, events } = setup({
+      faces: async () => {
+        looked++;
+        return null;
+      },
+    });
+    const created = await pipeline.import(["/videos/talk.mp4"], null);
+    await settle(events, 4);
+    expect((await store.get(created.id)).sources[0]?.faces).toBeNull();
+    events.length = 0;
+    await store.update(created.id, null, (d) => {
+      d.sources[0]!.faces = [];
+    });
+    await pipeline.resume();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(events).toEqual([]);
+    expect(looked).toBe(1);
   });
 });

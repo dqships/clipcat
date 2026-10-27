@@ -1,4 +1,4 @@
-import { type Project, type Timeline, buildTimeline } from "@clipcat/core";
+import { type Project, type Source, type Timeline, buildTimeline, cropOffset, framingAt } from "@clipcat/core";
 import { type Ref, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { mediaUrl } from "../format";
 
@@ -17,6 +17,18 @@ type Props = {
 const EDGE = 0.01;
 /** How far playback moves before the playhead is reported again: often enough to follow words, rare enough not to re-render every frame. */
 const REPORT_STEP = 0.1;
+
+/**
+ * Where the 9:16 crop sits (0 = left edge, 1 = right) at `time` in `source`:
+ * the same place the export puts it for the kept range there, or for the
+ * moment itself inside a cut.
+ */
+export function previewOffset(timeline: Timeline, source: Source, time: number): number {
+  const item = timeline.items.find((i) => i.sourceId === source.id && time >= i.sourceStart - EDGE && time < i.sourceEnd);
+  const { width, height } = source.media;
+  const aspect = width > 0 && height > 0 ? width / height : 16 / 9;
+  return cropOffset(framingAt(source, item?.sourceStart ?? time, item?.sourceEnd ?? time), aspect, 9 / 16);
+}
 
 /** The kept stretch to play after `time` in `sourceId`, in timeline order, or null at the end. */
 export function nextKept(timeline: Timeline, sourceId: string, time: number, order: Map<string, number>) {
@@ -42,8 +54,10 @@ export function Preview({ project, onTime, ref }: Props) {
   const [sourceId, setSourceId] = useState(sources[0]?.id ?? null);
   /** Where to go once a newly loaded proxy can seek, and whether to keep playing. */
   const pending = useRef<{ time: number; play: boolean } | null>(null);
-  const live = useRef({ timeline, order, sourceId, onTime });
-  live.current = { timeline, order, sourceId, onTime };
+  const tall = project.aspectRatio === "9:16";
+  const [offset, setOffset] = useState(0.5);
+  const live = useRef({ timeline, order, sourceId, onTime, sources, tall });
+  live.current = { timeline, order, sourceId, onTime, sources, tall };
 
   useEffect(() => {
     if (!sourceId && sources[0]) setSourceId(sources[0].id);
@@ -68,9 +82,11 @@ export function Preview({ project, onTime, ref }: Props) {
     let handle = 0;
     let reported = Number.NaN;
     const check = () => {
-      const { timeline: tl, order: ord, sourceId: sid, onTime: report } = live.current;
+      const { timeline: tl, order: ord, sourceId: sid, onTime: report, sources: all, tall: narrow } = live.current;
       if (!sid) return;
       const t = v.currentTime;
+      const here = narrow ? all.find((s) => s.id === sid) : undefined;
+      if (here) setOffset(previewOffset(tl, here, t));
       if (v.paused || !(Math.abs(t - reported) < REPORT_STEP)) {
         reported = t;
         report({ sourceId: sid, time: t });
@@ -100,6 +116,13 @@ export function Preview({ project, onTime, ref }: Props) {
     };
   }, [sourceId]);
 
+  // A new shape or framing moves the crop at once, even while paused.
+  useEffect(() => {
+    const v = video.current;
+    const here = sources.find((s) => s.id === sourceId);
+    if (tall && v && here) setOffset(previewOffset(timeline, here, v.currentTime));
+  }, [tall, timeline, sources, sourceId]);
+
   // The preview plays at the export's speed; loading another recording resets the rate, so it is set again then.
   const speed = project.speed;
   useEffect(() => {
@@ -110,11 +133,14 @@ export function Preview({ project, onTime, ref }: Props) {
   }, [speed, sourceId]);
 
   const source = sources.find((s) => s.id === sourceId);
-  if (!source?.prep) return <div className="project__video project__video--pending" />;
+  const shape = tall ? " project__video--tall" : "";
+  if (!source?.prep) return <div className={`project__video project__video--pending${shape}`} />;
   return (
     <video
       ref={video}
-      className="project__video"
+      className={`project__video${shape}`}
+      // The vertical export's crop, shown by covering a 9:16 box and sliding the picture.
+      style={tall ? { objectPosition: `${offset * 100}% 50%` } : undefined}
       src={mediaUrl(project.id, source.prep.proxy)}
       controls
       preload="auto"

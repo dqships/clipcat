@@ -95,18 +95,9 @@ jobs:
           cat "$out"; echo
           test "${code:-0}" = 0
           grep -q '"ok":true' "$out"
-          # Both sentences, from the start, with the pause between them found.
-          if [ "${{ steps.clip.outputs.words }}" = 1 ]; then
-            node -e '
-              const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).import;
-              const bad = [];
-              if (!/first take/i.test(r.text) || !/second take/i.test(r.text)) bad.push("a sentence is missing");
-              if (!r.span || r.span[0] > 1) bad.push("the transcript does not start with the first sentence");
-              if (!r.pauses.some(([a, b]) => b - a > 1.5)) bad.push("the pause between the sentences was not found");
-              if (!(r.exported > 100000)) bad.push("the 9:16 export is missing or empty");
-              if (bad.length) { console.error(bad.join("; ")); process.exit(1); }' "$out"
-          fi
           grep -q '"screen":"library"' "$out"
+          # The system's face detector (Vision, Windows.Media.FaceAnalysis) runs inside the app.
+          grep -q '"faceDetector":null' "$out"
       - name: Cache the speech models
         uses: actions/cache@v4
         with:
@@ -132,19 +123,28 @@ jobs:
               \$s.SetOutputToWaveFile('$win\two.wav'); \$s.Speak('$two'); \$s.Dispose()" && words=1 || true
           fi
           ff="${{ matrix.ffmpeg }}"
+          # A face to find (NASA's portrait of Eileen Collins, public domain), or a test pattern if it can't be fetched.
+          face=0
+          if curl -fsSL --retry 3 -o "$dir/face.png" https://raw.githubusercontent.com/scikit-image/scikit-image/v0.24.0/skimage/data/astronaut.png; then
+            "$ff" -hide_banner -y -loop 1 -framerate 30 -i "$dir/face.png" -t 12 \
+              -vf "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,format=yuv420p" \
+              -c:v libx264 "$dir/picture.mp4" && face=1
+          fi
+          [ "$face" = 1 ] || "$ff" -hide_banner -y -f lavfi -i testsrc2=s=1280x720:r=30:d=12 -c:v libx264 -pix_fmt yuv420p "$dir/picture.mp4"
           if [ "$words" = 1 ]; then
             "$ff" -hide_banner -y -i "$dir/one.$ext" -f lavfi -t 2.5 -i anullsrc=r=48000:cl=mono -i "$dir/two.$ext" \
-              -f lavfi -i testsrc2=s=1280x720:r=30 \
+              -i "$dir/picture.mp4" \
               -filter_complex "[0:a]aresample=48000,aformat=channel_layouts=mono[a0];[2:a]aresample=48000,aformat=channel_layouts=mono[a2];[a0][1:a][a2]concat=n=3:v=0:a=1[a]" \
               -map 3:v -map "[a]" -shortest -c:v libx264 -pix_fmt yuv420p -c:a aac "$dir/clip.mp4"
           else
             echo "No text-to-speech voice here; importing a clip without speech."
-            "$ff" -hide_banner -y -f lavfi -i testsrc2=s=1280x720:r=30:d=6 -f lavfi -i sine=f=220:d=6 \
+            "$ff" -hide_banner -y -t 6 -i "$dir/picture.mp4" -f lavfi -i sine=f=220:d=6 \
               -c:v libx264 -pix_fmt yuv420p -c:a aac "$dir/clip.mp4"
           fi
           echo "file=$dir/clip.mp4" >> "$GITHUB_OUTPUT"
           echo "words=$words" >> "$GITHUB_OUTPUT"
-      - name: Import, transcribe, find pauses and export in the packaged app
+          echo "face=$face" >> "$GITHUB_OUTPUT"
+      - name: Import, transcribe, find pauses and the face, and export in the packaged app
         run: |
           out="$RUNNER_TEMP/smoke-import.json"
           mkdir -p ${{ matrix.models }}
@@ -157,6 +157,12 @@ jobs:
           find "$data/projects" \( -name 'transcript*.json' -o -name events.jsonl \) -exec cat {} \; | head -c 6000 || true; echo
           test "${code:-0}" = 0
           grep -q '"ok":true' "$out"
+          # The face was found in the sampled frames.
+          if [ "${{ steps.clip.outputs.face }}" = 1 ]; then
+            node -e '
+              const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).import;
+              if (!(r.faces > 0)) { console.error(`no face found (faces: ${r.faces})`); process.exit(1); }' "$out"
+          fi
           # Both sentences, from the start, with the pause between them found.
           if [ "${{ steps.clip.outputs.words }}" = 1 ]; then
             node -e '

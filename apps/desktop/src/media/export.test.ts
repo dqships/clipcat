@@ -84,9 +84,8 @@ describe("chunkCommand", () => {
     const { graph, args } = chunkCommand({ ...shape, chunk, captions: { ass: "captions.ass", fontsDir: "fonts" }, encoder: "libx264", out: "chunk-000.mp4" });
     expect(args.filter((a) => a === "-i")).toHaveLength(1);
     expect(args).toEqual(expect.arrayContaining(["-ss", "0.000000", "-i", "/v/a.mov", "-an", "-map", "[outv]", "chunk-000.mp4"]));
-    expect(graph).toContain("[0:v:0]fps=fps=30000/1000:start_time=0,scale=1920:1080");
-    expect(graph).toContain("split=2[s0v0][s0v1]");
-    expect(graph).toContain("[s0v1]trim=start_frame=120:end_frame=160");
+    expect(graph).toContain("[0:v:0]fps=fps=30000/1000:start_time=0,split=2[s0v0][s0v1]");
+    expect(graph).toContain("[s0v1]trim=start_frame=120:end_frame=160,setpts=PTS-STARTPTS,scale=1920:1080");
     expect(graph).toContain("concat=n=2:v=1:a=0[cv]");
     expect(graph).toContain("[cv]settb=1/30,setpts=N+0,ass=filename=captions.ass:fontsdir=fonts,setpts=N[outv]");
 
@@ -102,8 +101,26 @@ describe("chunkCommand", () => {
     const { timeline, shape } = setup(1.25);
     const chunk = exportChunks(timeline, 10_000)[0]!;
     const { graph } = chunkCommand({ ...shape, format: "9:16", chunk, captions: null, encoder: "libx264", out: "c.mp4" });
-    expect(graph).toContain("fps=fps=30000/1250:start_time=0,crop=w='min(iw,ih*0.562500)'");
+    expect(graph).toContain("fps=fps=30000/1250:start_time=0,split=");
+    expect(graph).toContain("setpts=PTS-STARTPTS,crop=w='min(iw,ih*0.562500)':h='min(ih,iw/0.562500)':x='(iw-ow)*0.5000'");
     expect(graph).toContain("[cv]settb=1/30,setpts=N[outv]");
+  });
+
+  it("moves the vertical crop to the speaker at each cut, and holds a hand-set position", () => {
+    const { timeline, shape } = setup();
+    // The speaker sits left in a's first range and right in its second.
+    const a = { ...shape.project.sources[0]!, faces: [{ t: 1, x: 0.3 }, { t: 6, x: 0.7 }] };
+    const project = { ...shape.project, sources: [a, shape.project.sources[1]!] };
+    const chunk = exportChunks(timeline, 10_000)[0]!;
+    const crops = (p: typeof project) =>
+      [...chunkCommand({ ...shape, project: p, format: "9:16", chunk, captions: null, encoder: "libx264", out: "c.mp4" }).graph.matchAll(/x='\(iw-ow\)\*([\d.]+)'/g)].map((m) => Number(m[1]));
+    const [first, second, third] = crops(project);
+    expect(first).toBeCloseTo((0.3 - 0.31640625 / 2) / (1 - 0.31640625), 3);
+    expect(second).toBeCloseTo((0.7 - 0.31640625 / 2) / (1 - 0.31640625), 3);
+    // b found no faces: the middle.
+    expect(third).toBe(0.5);
+    const held = { ...project, sources: [{ ...a, framing: "manual" as const, frameX: 0.5 }, project.sources[1]!] };
+    expect(crops(held).slice(0, 2)).toEqual([0.5, 0.5]);
   });
 });
 

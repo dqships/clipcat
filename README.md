@@ -83,6 +83,14 @@ suggestions; its recordings' prepared media are hard links to the long
 video's, so a short takes no extra disk space. Deleting either one leaves the
 other intact.
 
+The vertical crop follows the speaker. After import, ClipCat samples a frame
+every 2 seconds from the proxy and finds faces with the system's own detector
+(Vision on macOS, Windows.Media.FaceAnalysis on Windows, through Chromium's
+Shape Detection API in a hidden window), so nothing extra is bundled or
+downloaded. Each kept stretch is cropped around the median face position in it,
+so the frame moves only at cuts. Set Shape to Vertical 9:16 to preview the crop,
+and untick "Follow the speaker" to place it by hand per recording.
+
 Editing happens in the transcript: click a word to jump there, shift-click to
 select a run, and press Delete to cut it (again to restore). Suggested cuts,
 from the pause finder and from Claude, are accepted or rejected under the

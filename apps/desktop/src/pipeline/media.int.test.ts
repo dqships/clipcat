@@ -58,8 +58,14 @@ describe.skipIf(!binDir)("prep with real ffmpeg", () => {
   it("probes, preps and finds the pause", async () => {
     const events: JobEvent[] = [];
     store = new ProjectStore(join(root, "projects"));
+    // A stand-in for the system's face detector: one face right of centre in every frame.
+    const frames: Buffer[] = [];
+    const faceDetector = async () => async (jpegs: Buffer[]) => {
+      frames.push(...jpegs);
+      return jpegs.map(() => [{ x: 0.6, y: 0.2, width: 0.2, height: 0.3 }]);
+    };
     const pipeline = new ImportPipeline({
-      ...realDeps({ ffmpeg: exe("ffmpeg"), ffprobe: exe("ffprobe"), whisper: "", parakeet: null, modelsDir: "", model: "base", encoder: sw }),
+      ...realDeps({ ffmpeg: exe("ffmpeg"), ffprobe: exe("ffprobe"), whisper: "", parakeet: null, modelsDir: "", model: "base", encoder: sw, faceDetector }),
       // No speech model in CI: stand in for whisper with the words we generated, timed
       // in the speech audio, where 1.7 s to 3.8 s of the pause was taken out.
       transcribe: async () => ({
@@ -78,7 +84,7 @@ describe.skipIf(!binDir)("prep with real ffmpeg", () => {
     });
     const created = await pipeline.import([clip], null);
     projectId = created.id;
-    for (let i = 0; i < 600 && events.filter((e) => e.state === "done" || e.state === "failed").length < 3; i++) {
+    for (let i = 0; i < 600 && events.filter((e) => e.state === "done" || e.state === "failed").length < 4; i++) {
       await new Promise((r) => setTimeout(r, 50));
     }
     expect(events.filter((e) => e.state === "failed")).toEqual([]);
@@ -100,6 +106,11 @@ describe.skipIf(!binDir)("prep with real ffmpeg", () => {
     const cuts = p.proposals.filter((x) => x.type === "silence").map((x) => x.cuts[0]!);
     expect(cuts.some(([a, b]) => a > 1.4 && a < 1.8 && b > 3.8 && b < 4.2)).toBe(true);
     expect(events.some((e) => e.kind === "prep" && e.state === "running" && (e.fraction ?? 0) > 0.5)).toBe(true);
+
+    // A frame every 2 s from the start, as JPEGs, and the frames cleaned up after.
+    expect(s.faces).toEqual([0, 2, 4].map((t) => ({ t, x: 0.7 })));
+    expect(frames.every((f) => f[0] === 0xff && f[1] === 0xd8)).toBe(true);
+    expect(files.includes("faces")).toBe(false);
   }, 120_000);
 
   it("exports both shapes with captions and an SRT", async () => {

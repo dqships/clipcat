@@ -247,6 +247,33 @@ describe("App", () => {
     expect(invoke).toHaveBeenCalledWith("project:reveal-export", { id: "p1" });
   });
 
+  it("switches to the vertical shape, crops the preview around the face and takes a hand-set position", async () => {
+    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude" };
+    const withFaces = { ...project, sources: [{ ...project.sources[0]!, framing: "auto", faces: [{ t: 2, x: 0.8 }] }] };
+    const tall = { ...withFaces, aspectRatio: "9:16", revision: 4 };
+    const { invoke } = fakeBridge({
+      "app:info": info(),
+      "library:list": [summary],
+      "project:get": withFaces,
+      "ai:status": ready,
+      "project:edit": (input: { op: { type: string } }) => (input.op.type === "aspect" ? tall : { ...tall, revision: 5 }),
+    });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "talk" }));
+    fireEvent.change(await screen.findByLabelText("Made for"), { target: { value: "9:16" } });
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:edit", { id: "p1", revision: 3, op: { type: "aspect", aspectRatio: "9:16" } }));
+    const video = await vi.waitFor(() => {
+      const v = document.querySelector<HTMLVideoElement>(".project__video--tall");
+      expect(v).toBeTruthy();
+      return v!;
+    });
+    // A face at 0.8 across: the crop's left edge sits at 0.64, 94% of the way it can move.
+    expect(video.style.objectPosition).toMatch(/^93\.88\d*% 50%$/);
+    expect(screen.getByText(/finds the face in each kept stretch/)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Crop position"), { target: { value: "0.3" } });
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:edit", { id: "p1", revision: 4, op: { type: "frame", sourceId: "s1", x: 0.3 } }));
+  });
+
   it("changes the speed and cancels a running export", async () => {
     const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude" };
     const { invoke, emit } = fakeBridge({
