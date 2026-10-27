@@ -3,6 +3,8 @@
 // renderer.
 
 import { BrowserWindow, app, dialog, nativeTheme, shell } from "electron";
+import { randomUUID } from "node:crypto";
+import { applyEdit } from "@clipcat/core";
 import tokens from "../../../design/tokens.json";
 import { join, resolve } from "node:path";
 import type { AppInfoValue } from "@clipcat/ipc";
@@ -167,6 +169,11 @@ if (!squirrelLaunch) {
         },
         "ai:status": async () => ({ claude: await probeClaude(await hostEnv) }),
         "project:analyze": ({ id, brief }) => analysis.analyze(id, brief),
+        "project:edit": async ({ id, revision, op }) => {
+          const next = await store.update(id, revision, (p) => applyEdit(p, op, () => `g${randomUUID().slice(0, 8)}`));
+          broadcast("project:changed", { id, revision: next.revision });
+          return next;
+        },
         "jobs:cancel": ({ id }) => queue.cancel(id),
       },
       DEV_URL,

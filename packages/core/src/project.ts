@@ -80,6 +80,17 @@ export const Captions = z.object({
   position: z.number().min(0).max(1).default(0.82),
 });
 
+/** What undo puts back: the edit itself and the user's decisions, never the words or the proposals' content. */
+export const Snapshot = z.object({
+  segments: z.array(Segment),
+  statuses: z.record(z.string(), ProposalStatus),
+});
+
+export const History = z.object({
+  past: z.array(Snapshot).default([]),
+  future: z.array(Snapshot).default([]),
+});
+
 export const Project = z.object({
   version: z.literal(1),
   id: z.string(),
@@ -98,6 +109,7 @@ export const Project = z.object({
   segments: z.array(Segment),
   proposals: z.array(Proposal),
   captions: Captions,
+  history: History.default({ past: [], future: [] }),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -109,5 +121,6 @@ export type Word = z.infer<typeof Word>;
 export type Segment = z.infer<typeof Segment>;
 export type Proposal = z.infer<typeof Proposal>;
 export type Captions = z.infer<typeof Captions>;
+export type Snapshot = z.infer<typeof Snapshot>;
 export type Project = z.infer<typeof Project>;
 export type Range = [number, number];

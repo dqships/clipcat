@@ -45,7 +45,8 @@ const project = {
     { id: "s1-0", sourceId: "s1", text: "Hello", start: 0.5, end: 0.9 },
     { id: "s1-1", sourceId: "s1", text: "again.", start: 3, end: 3.5 },
   ],
-  segments: [],
+  segments: [{ id: "g1", sourceId: "s1", sourceStart: 0, sourceEnd: 75, included: true }],
+  history: { past: [], future: [] },
   proposals: [
     { id: "x1", type: "silence", sourceId: "s1", cuts: [[1, 2.5]], wordIds: [], keepWordIds: [], reason: "", confidence: 1, status: "pending" },
   ],
@@ -140,7 +141,7 @@ describe("App", () => {
     fireEvent.click(await screen.findByRole("button", { name: "talk" }));
     expect(await screen.findByRole("heading", { level: 1, name: "talk" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "again." })).toBeTruthy();
-    expect(screen.getByText("1 pause found, 0:02 to cut.")).toBeTruthy();
+    expect(screen.getByText("1 cut to review, 0:02 in all.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Back to library" }));
     expect(await screen.findByRole("heading", { level: 1, name: "Library" })).toBeTruthy();
   });
@@ -169,10 +170,48 @@ describe("App", () => {
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "talk" }));
     expect(await screen.findByText("Filler")).toBeTruthy();
-    expect(screen.getByText("1 cut proposed, 0:00 in all.")).toBeTruthy();
+    expect(screen.getByText("2 cuts to review, 0:02 in all.")).toBeTruthy();
     expect(screen.getByText("Suggested title: Hello again")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Hello" }).className).toContain("word--proposed");
     expect(screen.getByRole("button", { name: "Find cuts again" })).toBeTruthy();
+  });
+
+  it("cuts the selected words and restores them", async () => {
+    const ready = { claude: { status: "ready", version: "2.1.0", detail: null } };
+    const cut = { ...project, revision: 4, segments: [{ ...project.segments[0], sourceEnd: 1.95 }, { id: "g2", sourceId: "s1", sourceStart: 1.95, sourceEnd: 75, included: false }] };
+    const { invoke } = fakeBridge({ "app:info": info(), "library:list": [summary], "project:get": project, "ai:status": ready, "project:edit": cut });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "talk" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Hello" }));
+    fireEvent.click(screen.getByRole("button", { name: "again." }), { shiftKey: true });
+    expect(screen.getByText("2 words selected")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "again." }));
+    fireEvent.keyDown(screen.getByRole("button", { name: "again." }), { key: "Delete" });
+    await vi.waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("project:edit", { id: "p1", revision: 3, op: { type: "words", wordIds: ["s1-1"], included: false } }),
+    );
+    await vi.waitFor(() => expect(screen.getByRole("button", { name: "again." }).className).toContain("word--cut"));
+    expect(screen.getByRole("button", { name: "Restore" })).toBeTruthy();
+  });
+
+  it("accepts a suggested cut and undoes with the keyboard", async () => {
+    const ready = { claude: { status: "ready", version: "2.1.0", detail: null } };
+    const { invoke } = fakeBridge({
+      "app:info": info(),
+      "library:list": [summary],
+      "project:get": project,
+      "ai:status": ready,
+      "project:edit": (input: { op: { type: string } }) => ({ ...project, revision: 4, history: { past: input.op.type === "undo" ? [] : [{ segments: [], statuses: {} }], future: [] } }),
+    });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "talk" }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Accept pause/ }));
+    await vi.waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("project:edit", { id: "p1", revision: 3, op: { type: "decide", ids: ["x1"], status: "accepted" } }),
+    );
+    await vi.waitFor(() => expect((screen.getByRole("button", { name: "Undo" }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.keyDown(window, { key: "z", metaKey: true });
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:edit", { id: "p1", revision: 4, op: { type: "undo" } }));
   });
 
   it("says when Claude Code isn't installed", async () => {

@@ -46,6 +46,12 @@ gives it a single tool, `submit_analysis`, which runs inside the app; it gets no
 file, shell or web access. Proposals are checked against the transcript and
 nothing is cut until you accept it.
 
+Editing happens in the transcript: click a word to jump there, shift-click to
+select a run, and press Delete to cut it (again to restore). Suggested cuts,
+from the pause finder and from Claude, are accepted or rejected under the
+preview. Every edit is undoable with Cmd/Ctrl+Z and redone with
+Shift+Cmd/Ctrl+Z, and the preview plays the edit with the cuts skipped.
+
 ## Licenses
 
 A few files in `apps/desktop` are adapted from Diffusion Studio's editor and keep

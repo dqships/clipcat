@@ -62,6 +62,8 @@ body {
 }
 
 .titlebar__action {
+  display: flex;
+  gap: var(--space-1);
   margin-left: auto;
 }
 
@@ -113,7 +115,8 @@ body {
 
 .button:focus-visible,
 .card__open:focus-visible,
-.word:focus-visible {
+.word:focus-visible,
+.wave:focus-visible {
   outline: none;
   box-shadow: var(--focus-ring);
 }
@@ -362,6 +365,117 @@ body {
   color: var(--color-text-muted);
   text-decoration: line-through;
   text-decoration-color: var(--color-danger);
+}
+
+/* Cut words stay readable but faded, so they can be found and restored. */
+.word--cut {
+  color: var(--color-text-muted);
+  text-decoration: line-through;
+  opacity: 0.5;
+}
+
+.word--current {
+  background: var(--color-surface-raised);
+  box-shadow: inset 0 -1px 0 var(--color-accent);
+}
+
+.word--selected,
+.word--selected:hover {
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+.transcript__source {
+  display: block;
+  margin: var(--space-3) 0 var(--space-1);
+  color: var(--color-text-muted);
+  font-size: var(--text-caption);
+  line-height: var(--leading-caption);
+  font-weight: var(--font-weight-semibold);
+}
+
+.transcript__source:first-child {
+  margin-top: 0;
+}
+
+/* Transcript editor: the selection's actions above the words. */
+.editor {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.editor__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--control-height);
+}
+
+.editor__count {
+  color: var(--color-text-muted);
+  font-size: var(--text-caption);
+  line-height: var(--leading-caption);
+}
+
+/* Waveform: the waveform under the preview, cuts shaded, suggestions outlined. */
+.wave {
+  position: relative;
+  height: var(--space-7);
+  overflow: hidden;
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  cursor: pointer;
+}
+
+.wave__image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  pointer-events: none;
+}
+
+.wave__cut,
+.wave__pending,
+.wave__playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  pointer-events: none;
+}
+
+.wave__cut {
+  background: var(--color-background);
+  opacity: 0.8;
+}
+
+.wave__pending {
+  border: 1px solid var(--color-danger);
+}
+
+.wave__playhead {
+  width: 1px;
+  background: var(--color-accent);
+}
+
+/* Suggested cuts: each one to accept or reject, or all at once. */
+.review {
+  display: grid;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+}
+
+.review__actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.proposal-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: var(--space-1);
 }
 
 /* AI cuts: a brief, one button, the proposals. */
