@@ -95,7 +95,7 @@ export function llmsTxt(origin) {
   return [
     `# ${SITE.name}`,
     "",
-    `> ${SITE.tagline} ClipCat is a free desktop editor for Apple Silicon Macs and Windows. It transcribes on your computer, then uses your own Claude Code, Codex or Claude API key to propose the first edit (cuts, punch-ins, b-roll, motion slides, sound and captions), shorts and a write-up.`,
+    `> ${SITE.tagline} ClipCat is a desktop app for Apple Silicon Macs and Windows. It transcribes on your computer, then uses your own Claude Code, Codex or Claude API key to suggest the first edit (cuts, punch-ins, b-roll, motion slides, sound and captions), shorts and a write-up.`,
     "",
     "Every page is also available as Markdown: request it with `Accept: text/markdown`, or use the `.md` links below.",
     "",
