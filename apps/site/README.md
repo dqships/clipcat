@@ -22,6 +22,7 @@ npm run test:server    # builds, then checks every served page against the launc
 npm run build && npm run og   # re-render the share card (needs Playwright)
 ```
 
-The production address comes from `SITE_URL`, or the address Vercel gives the
-project. The Vercel project uses `apps/site` as its root directory and skips a
+The site lives at https://clipcat.followusai.com. The production address comes
+from `SITE_URL`, then the address Vercel gives the project (its shortest custom
+domain), then `https://clipcat.followusai.com`. The Vercel project uses `apps/site` as its root directory and skips a
 build when nothing in it changed.

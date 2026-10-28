@@ -109,7 +109,8 @@ test("the site's tokens are the design system's tokens", () => {
   assert.equal(read(join(root, "styles", "tokens.css")), read(join(root, "..", "..", "design", "tokens.css")));
 });
 
-test("the production address comes from SITE_URL or Vercel", () => {
+test("the production address comes from SITE_URL, then Vercel, then the custom domain", () => {
   assert.equal(siteOrigin({ SITE_URL: "https://clipcat.app/" }), "https://clipcat.app");
   assert.equal(siteOrigin({ VERCEL_PROJECT_PRODUCTION_URL: "clipcat.vercel.app" }), "https://clipcat.vercel.app");
+  assert.equal(siteOrigin({}), "https://clipcat.followusai.com");
 });

@@ -1,11 +1,11 @@
 // Settings the pages, the proxy and next.config.mjs share: the production
 // address and the response headers every page gets.
 
-/** The production address: SITE_URL when set, otherwise the one Vercel gives the project. */
+/** The production address: SITE_URL when set, otherwise the one Vercel gives the project, otherwise the custom domain. */
 export function siteOrigin(env = process.env) {
   if (env.SITE_URL) return env.SITE_URL.replace(/\/$/, "");
   if (env.VERCEL_PROJECT_PRODUCTION_URL) return `https://${env.VERCEL_PROJECT_PRODUCTION_URL}`;
-  return "https://clipcat.vercel.app";
+  return "https://clipcat.followusai.com";
 }
 
 // The pages run no JavaScript at all. Inline styles are allowed for the
