@@ -167,7 +167,7 @@ jobs:
             const version = require("./apps/desktop/package.json").version;
             const current = m.releases.find((r) => r.version === m.currentRelease);
             if (m.currentRelease !== version) throw new Error(`currentRelease is ${m.currentRelease}, not ${version}`);
-            if (!m.releases.every((r) => r.updateTo.url.includes(`-darwin-${arch}-`))) throw new Error("the manifest lists another processor's zip");
+            if (!m.releases.every((r) => r.updateTo.url.includes(`-darwin-${arch}-`))) throw new Error("the manifest lists a zip for another processor");
             if (!current) throw new Error("no entry for currentRelease");' "$file" "$arch"
       - name: Bundled ffmpeg has libass
         run: |
