@@ -15,6 +15,13 @@ const SERVER = "clipcat";
 /** Long enough for an answer, a corrected one, and a slide's look at its stills. */
 const MAX_TURNS = 8;
 
+/** Claude Code's model aliases, which always mean the newest of each. */
+export const CLAUDE_MODELS = [
+  { id: "opus", label: "Opus (newest)" },
+  { id: "sonnet", label: "Sonnet (newest)" },
+  { id: "haiku", label: "Haiku (newest)" },
+];
+
 export const SIGN_IN_HINT = "Run `claude auth login` in a terminal, then try again.";
 
 export type AgentStatus = {
@@ -68,7 +75,8 @@ export async function claudePrompt(text: string, images: string[] = []): Promise
   })();
 }
 
-export function claudeAgent(host: HostEnv, appVersion: string): Agent {
+/** `model` is a model or alias for Claude Code; null leaves its default. */
+export function claudeAgent(host: HostEnv, appVersion: string, model: string | null = null): Agent {
   return {
     label: "Claude",
     run: async (run: AgentRun) => {
@@ -94,6 +102,7 @@ export function claudeAgent(host: HostEnv, appVersion: string): Agent {
           prompt: await claudePrompt(run.prompt, run.images),
           options: {
             pathToClaudeCodeExecutable: resolveClaudeExecutable(binary),
+            ...(model ? { model } : {}),
             systemPrompt: `${run.system}\n\n${task.toolAnswer}`,
             tools: [],
             mcpServers: { [SERVER]: createSdkMcpServer({ name: SERVER, version: appVersion, tools: [submit], alwaysLoad: true }) },

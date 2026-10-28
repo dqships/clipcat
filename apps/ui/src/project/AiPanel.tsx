@@ -16,6 +16,18 @@ const MODEL_LABEL: Record<ApiModelValue, string> = {
   "claude-haiku-5-5": "Haiku 5.5 (cheapest)",
 };
 
+/** What the empty choice means: the CLI's own default, named when the CLI says which. */
+function defaultModelLabel(ai: AiStatusValue, name: "claude" | "codex"): string {
+  const fallback = ai.models[name].fallback;
+  return `${AGENT_LABEL[name]} default${fallback ? ` (${fallback})` : ""}`;
+}
+
+/** The models to offer, with a picked one that has since left the list kept in it. */
+function modelChoices(ai: AiStatusValue, name: "claude" | "codex"): { id: string; label: string }[] {
+  const { choices, selected } = ai.models[name];
+  return selected && !choices.some((c) => c.id === selected) ? [...choices, { id: selected, label: selected }] : choices;
+}
+
 /** Whether an agent can run now, and what to do if not. */
 function readiness(ai: AiStatusValue, name: AgentNameValue): { ready: boolean; installed: boolean; detail: string | null } {
   if (name === "api") return { ready: ai.api.hasKey, installed: ai.api.hasKey, detail: ai.api.hasKey ? null : "Add a key from console.anthropic.com below." };
@@ -86,6 +98,12 @@ export function AiPanel({ project, jobs }: Props) {
       ?.invoke("settings:set", { apiModel: model })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
   };
+  const chooseAgentModel = (name: "claude" | "codex", model: string | null) => {
+    setAi((prev) => (prev ? { ...prev, models: { ...prev.models, [name]: { ...prev.models[name], selected: model } } } : prev));
+    bridge()
+      ?.invoke("settings:set", name === "codex" ? { codexModel: model } : { claudeModel: model })
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
+  };
   const hasWords = project.transcript.length > 0;
   const proposals = project.proposals.filter((p) => AI_TYPES.has(p.type) && p.status === "pending");
 
@@ -128,6 +146,24 @@ export function AiPanel({ project, jobs }: Props) {
           ))}
         </select>
       </label>
+      {ai && agent !== "api" && (
+        <label className="field">
+          <span className="field__label">Model</span>
+          <select
+            className="field__control"
+            value={ai.models[agent].selected ?? ""}
+            disabled={running}
+            onChange={(e) => chooseAgentModel(agent, e.target.value || null)}
+          >
+            <option value="">{defaultModelLabel(ai, agent)}</option>
+            {modelChoices(ai, agent).map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       {status && !ready && agent !== "api" && (
         <div className="notice ai__notice" role="status">
           <span>

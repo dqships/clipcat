@@ -3,6 +3,7 @@ import { Check, Clock, LoaderCircle, Minus, Plug, RefreshCw, Unplug, X } from "l
 import { useState } from "react";
 import { bridge } from "../bridge";
 import { ICON_STROKE } from "../icons";
+import { AgentCli } from "./AgentCli";
 
 const message = (e: unknown) => (e instanceof Error ? e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, "") : String(e));
 
@@ -82,6 +83,9 @@ function Steps({ agent, steps }: { agent: McpAgentValue; steps: McpCheckStepValu
     </ol>
   );
 }
+
+/** The command-line tool behind an agent row, for the ones that have one. */
+const CLI_OF: Partial<Record<McpAgentIdValue, "claude" | "codex">> = { "claude-code": "claude", codex: "codex" };
 
 /**
  * The coding agents ClipCat can be added to. Connect shows exactly what it
@@ -174,6 +178,7 @@ export function Agents({ agents, onAgents: setAgents }: { agents: McpAgentValue[
                 )}
               </div>
             </div>
+            {CLI_OF[agent.id] && <AgentCli cli={CLI_OF[agent.id]!} />}
             {confirming === agent.id && (
               <div className="agents__confirm" role="group" aria-labelledby={`confirm-${agent.id}`}>
                 <p id={`confirm-${agent.id}`} className="agents__ask">

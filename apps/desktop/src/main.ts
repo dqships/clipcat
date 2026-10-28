@@ -14,8 +14,9 @@ import { dirname, extname, join, resolve } from "node:path";
 import type { AppInfoValue } from "@clipcat/ipc";
 import { AnalysisRunner } from "./ai/analyze";
 import { apiAgent, verifyKey } from "./ai/api";
-import { claudeAgent, probeClaude } from "./ai/claude";
-import { codexAgent, probeCodex } from "./ai/codex";
+import { CLAUDE_MODELS, claudeAgent, probeClaude } from "./ai/claude";
+import { type CliDeps, cliStatus, runCli } from "./ai/cli";
+import { codexAgent, codexModels, probeCodex, resolveCodex } from "./ai/codex";
 import { hydrateEnv } from "./ai/env";
 import { type Binary, binaryPath, probeVersion } from "./tools";
 import { broadcast, registerIpc } from "./ipc";
@@ -172,16 +173,16 @@ function startPipeline() {
     queue,
     agent: async () => {
       const host = await hostEnv;
-      const { agent } = await settings.get();
+      const { agent, claudeModel, codexModel } = await settings.get();
       if (agent === "api") return apiAgent({ key: () => keys.get(), model: async () => (await settings.get()).apiModel });
       if (agent === "codex") {
         const status = await probeCodex(host);
         if (status.status !== "ready") throw new Error(status.detail ?? "Codex isn't ready");
-        return codexAgent(host);
+        return codexAgent(host, codexModel);
       }
       const status = await probeClaude(host);
       if (status.status !== "ready") throw new Error(status.detail ?? "Claude Code isn't ready");
-      return claudeAgent(host, app.getVersion());
+      return claudeAgent(host, app.getVersion(), claudeModel);
     },
     dictionary: async () => (await settings.get()).dictionary,
     changed,
@@ -400,9 +401,23 @@ if (!squirrelLaunch && !app.requestSingleInstanceLock()) {
     if (!isSmokeRun()) void healRegistrations(installEnv);
     const aiStatus = async () => {
       const host = await hostEnv;
-      const [claude, codex, current, key] = await Promise.all([probeClaude(host), probeCodex(host), settings.get(), keys.get()]);
-      return { claude, codex, api: { hasKey: key !== null, model: current.apiModel }, agent: current.agent };
+      const [claude, codex, current, key, codexOffers] = await Promise.all([probeClaude(host), probeCodex(host), settings.get(), keys.get(), codexModels(host)]);
+      return {
+        claude,
+        codex,
+        api: { hasKey: key !== null, model: current.apiModel },
+        agent: current.agent,
+        models: {
+          claude: { choices: CLAUDE_MODELS, fallback: null, selected: current.claudeModel },
+          codex: { ...codexOffers, selected: current.codexModel },
+        },
+      };
     };
+    const cliDeps = async (): Promise<CliDeps> => {
+      const host = await hostEnv;
+      return { host, codexRuns: async () => (await resolveCodex(host))?.binary ?? null };
+    };
+    const cliRuns = new Map<string, ReturnType<typeof runCli>>();
     serveUi(UI_ROOT);
     setFacePage(DEV_URL ? new URL("faces.html", DEV_URL).toString() : `${APP_ORIGIN}/faces.html`);
     setCutoutPage(DEV_URL ? new URL("cutout.html", DEV_URL).toString() : `${APP_ORIGIN}/cutout.html`);
@@ -655,6 +670,17 @@ if (!squirrelLaunch && !app.requestSingleInstanceLock()) {
           });
           await writeFile(path, zip);
           return { path };
+        },
+        "cli:status": async ({ id }) => cliStatus(id, await cliDeps()),
+        "cli:run": async ({ id }) => {
+          // One run per CLI: a second press while one is going waits for it.
+          const running = cliRuns.get(id);
+          if (running) return running;
+          const run = cliDeps()
+            .then((deps) => runCli(id, deps, (line) => broadcast("cli:progress", { id, line })))
+            .finally(() => cliRuns.delete(id));
+          cliRuns.set(id, run);
+          return run;
         },
         "mcp:status": agentStatus,
         "mcp:connect": async ({ agent, connect }) => {
