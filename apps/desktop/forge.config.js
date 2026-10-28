@@ -37,6 +37,11 @@ const config = {
       !path.startsWith("/ui/"),
     // bin and models are staged by the prePackage hook; all end up in Resources (bin/, models/, fonts/, sfx/).
     extraResource: [join(STAGE, "bin"), join(STAGE, "models"), join(__dirname, "resources", "fonts"), join(__dirname, "resources", "sfx")],
+    // macOS asks before the camera or microphone is used and shows these reasons.
+    extendInfo: {
+      NSCameraUsageDescription: "ClipCat records takes from your camera when you choose Camera in Record.",
+      NSMicrophoneUsageDescription: "ClipCat records your voice with every take, and transcribes it.",
+    },
     osxSign: process.env.SKIP_SIGN ? undefined : {},
     osxNotarize:
       process.env.APPLE_ID && process.env.APPLE_PASSWORD && process.env.APPLE_TEAM_ID
@@ -59,16 +64,17 @@ const config = {
     }),
   ],
   hooks: {
-    // Copies this platform's ffmpeg, ffprobe, whisper-cli and (Apple Silicon) clipcat-parakeet
+    // Copies this platform's ffmpeg, ffprobe, whisper-cli, (Apple Silicon) clipcat-parakeet, (macOS) clipcat-recorder
     // and the cutout model from vendor/ into the stage folder, so packaging fails loudly instead of
     // shipping without them.
     prePackage: async (/** @type {unknown} */ _config, /** @type {string} */ platform, /** @type {string} */ arch) => {
       const from = join(__dirname, "..", "..", "vendor", "bin", `${platform}-${arch}`);
       const exe = platform === "win32" ? ".exe" : "";
       const parakeet = platform === "darwin" && arch === "arm64" ? ["clipcat-parakeet"] : [];
-      for (const tool of ["ffmpeg", "ffprobe", "whisper-cli", ...parakeet]) {
+      const recorder = platform === "darwin" ? ["clipcat-recorder"] : [];
+      for (const tool of ["ffmpeg", "ffprobe", "whisper-cli", ...parakeet, ...recorder]) {
         if (!existsSync(join(from, tool + exe))) {
-          const build = parakeet.length ? " && npm run build:parakeet" : "";
+          const build = (parakeet.length ? " && npm run build:parakeet" : "") + (recorder.length ? " && npm run build:recorder" : "");
           throw new Error(`No ${tool} for ${platform}-${arch} in vendor/bin. Run: npm run fetch:ffmpeg && npm run build:whisper${build}`);
         }
       }

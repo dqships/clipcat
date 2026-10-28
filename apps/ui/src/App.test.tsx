@@ -645,4 +645,138 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "Back to library" }));
     expect(await screen.findByRole("heading", { level: 2, name: "No videos yet" })).toBeTruthy();
   });
+
+  describe("recording", () => {
+    /** Stand-ins for the camera, the microphone and MediaRecorder, which jsdom doesn't have. */
+    function fakeMedia() {
+      const track = (kind: string) => ({ kind, stop: vi.fn(), addEventListener: vi.fn() });
+      const stream = (kinds: string[]) => {
+        const tracks = kinds.map(track);
+        return { getTracks: () => tracks, getVideoTracks: () => tracks.filter((t) => t.kind === "video"), getAudioTracks: () => tracks.filter((t) => t.kind === "audio") };
+      };
+      const getUserMedia = vi.fn(async (c: { video: unknown }) => stream(c.video ? ["video", "audio"] : ["audio"]));
+      const devices = [
+        { kind: "audioinput", deviceId: "default", label: "Default" },
+        { kind: "audioinput", deviceId: "m1", label: "MacBook Air Microphone (Built-in)" },
+        { kind: "videoinput", deviceId: "c1", label: "FaceTime HD Camera" },
+      ];
+      vi.stubGlobal("navigator", { ...navigator, mediaDevices: { getUserMedia, enumerateDevices: async () => devices } });
+      const recorders: { options: unknown; timeslice: number }[] = [];
+      class FakeRecorder {
+        static isTypeSupported = (t: string) => t.startsWith("video/webm") || t.startsWith("audio/webm");
+        state = "inactive";
+        ondataavailable: ((e: { data: Blob }) => void) | null = null;
+        onstop: (() => void) | null = null;
+        constructor(_stream: unknown, options: unknown) {
+          recorders.push({ options, timeslice: 0 });
+        }
+        start(timeslice: number) {
+          this.state = "recording";
+          recorders.at(-1)!.timeslice = timeslice;
+        }
+        stop() {
+          this.state = "inactive";
+          this.ondataavailable?.({ data: new Blob(["take"]) });
+          this.onstop?.();
+        }
+      }
+      vi.stubGlobal("MediaRecorder", FakeRecorder);
+      return { getUserMedia, recorders };
+    }
+
+    afterEach(() => vi.unstubAllGlobals());
+
+    it("records a camera take from the library and opens it as a new project", async () => {
+      const { getUserMedia, recorders } = fakeMedia();
+      const token = "00000000-0000-4000-8000-000000000001";
+      const { invoke } = fakeBridge({
+        "app:info": info(),
+        "library:list": [],
+        "project:get": project,
+        "record:access": true,
+        "record:begin": { token },
+        "record:end": project,
+      });
+      render(<App />);
+      fireEvent.click(await screen.findByRole("button", { name: "Record" }));
+      expect(await screen.findByRole("heading", { level: 1, name: "Record" })).toBeTruthy();
+      expect(screen.getByRole("tab", { name: "Camera", selected: true })).toBeTruthy();
+      expect(await screen.findByRole("option", { name: "FaceTime HD Camera" })).toBeTruthy();
+      expect(screen.queryByRole("option", { name: "Default" })).toBeNull();
+      expect(getUserMedia).toHaveBeenCalledWith(expect.objectContaining({ audio: true }));
+
+      const record = screen.getByRole("button", { name: "Record" });
+      fireEvent.click(record);
+      expect(await screen.findByRole("timer", { name: "Recording time" })).toBeTruthy();
+      expect(invoke).toHaveBeenCalledWith("record:begin", { kind: "camera", mimeType: "video/webm;codecs=vp9,opus" });
+      expect(recorders[0]).toEqual({ options: { mimeType: "video/webm;codecs=vp9,opus", videoBitsPerSecond: 8_000_000, audioBitsPerSecond: 192_000 }, timeslice: 1000 });
+
+      fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+      expect(await screen.findByRole("heading", { level: 1, name: "talk" })).toBeTruthy();
+      expect(invoke).toHaveBeenCalledWith("record:chunk", { token, data: btoa("take") });
+      expect(invoke).toHaveBeenCalledWith("record:end", { token, projectId: null });
+    });
+
+    it("records a voice take into the open project, and says when the microphone is blocked", async () => {
+      fakeMedia();
+      let allowed = false;
+      const token = "00000000-0000-4000-8000-000000000002";
+      const { invoke } = fakeBridge({
+        "app:info": info(),
+        "library:list": [summary],
+        "project:get": project,
+        "record:access": () => allowed,
+        "record:begin": { token },
+        "record:end": project,
+      });
+      render(<App />);
+      fireEvent.click(await screen.findByRole("button", { name: "talk" }));
+      fireEvent.click(await screen.findByRole("button", { name: "Record another take" }));
+      expect(await screen.findByRole("heading", { level: 1, name: "Record into talk" })).toBeTruthy();
+      expect(await screen.findByText(/isn't allowed to use the microphone/)).toBeTruthy();
+      fireEvent.click(screen.getByRole("button", { name: "Open privacy settings" }));
+      expect(invoke).toHaveBeenCalledWith("record:privacy", { kind: "microphone" });
+
+      allowed = true;
+      fireEvent.click(screen.getByRole("tab", { name: "Voice" }));
+      const record = await screen.findByRole("button", { name: "Record" });
+      await vi.waitFor(() => expect((record as HTMLButtonElement).disabled).toBe(false));
+      fireEvent.click(record);
+      fireEvent.click(await screen.findByRole("button", { name: "Stop" }));
+      expect(await screen.findByRole("heading", { level: 1, name: "talk" })).toBeTruthy();
+      expect(invoke).toHaveBeenCalledWith("record:begin", { kind: "voice", mimeType: "audio/webm;codecs=opus" });
+      expect(invoke).toHaveBeenCalledWith("record:end", { token, projectId: "p1" });
+    });
+
+    it("records a screen with the macOS recorder and the chosen microphone", async () => {
+      fakeMedia();
+      const token = "00000000-0000-4000-8000-000000000003";
+      const screens = [
+        { id: "screen:1:0", displayId: "1", name: "Screen 1", thumbnail: "data:image/png;base64,AA==" },
+        { id: "screen:2:0", displayId: "2", name: "Screen 2", thumbnail: "data:image/png;base64,AA==" },
+      ];
+      const { invoke } = fakeBridge({
+        "app:info": info(),
+        "library:list": [],
+        "project:get": project,
+        "record:access": true,
+        "record:setup": { screens, native: true, systemAudio: true, screenAccess: "granted" },
+        "record:native": { token },
+        "record:end": project,
+      });
+      render(<App />);
+      fireEvent.click(await screen.findByRole("button", { name: "Record" }));
+      fireEvent.click(await screen.findByRole("tab", { name: "Screen" }));
+      fireEvent.click(await screen.findByRole("radio", { name: "Screen 2" }));
+      fireEvent.change(await screen.findByRole("combobox", { name: "Microphone" }), { target: { value: "m1" } });
+      fireEvent.click(screen.getByRole("checkbox", { name: "Also record the computer's sound" }));
+      const record = screen.getByRole("button", { name: "Record" });
+      await vi.waitFor(() => expect((record as HTMLButtonElement).disabled).toBe(false));
+      fireEvent.click(record);
+      fireEvent.click(await screen.findByRole("button", { name: "Stop" }));
+      expect(await screen.findByRole("heading", { level: 1, name: "talk" })).toBeTruthy();
+      expect(invoke).toHaveBeenCalledWith("record:native", { displayId: "2", mic: true, micName: "MacBook Air Microphone (Built-in)", systemAudio: true });
+      expect(invoke).not.toHaveBeenCalledWith("record:begin", expect.anything());
+    });
+  });
 });

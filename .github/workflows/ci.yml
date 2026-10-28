@@ -84,6 +84,16 @@ jobs:
       - name: clipcat-parakeet runs
         if: matrix.target == 'darwin-arm64'
         run: vendor/bin/${{ matrix.target }}/clipcat-parakeet --version
+      - name: Cache clipcat-recorder
+        if: matrix.target == 'darwin-arm64'
+        uses: actions/cache@v4
+        with:
+          path: vendor/bin/${{ matrix.target }}/clipcat-recorder
+          key: recorder-${{ matrix.target }}-${{ hashFiles('native/recorder/Package.swift', 'native/recorder/Sources/**', 'scripts/build-recorder.mjs') }}
+      - run: npm run build:recorder
+      - name: clipcat-recorder runs
+        if: matrix.target == 'darwin-arm64'
+        run: vendor/bin/${{ matrix.target }}/clipcat-recorder --version
       - name: Prep pipeline against the pinned ffmpeg
         run: npx vitest run src/pipeline
         working-directory: apps/desktop

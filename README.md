@@ -18,7 +18,8 @@ in [DESIGN.md](DESIGN.md); read it before touching any screen.
 | `design/` | Design tokens generated from DESIGN.md |
 | `brand/` | Logo, app icons and their generator |
 | `native/parakeet` | `clipcat-parakeet`, a Swift helper that runs Parakeet TDT 0.6B v3 with FluidAudio (Apple Silicon) |
-| `scripts/` | `fetch-ffmpeg` (pinned static builds), `build-whisper` (whisper.cpp from a pinned commit), `build-parakeet` (the Swift helper), `check-tokens` (no raw values in UI) |
+| `native/recorder` | `clipcat-recorder`, a Swift helper that records the screen with ScreenCaptureKit (macOS 15) |
+| `scripts/` | `fetch-ffmpeg` (pinned static builds), `build-whisper` (whisper.cpp from a pinned commit), `build-parakeet` and `build-recorder` (the Swift helpers), `check-tokens` (no raw values in UI) |
 | `apps/site` | Marketing site (coming later), deployed on its own by Vercel |
 
 ## Develop
@@ -29,14 +30,15 @@ npm run fetch:ffmpeg   # ffmpeg + ffprobe for this machine into vendor/
 npm run fetch:cutout   # the subject cutout model (ISNet, 44 MB) into vendor/models/
 npm run build:whisper  # whisper-cli into vendor/ (needs git, cmake and a C++ compiler)
 npm run build:parakeet # Apple Silicon only: clipcat-parakeet into vendor/ (needs Xcode 16+)
+npm run build:recorder # macOS only: clipcat-recorder into vendor/ (needs Xcode 16+)
 npm run dev            # Vite + Electron
 npm run check && npm test && npm run lint:tokens
 npm run make           # installers in apps/desktop/out/make (set SKIP_SIGN=1 for unsigned)
 ```
 
 Smoke test a packaged build: `CLIPCAT_SMOKE=1 <path to ClipCat binary>` prints one
-JSON line and exits 0 when the UI drew and the bundled ffmpeg, whisper-cli and
-(on Apple Silicon) clipcat-parakeet ran.
+JSON line and exits 0 when the UI drew and the bundled ffmpeg, whisper-cli,
+(on Apple Silicon) clipcat-parakeet and (on macOS) clipcat-recorder ran.
 Add `CLIPCAT_SMOKE_IMPORT=<video>` to also import, transcribe and analyse a file
 (`CLIPCAT_MODEL=base` uses the small speech model).
 
@@ -160,6 +162,21 @@ select a run, and press Delete to cut it (again to restore). Suggested cuts,
 from the pause finder and from Claude, are accepted or rejected under the
 preview. Every edit is undoable with Cmd/Ctrl+Z and redone with
 Shift+Cmd/Ctrl+Z, and the preview plays the edit with the cuts skipped.
+
+Takes can be recorded in ClipCat itself: Record in the library starts a new
+project, and the camera icon in a project's title bar adds a take to it. Camera records
+the webcam and microphone, Voice the microphone alone, and Screen a whole
+display with the microphone and, if you like, the computer's sound. On macOS 15
+the screen is recorded by `clipcat-recorder` (ScreenCaptureKit writing H.264
+straight to a movie, with ClipCat's window left out); on Windows and older
+Macs it goes through Chromium's screen capture, with the window kept out of the
+picture by content protection and the computer's sound taken by loopback on
+Windows. Camera and voice takes use MediaRecorder (H.264 in MP4 where Chromium
+can, WebM otherwise), streamed to the main process a second at a time. When you
+stop, the take is remuxed without re-encoding the picture (several sound tracks
+are mixed into one so transcription hears them together), kept in
+`Movies/ClipCat` (`Videos\ClipCat` on Windows), since it is the project's
+source, and imported like any other video.
 
 Claude Code, Codex and the Claude desktop app can drive ClipCat from outside
 it. Settings (the gear in the library) adds ClipCat's MCP server to each

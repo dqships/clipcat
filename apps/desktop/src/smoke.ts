@@ -16,7 +16,7 @@ import { writeFileSync } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { defaultOverlay, overlayProposal, slideAsset, soundProposal } from "@clipcat/core";
-import type { AiStatusValue, AppInfoValue, JobEventValue } from "@clipcat/ipc";
+import type { AiStatusValue, AppInfoValue, JobEventValue, ToolInfoValue } from "@clipcat/ipc";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import type { McpServerSpec } from "./mcp/config";
@@ -176,9 +176,11 @@ export function finishSmoke(result: {
   faceDetector: string | null;
   cutout: string | null;
   mcp: string | null;
+  /** The macOS screen recorder (it runs on any macOS, records on 15 and newer); null elsewhere. */
+  recorder: ToolInfoValue | null;
   import?: SmokeImport;
 }): void {
-  const tools = [result.info.ffmpeg, result.info.whisper, result.info.parakeet ?? { available: true }];
+  const tools = [result.info.ffmpeg, result.info.whisper, result.info.parakeet ?? { available: true }, result.recorder ?? { available: true }];
   const ok = tools.every((t) => t.available) && (result.import?.ok ?? true);
   report({ ok, ...result });
   app.exit(ok ? 0 : 1);

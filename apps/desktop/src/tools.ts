@@ -1,12 +1,13 @@
 // Where the bundled command-line tools live and whether they run. Packaged
 // builds carry them in Resources/bin; in development they come from
 // vendor/bin/<platform>-<arch>, filled by `npm run fetch:ffmpeg`,
-// `npm run build:whisper` and, on Apple Silicon, `npm run build:parakeet`.
+// `npm run build:whisper`, on Apple Silicon `npm run build:parakeet`, and on
+// macOS `npm run build:recorder`.
 
 import { execFile } from "node:child_process";
 import { join } from "node:path";
 
-export type Binary = "ffmpeg" | "ffprobe" | "whisper-cli" | "clipcat-parakeet";
+export type Binary = "ffmpeg" | "ffprobe" | "whisper-cli" | "clipcat-parakeet" | "clipcat-recorder";
 
 export type Locate = {
   packaged: boolean;
@@ -28,12 +29,12 @@ export const WHISPER_RELEASE = "whisper.cpp v1.9.4";
 
 /**
  * A one-line version for a bundled tool, or null if it can't be run within
- * 10 s: the first line of `ffmpeg -version` or `clipcat-parakeet --version`,
+ * 10 s: the first line of `ffmpeg -version` or a ClipCat helper's `--version`,
  * or the pinned release for a whisper-cli that answers `--help`.
  */
 export function probeVersion(path: string): Promise<string | null> {
   const whisper = /whisper-cli(\.exe)?$/.test(path);
-  const args = whisper ? ["--help"] : /clipcat-parakeet$/.test(path) ? ["--version"] : ["-hide_banner", "-version"];
+  const args = whisper ? ["--help"] : /clipcat-(parakeet|recorder)$/.test(path) ? ["--version"] : ["-hide_banner", "-version"];
   return new Promise((resolve) => {
     execFile(path, args, { timeout: 10_000, windowsHide: true }, (error, stdout) => {
       if (error) return resolve(null);

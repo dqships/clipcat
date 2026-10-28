@@ -45,6 +45,24 @@ export function parseProbe(json: ProbeJson): MediaInfo {
   };
 }
 
+/** How many sound streams a file has, and whether it has a picture (cover art doesn't count). */
+export function streamCounts(json: ProbeJson): { audio: number; video: boolean } {
+  const streams = json.streams ?? [];
+  return {
+    audio: streams.filter((s) => s.codec_type === "audio").length,
+    video: streams.some((s) => s.codec_type === "video" && !s.disposition?.attached_pic),
+  };
+}
+
+export function inspectStreams(ffprobe: string, file: string): Promise<{ audio: number; video: boolean }> {
+  return new Promise((resolve, reject) => {
+    execFile(ffprobe, [...PROBE_ARGS, file], { maxBuffer: 16 * 1024 * 1024, windowsHide: true }, (error, stdout, stderr) => {
+      if (error) return reject(new Error(`ffprobe couldn't read ${file}: ${stderr.trim() || error.message}`));
+      resolve(streamCounts(JSON.parse(stdout) as ProbeJson));
+    });
+  });
+}
+
 export function probe(ffprobe: string, file: string): Promise<MediaInfo> {
   return new Promise((resolve, reject) => {
     execFile(ffprobe, [...PROBE_ARGS, file], { maxBuffer: 16 * 1024 * 1024, windowsHide: true }, (error, stdout, stderr) => {
