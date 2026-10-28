@@ -48,6 +48,9 @@ jobs:
             app: apps/desktop/out/ClipCat-darwin-x64/ClipCat.app/Contents/MacOS/ClipCat
             ffmpeg: apps/desktop/out/ClipCat-darwin-x64/ClipCat.app/Contents/Resources/bin/ffmpeg
             models: ~/clipcat-models
+            # This runner's virtual machine has no Metal, so Chromium has no WebGL for the face detector
+            # unless it may use its software renderer. Every Intel Mac that runs macOS 14 has Metal.
+            app_args: --enable-unsafe-swiftshader
           - os: windows-latest
             target: win32-x64
             app: apps/desktop/out/ClipCat-win32-x64/ClipCat.exe
@@ -176,7 +179,7 @@ jobs:
       - name: Smoke test the packaged app
         run: |
           out="$RUNNER_TEMP/smoke.json"
-          CLIPCAT_SMOKE=1 CLIPCAT_SMOKE_OUT="$out" "${{ matrix.app }}" || code=$?
+          CLIPCAT_SMOKE=1 CLIPCAT_SMOKE_OUT="$out" "${{ matrix.app }}" ${{ matrix.app_args }} || code=$?
           cat "$out"; echo
           test "${code:-0}" = 0
           grep -q '"ok":true' "$out"
@@ -239,7 +242,7 @@ jobs:
           mkdir -p ${{ matrix.models }}
           CLIPCAT_SMOKE=1 CLIPCAT_SMOKE_OUT="$out" CLIPCAT_SMOKE_IMPORT="${{ steps.clip.outputs.file }}" \
             CLIPCAT_SMOKE_EXPECT_WORDS="${{ steps.clip.outputs.words }}" CLIPCAT_MODEL=base \
-            CLIPCAT_MODELS_DIR="$(cd ${{ matrix.models }} && pwd -W 2>/dev/null || pwd)" "${{ matrix.app }}" || code=$?
+            CLIPCAT_MODELS_DIR="$(cd ${{ matrix.models }} && pwd -W 2>/dev/null || pwd)" "${{ matrix.app }}" ${{ matrix.app_args }} || code=$?
           cat "$out"; echo
           # The speech engine's raw output and the project log, for when the transcript looks wrong.
           data="$HOME/Library/Application Support/ClipCat"; [ "$RUNNER_OS" = "Windows" ] && data="$APPDATA/ClipCat"
