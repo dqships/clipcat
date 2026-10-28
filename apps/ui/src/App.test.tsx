@@ -662,23 +662,65 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "Delete project" }));
     await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:remove", { id: "p1" }));
   });
-  it("connects a coding agent from settings", async () => {
-    const agent = (id: string, label: string, over: object = {}) => ({ id, label, detected: true, connected: false, config: `/home/me/${id}`, unavailable: null, ...over });
+  it("connects a coding agent from settings only after showing what it writes, then checks it for real", async () => {
+    const never = { live: false, lastAt: null, client: null };
+    const agent = (id: string, label: string, over: object = {}) => ({
+      id,
+      label,
+      detected: true,
+      connected: false,
+      config: `/Users/me/${id}.json`,
+      unavailable: null,
+      entry: `{ "mcpServers": { "clipcat": { "command": "/Applications/ClipCat.app" } } }`,
+      session: never,
+      ...over,
+    });
     const before = [agent("claude-code", "Claude Code"), agent("codex", "Codex", { detected: false }), agent("claude-desktop", "Claude desktop app")];
-    const { invoke } = fakeBridge({
+    const after = before.map((a) => (a.id === "claude-code" ? { ...a, connected: true } : a));
+    let added = false;
+    const { invoke, emit } = fakeBridge({
       "app:info": info(),
       "library:list": [],
-      "mcp:status": before,
-      "mcp:connect": () => before.map((a) => (a.id === "claude-code" ? { ...a, connected: true } : a)),
+      "mcp:status": () => (added ? after : before),
+      "mcp:connect": () => {
+        added = true;
+        return after;
+      },
+      "mcp:check": [
+        { id: "saved", state: "ok", text: "Saved in ~/.claude.json." },
+        { id: "reaches", state: "ok", text: "ClipCat 0.1.0 answered with 15 tools." },
+        { id: "agent", state: "failed", text: 'Claude Code says "Failed to connect": ENOENT' },
+      ],
     });
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
     expect(await screen.findByRole("heading", { level: 1, name: "Settings" })).toBeTruthy();
     expect(await screen.findByRole("button", { name: "Connect Codex" })).toBeTruthy();
     expect(screen.getByText("Not found on this computer. You can still connect it for later.")).toBeTruthy();
+
+    // Connect asks first, showing the file and the entry; cancelling writes nothing.
     fireEvent.click(screen.getByRole("button", { name: "Connect Claude Code" }));
+    expect(screen.getByText("Add ClipCat to Claude Code?")).toBeTruthy();
+    expect(screen.getAllByText("~/claude-code.json").length).toBeGreaterThan(0);
+    expect(screen.getByText(/"clipcat"/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(invoke).not.toHaveBeenCalledWith("mcp:connect", expect.anything());
+
+    fireEvent.click(screen.getByRole("button", { name: "Connect Claude Code" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add to Claude Code" }));
     expect(await screen.findByRole("button", { name: "Disconnect Claude Code" })).toBeTruthy();
     expect(invoke).toHaveBeenCalledWith("mcp:connect", { agent: "claude-code", connect: true });
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("mcp:check", { agent: "claude-code" }));
+    expect(await screen.findByText("ClipCat 0.1.0 answered with 15 tools.")).toBeTruthy();
+    expect(screen.getByText(/Failed to connect/)).toBeTruthy();
+    expect(screen.getByText("Added, but it hasn't connected yet.")).toBeTruthy();
+    expect(screen.getByText(/Waiting for Claude Code/)).toBeTruthy();
+
+    // A real session arriving on the socket is what turns it on.
+    emit("mcp:agents", after.map((a) => (a.id === "claude-code" ? { ...a, session: { live: true, lastAt: new Date().toISOString(), client: "claude-code 2.1.312" } } : a)));
+    expect(await screen.findByText("Connected now (claude-code 2.1.312).")).toBeTruthy();
+    expect(screen.getByText("Claude Code is connected now (claude-code 2.1.312).")).toBeTruthy();
+
     // The walkthrough opens on the agent just connected, and switches per agent.
     expect(screen.getByRole("tab", { name: "Claude Code, connected" }).getAttribute("aria-selected")).toBe("true");
     expect(screen.getByRole("tabpanel").textContent).toContain("Type /mcp.");

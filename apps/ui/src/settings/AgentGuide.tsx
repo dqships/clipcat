@@ -11,27 +11,27 @@ const STEPS: Record<McpAgentIdValue, { label: string; steps: string[] }> = {
   "claude-desktop": {
     label: "Claude desktop app",
     steps: [
-      "Connect the Claude desktop app above.",
+      "Choose Connect next to the Claude desktop app above, check the entry ClipCat shows you, then choose Add to Claude desktop app.",
       "Quit Claude completely and open it again. Closing the window isn't enough: it only looks for tools when it starts.",
-      "Check it's there: in Claude, `Settings > Developer` lists clipcat as running, and ClipCat's tools show in the tools menu of a new chat.",
+      "Check it's there: the Claude desktop app's row above says Connected now once Claude has started ClipCat. In Claude, `Settings > Developer` lists clipcat as running too.",
       "Ask for something and say ClipCat, like \"List my ClipCat projects\". Claude asks before it uses a ClipCat tool for the first time. Choose Allow.",
     ],
   },
   "claude-code": {
     label: "Claude Code",
     steps: [
-      "Connect Claude Code above. ClipCat is added for every folder you work in, not just one.",
+      "Choose Connect next to Claude Code above, then Add to Claude Code. ClipCat is added for every folder you work in, not just one, and ClipCat checks with Claude Code that it connects.",
       "Start a new Claude Code session. One that was already running won't see ClipCat.",
-      "Type `/mcp`. clipcat should be in the list as connected.",
+      "Type `/mcp`. clipcat should be in the list as connected, and Claude Code's row above says Connected now.",
       "Ask for something and say ClipCat, like \"List my ClipCat projects\". Approve each tool the first time Claude Code asks.",
     ],
   },
   codex: {
     label: "Codex",
     steps: [
-      "Connect Codex above. The Codex CLI, the Codex app and the editor extension all read the same settings file, so this covers each of them.",
+      "Choose Connect next to Codex above, then Add to Codex. The Codex CLI, the Codex app and the editor extension all read the same settings file, so this covers each of them.",
       "Start a new Codex session, or quit the Codex app and open it again.",
-      "In the CLI, type `/mcp`. clipcat should be in the list with its tools.",
+      "In the CLI, type `/mcp`. clipcat should be in the list with its tools. Once Codex starts ClipCat, Codex's row above says Connected now.",
       "Ask for something and say ClipCat, like \"List my ClipCat projects\".",
     ],
   },
@@ -153,7 +153,7 @@ export function AgentGuide({ agents }: { agents: McpAgentValue[] | null }) {
           <li>It says it can't reach ClipCat: open ClipCat and ask again.</li>
           <li>A change is refused because the project changed: you or the agent edited it in between. Ask it to read the project again and retry.</li>
           <li>A job like AI cuts or shorts fails: those run on the AI you picked in ClipCat, so check that one is signed in.</li>
-          <li>Still stuck: disconnect and connect again, or save diagnostics below and attach them to an issue.</li>
+          <li>Still stuck: choose Test next to the agent above to see which step fails, disconnect and connect again, or save diagnostics below and attach them to an issue.</li>
         </ul>
       </details>
       <a className="guide__link" href={GUIDE_URL} target="_blank" rel="noreferrer">

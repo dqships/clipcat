@@ -22,7 +22,9 @@ import { broadcast, registerIpc } from "./ipc";
 import { JobLog } from "./jobs/log";
 import { JobQueue } from "./jobs/queue";
 import { type InstallEnv, connectAgent, healRegistrations, mcpStatus, serverSpec } from "./mcp/install";
+import { checkAgent } from "./mcp/check";
 import { createMcpServer } from "./mcp/server";
+import { SessionLog } from "./mcp/sessions";
 import { listen, socketPath } from "./mcp/socket";
 import { IMAGE_EXTENSIONS, VIDEO_EXTENSIONS } from "./media/assets";
 import { MUSIC_EXTENSIONS } from "./media/music";
@@ -366,8 +368,13 @@ if (!squirrelLaunch && !app.requestSingleInstanceLock()) {
     });
     const socket = socketPath(app.getPath("userData"), process.platform);
     const installEnv = mcpEnv(socket);
-    const mcp = listen(socket, () =>
-      createMcpServer({
+    // Which agents really opened a session, so Settings shows what happened rather than what a file says.
+    const agentStatus = () => mcpStatus(installEnv, (id) => sessions.seen(id));
+    const sessions = new SessionLog(join(app.getPath("userData"), "agent-sessions.json"), () => {
+      void agentStatus().then((agents) => broadcast("mcp:agents", agents), () => {});
+    });
+    const mcp = listen(socket, () => {
+      const server = createMcpServer({
         version: app.getVersion(),
         list: () => store.list(),
         get: (id) => store.get(id),
@@ -383,8 +390,10 @@ if (!squirrelLaunch && !app.requestSingleInstanceLock()) {
         importFiles: (files, projectId) => pipeline.import(files, projectId),
         exportTimeline: (id, format, path) => writeTimeline(store, id, format, path),
         jobs: (projectId) => jobs.list(projectId),
-      }),
-    ).then(
+      });
+      sessions.track(server);
+      return server;
+    }).then(
       () => null,
       (e: unknown) => `The MCP socket didn't open: ${e instanceof Error ? e.message : String(e)}`,
     );
@@ -632,7 +641,7 @@ if (!squirrelLaunch && !app.requestSingleInstanceLock()) {
             info: await part(appInfo),
             ai: await part(aiStatus),
             settings: await part(() => settings.get()),
-            agents: await part(() => mcpStatus(installEnv)),
+            agents: await part(agentStatus),
             mcp: await part(() => mcp),
             update: updater.current,
           };
@@ -647,11 +656,12 @@ if (!squirrelLaunch && !app.requestSingleInstanceLock()) {
           await writeFile(path, zip);
           return { path };
         },
-        "mcp:status": () => mcpStatus(installEnv),
+        "mcp:status": agentStatus,
         "mcp:connect": async ({ agent, connect }) => {
           await connectAgent(installEnv, agent, connect);
-          return mcpStatus(installEnv);
+          return agentStatus();
         },
+        "mcp:check": async ({ agent }) => checkAgent(agent, { env: installEnv, host: await hostEnv, platform: process.platform }),
       },
       DEV_URL,
     );
