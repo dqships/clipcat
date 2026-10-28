@@ -56,6 +56,12 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run fetch:ffmpeg -- ${{ matrix.target }}
+      - name: Cache the cutout model
+        uses: actions/cache@v4
+        with:
+          path: vendor/models/isnet-small.onnx
+          key: cutout-${{ hashFiles('scripts/fetch-cutout.mjs') }}
+      - run: npm run fetch:cutout
       - name: Cache whisper-cli
         uses: actions/cache@v4
         with:
@@ -98,6 +104,8 @@ jobs:
           grep -q '"screen":"library"' "$out"
           # The face detector (MediaPipe on WebAssembly) loads and runs inside the app.
           grep -q '"faceDetector":null' "$out"
+          # So does the subject cutout (ISNet on ONNX Runtime's WebAssembly backend).
+          grep -q '"cutout":null' "$out"
       - name: Cache the speech models
         uses: actions/cache@v4
         with:

@@ -19,6 +19,8 @@ import {
   type Range,
   SlideLook,
   type Snapshot,
+  ThumbnailBackground,
+  ThumbnailColor,
   type Word,
   Writeup,
 } from "./project";
@@ -67,6 +69,15 @@ export const EditOp = z.discriminatedUnion("type", [
     description: z.string().max(5000).optional(),
     articleTitle: z.string().max(200).optional(),
     article: z.string().max(100_000).optional(),
+  }),
+  /** The thumbnail's text and colours. Not an undo step. */
+  z.object({
+    type: z.literal("thumbnail"),
+    text: z.string().max(80).optional(),
+    textColor: ThumbnailColor.optional(),
+    background: ThumbnailBackground.optional(),
+    textSide: z.enum(["left", "right"]).optional(),
+    behind: z.boolean().optional(),
   }),
   /** Where and how b-roll shows. Not an undo step: the list shows it. */
   z.object({
@@ -215,6 +226,16 @@ export function applyEdit(project: Project, op: EditOp, id: IdFactory): Project 
     if (op.description !== undefined) w.description = op.description;
     if (op.articleTitle !== undefined) w.article.title = op.articleTitle;
     if (op.article !== undefined) w.article.markdown = op.article;
+    return p;
+  }
+
+  if (op.type === "thumbnail") {
+    if (!p.thumbnail) throw new Error("Pick a frame for the thumbnail first");
+    if (op.text !== undefined) p.thumbnail.text = op.text;
+    if (op.textColor !== undefined) p.thumbnail.textColor = op.textColor;
+    if (op.background !== undefined) p.thumbnail.background = op.background;
+    if (op.textSide !== undefined) p.thumbnail.textSide = op.textSide;
+    if (op.behind !== undefined) p.thumbnail.behind = op.behind;
     return p;
   }
 

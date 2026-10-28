@@ -219,6 +219,32 @@ export const Writeup = z.object({
   article: Article.default({ title: "", markdown: "" }),
 });
 
+/** The colours a thumbnail can use, from the app's palette. */
+export const ThumbnailColor = z.enum(["paper", "ink", "tape"]);
+/** What fills the thumbnail behind the text: the frame itself, the frame blurred, or a flat colour. */
+export const ThumbnailBackground = z.enum(["frame", "blur", "paper", "ink", "tape"]);
+
+/**
+ * The video's thumbnail: a frame from a recording, its subject cut out so the
+ * text can sit behind them, and the text and colours on it. The pictures are
+ * paths in the project's folder; `subject` is null while it is being cut out,
+ * or when nothing in the frame stood out.
+ */
+export const Thumbnail = z.object({
+  sourceId: z.string(),
+  /** Source seconds. */
+  time: z.number().nonnegative(),
+  frame: z.string(),
+  subject: z.string().nullable().default(null),
+  text: z.string().max(80).default(""),
+  textColor: ThumbnailColor.default("paper"),
+  background: ThumbnailBackground.default("frame"),
+  /** Which half the text sits in. */
+  textSide: z.enum(["left", "right"]).default("left"),
+  /** The subject in front of the text (true) or the text over everything. */
+  behind: z.boolean().default(true),
+});
+
 /** The last file exported, so the project can point back to it. */
 export const LastExport = z.object({
   path: z.string(),
@@ -266,6 +292,8 @@ export const Project = z.object({
   shorts: z.array(ShortRef).default([]),
   /** Chapters, a description and an article; null until written. */
   writeup: Writeup.nullable().default(null),
+  /** The thumbnail being made; null until a frame is picked. */
+  thumbnail: Thumbnail.nullable().default(null),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -293,6 +321,9 @@ export type LastExport = z.infer<typeof LastExport>;
 export type Chapter = z.infer<typeof Chapter>;
 export type Article = z.infer<typeof Article>;
 export type Writeup = z.infer<typeof Writeup>;
+export type ThumbnailColor = z.infer<typeof ThumbnailColor>;
+export type ThumbnailBackground = z.infer<typeof ThumbnailBackground>;
+export type Thumbnail = z.infer<typeof Thumbnail>;
 export type Origin = z.infer<typeof Origin>;
 export type ShortRef = z.infer<typeof ShortRef>;
 export type Project = z.infer<typeof Project>;

@@ -140,9 +140,16 @@ export async function smokeImport(
 
 /**
  * `ai` is reported, not required: CI has no signed-in Claude Code. Neither is
- * `faceDetector` (why there's none, or null), which CI checks per system.
+ * `faceDetector` or `cutout` (why there's none, or null), which CI checks per system.
  */
-export function finishSmoke(result: { screen: string; info: AppInfoValue; ai: AiStatusValue; faceDetector: string | null; import?: SmokeImport }): void {
+export function finishSmoke(result: {
+  screen: string;
+  info: AppInfoValue;
+  ai: AiStatusValue;
+  faceDetector: string | null;
+  cutout: string | null;
+  import?: SmokeImport;
+}): void {
   const tools = [result.info.ffmpeg, result.info.whisper, result.info.parakeet ?? { available: true }];
   const ok = tools.every((t) => t.available) && (result.import?.ok ?? true);
   report({ ok, ...result });

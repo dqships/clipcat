@@ -26,6 +26,7 @@ in [DESIGN.md](DESIGN.md); read it before touching any screen.
 ```sh
 npm install
 npm run fetch:ffmpeg   # ffmpeg + ffprobe for this machine into vendor/
+npm run fetch:cutout   # the subject cutout model (ISNet, 44 MB) into vendor/models/
 npm run build:whisper  # whisper-cli into vendor/ (needs git, cmake and a C++ compiler)
 npm run build:parakeet # Apple Silicon only: clipcat-parakeet into vendor/ (needs Xcode 16+)
 npm run dev            # Vite + Electron
@@ -145,6 +146,14 @@ started on any word from the transcript. "Copy description and chapters"
 puts the description with a YouTube-style chapter list on the clipboard, the
 article saves as a `.md` file, and every export carries the title and the
 chapters in the MP4 itself.
+
+The thumbnail starts from a frame: pause where you look your best and pick
+"Use the frame at …". ClipCat grabs that frame from the original recording
+and cuts you out of it, so big Jost text can sit behind you, over the frame,
+the frame blurred, or a flat palette colour. The cutout is ISNet (the
+quantized model IMG.LY ships in `@imgly/background-removal-node`, AGPL-3.0)
+on ONNX Runtime's WebAssembly backend in a hidden window, so it runs offline
+and the same on macOS and Windows; it takes a few seconds per frame.
 
 Editing happens in the transcript: click a word to jump there, shift-click to
 select a run, and press Delete to cut it (again to restore). Suggested cuts,

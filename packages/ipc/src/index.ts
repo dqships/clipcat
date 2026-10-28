@@ -117,6 +117,13 @@ export const methods = {
   "project:writeup": { input: ProjectRef, output: z.void() },
   /** Asks where to save the article, then writes it there as Markdown. Resolves with the path, or null when cancelled. */
   "project:save-article": { input: ProjectRef, output: z.object({ path: z.string().nullable() }) },
+  /** Queues grabbing this moment of a recording for the thumbnail and cutting its subject out. */
+  "project:thumbnail-frame": { input: ProjectRef.extend({ sourceId: z.string().min(1).max(200), time: z.number().nonnegative() }), output: z.void() },
+  /** Asks where to save the thumbnail the editor drew (a base64 PNG), then writes it. Resolves with the path, or null when cancelled. */
+  "project:save-thumbnail": {
+    input: ProjectRef.extend({ png: z.string().min(1).max(30_000_000).regex(/^[A-Za-z0-9+/]+={0,2}$/) }),
+    output: z.object({ path: z.string().nullable() }),
+  },
   /** Queues designing the project's slides that have no design yet (one that failed, say). */
   "project:design-slides": { input: ProjectRef, output: z.void() },
   /** Queues a pass that fixes misheard names and terms, using the dictionary. */

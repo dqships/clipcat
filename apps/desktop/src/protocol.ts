@@ -1,8 +1,9 @@
 // Serves the built UI from app://clipcat/ so the renderer runs on a real,
 // secure origin instead of file://, a project's prepared media (proxies,
 // thumbnails, waveforms) from media://<project id>/, and motion slides'
-// pages from slide://, and the sound effects from sound://sfx/. Those that
-// serve files refuse any path outside their folder.
+// pages from slide://, the sound effects from sound://sfx/, and the cutout
+// model from model://cutout/. Those that serve files refuse any path outside
+// their folder.
 
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
@@ -16,14 +17,17 @@ export const APP_ORIGIN = "app://clipcat";
 export const MEDIA_SCHEME = "media";
 export const SLIDE_SCHEME = "slide";
 export const SOUND_SCHEME = "sound";
+export const MODEL_SCHEME = "model";
 
 /** Must run before the app is ready. */
 export function registerSchemes(): void {
   protocol.registerSchemesAsPrivileged([
     { scheme: APP_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true } },
-    { scheme: MEDIA_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
+    // CORS-enabled so the thumbnail editor can draw frames on a canvas and still save it.
+    { scheme: MEDIA_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true } },
     { scheme: SLIDE_SCHEME, privileges: { standard: true, secure: true } },
     { scheme: SOUND_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
+    { scheme: MODEL_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } },
   ]);
 }
 
@@ -41,13 +45,22 @@ export function resolveInside(root: string, requestPath: string): string | null 
   return rel === "" ? resolve(root, "index.html") : wanted;
 }
 
+/** Pages that run cross-origin isolated, so their WebAssembly can use threads. */
+const ISOLATED = new Set(["/cutout.html"]);
+
 export function serveUi(uiRoot: string): void {
-  protocol.handle(APP_SCHEME, (request) => {
+  protocol.handle(APP_SCHEME, async (request) => {
     const url = new URL(request.url);
     if (url.host !== "clipcat") return new Response("Not found", { status: 404 });
     const file = resolveInside(uiRoot, url.pathname);
     if (!file) return new Response("Not found", { status: 404 });
-    return net.fetch(pathToFileURL(file).toString());
+    // Worker scripts (.mjs) carry the policy too, or an isolated page can't start them.
+    if (!ISOLATED.has(url.pathname) && extname(file) !== ".mjs") return net.fetch(pathToFileURL(file).toString());
+    const page = await net.fetch(pathToFileURL(file).toString());
+    const headers = new Headers(page.headers);
+    headers.set("Cross-Origin-Opener-Policy", "same-origin");
+    headers.set("Cross-Origin-Embedder-Policy", "require-corp");
+    return new Response(page.body, { status: page.status, headers });
   });
 }
 
@@ -57,7 +70,11 @@ const TYPES: Record<string, string> = {
   ".jpg": "image/jpeg",
   ".wav": "audio/wav",
   ".m4a": "audio/mp4",
+  ".onnx": "application/octet-stream",
 };
+
+/** Lets the app's pages (and the dev server) read these files, not only show them. */
+const SHARED = { "Access-Control-Allow-Origin": "*", "Cross-Origin-Resource-Policy": "cross-origin" };
 
 /** Parses a single `bytes=a-b` range against a file size; null when absent or unsatisfiable. */
 export function parseRange(header: string | null, size: number): { start: number; end: number } | null {
@@ -87,8 +104,15 @@ export function serveMedia(projectDir: (id: string) => string): void {
     } catch {
       return new Response("Not found", { status: 404 });
     }
-    return serveFile(request, root);
+    return serveFile(request, root, SHARED);
   });
+}
+
+/** Serves model://cutout/<file> from the folder the cutout model ships in. */
+export function serveModels(modelsDir: string): void {
+  protocol.handle(MODEL_SCHEME, (request) =>
+    new URL(request.url).host === "cutout" ? serveFile(request, modelsDir, SHARED) : new Response("Not found", { status: 404 }),
+  );
 }
 
 /** Serves sound://sfx/<id>.wav from the folder the sound effects ship in. */
@@ -99,7 +123,7 @@ export function serveSounds(sfxDir: string): void {
 }
 
 /** A file inside `root` named by the request's path, with byte ranges. */
-async function serveFile(request: Request, root: string): Promise<Response> {
+async function serveFile(request: Request, root: string, extra: Record<string, string> = {}): Promise<Response> {
   const file = resolveInside(root, new URL(request.url).pathname);
   if (!file || !(extname(file) in TYPES)) return new Response("Not found", { status: 404 });
   let size: number;
@@ -122,6 +146,7 @@ async function serveFile(request: Request, root: string): Promise<Response> {
       "Content-Type": type,
       "Content-Length": String(end - start + 1),
       "Accept-Ranges": "bytes",
+      ...extra,
       ...(range ? { "Content-Range": `bytes ${start}-${end}/${size}` } : {}),
     },
   });
