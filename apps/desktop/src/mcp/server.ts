@@ -35,7 +35,7 @@ export type McpDeps = {
 
 const INSTRUCTIONS = `ClipCat is a video editor for talking-head recordings. It cuts by editing the transcript: removing words removes that stretch of video. Nothing here deletes footage; every cut can be restored or undone.
 
-Typical flow: list_projects, then get_transcript for the project you want. The transcript numbers every word [n]; words already cut are shown ~like this~. Use those numbers with cut_words, or with edit_project for punch-ins, b-roll, slides and sound effects. ClipCat's own AI editor can also propose cuts (find_cuts), which you then accept or reject with decide_proposals.
+Typical flow: list_projects, then get_transcript for the project you want. The transcript numbers every word [n]; words already cut are shown ~like this~. Use those numbers with cut_words, or with edit_project for punch-ins (the app calls them zooms), b-roll, slides and sound effects. ClipCat's own AI editor can also propose cuts (find_cuts), which you then accept or reject with decide_proposals.
 
 Every change takes the project's revision from your last read. If someone else changed the project since, the change is refused: read it again and retry.`;
 

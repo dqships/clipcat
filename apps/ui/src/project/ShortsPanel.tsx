@@ -55,7 +55,7 @@ export function ShortsPanel({ project, jobs, onOpen }: Props) {
       <h2 id="shorts-title" className="section-title">
         Shorts
       </h2>
-      <p className="project__summary">The AI editor picks the moments that stand on their own. Each one becomes a vertical project you can edit and export.</p>
+      <p className="project__summary">The AI editor picks the moments that stand on their own. Each one becomes a vertical project you can edit and export. If there aren't enough good moments, you get fewer.</p>
       <div className="shorts__controls">
         <label className="field">
           <span className="field__label">How many</span>
@@ -81,6 +81,7 @@ export function ShortsPanel({ project, jobs, onOpen }: Props) {
           <Smartphone className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
           {running ? "Finding shorts…" : "Make shorts"}
         </button>
+        {!hasWords && <span className="ai__hint">Available once the transcript is ready.</span>}
       </div>
       {error && (
         <p className="notice notice--danger" role="alert">

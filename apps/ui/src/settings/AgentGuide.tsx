@@ -50,7 +50,7 @@ export const PROMPTS = [
   "In ClipCat, cut the filler words and long pauses from my newest project. Show me what you'll cut before you do it.",
   "Ask ClipCat's AI editor for cuts on my newest project, then accept the retakes and leave the rest for me.",
   "In my newest ClipCat project, cut the part where I talk about pricing.",
-  "Add a punch-in on each line where I give a number, and a whoosh where each new topic starts.",
+  "Add a zoom on each line where I give a number, and a whoosh where each new topic starts.",
   "Make three ClipCat shorts of up to 60 seconds from my newest project.",
   "Write the chapters and a YouTube description for my newest ClipCat project.",
   "Import ~/Movies/take-1.mov and ~/Movies/take-2.mov into a new ClipCat project, and cut the retakes once it's transcribed.",
@@ -141,7 +141,7 @@ export function AgentGuide({ agents }: { agents: McpAgentValue[] | null }) {
         <ul className="guide__list">
           <li>Read your projects, their transcripts, the edits ClipCat's AI editor suggested, and what ClipCat is working on.</li>
           <li>Cut and restore words, and accept or reject suggested edits.</li>
-          <li>Add punch-ins, b-roll from the project's media, motion slides, sound effects and chapters, and change the captions, speed, aspect ratio and music volume.</li>
+          <li>Add zooms, b-roll from the project's media, motion slides, sound effects and chapters, and change the captions, speed, aspect ratio and music volume.</li>
           <li>Start the jobs you'd start here: importing recordings, AI cuts, shorts, the write-up, video exports and Final Cut, Premiere or EDL timelines.</li>
           <li>Every change is one undo step, just like an edit you make yourself. Nothing deletes your footage.</li>
         </ul>

@@ -199,9 +199,9 @@ describe("App", () => {
     const { invoke } = fakeBridge({ "app:info": info(), "library:list": [summary], "project:get": project, "ai:status": ready, "project:analyze": undefined });
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "talk" }));
-    const find = await screen.findByRole("button", { name: "Find cuts" });
+    const find = await screen.findByRole("button", { name: "Suggest an edit" });
     await vi.waitFor(() => expect((find as HTMLButtonElement).disabled).toBe(false));
-    fireEvent.change(screen.getByLabelText("Brief (optional)"), { target: { value: "Keep it short" } });
+    fireEvent.change(screen.getByLabelText("What should the edit do? (optional)"), { target: { value: "Keep it short" } });
     fireEvent.click(find);
     expect(invoke).toHaveBeenCalledWith("project:analyze", { id: "p1", brief: "Keep it short" });
   });
@@ -221,7 +221,7 @@ describe("App", () => {
     expect(screen.getByText("2 cuts to review, 0:02 in all.")).toBeTruthy();
     expect(screen.getByText("Suggested title: Hello again")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Hello" }).className).toContain("word--proposed");
-    expect(screen.getByRole("button", { name: "Find cuts again" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Suggest again" })).toBeTruthy();
   });
 
   it("cuts the selected words and restores them", async () => {
@@ -253,7 +253,7 @@ describe("App", () => {
     });
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "talk" }));
-    fireEvent.click(await screen.findByRole("button", { name: /^Accept pause/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Accept silence/ }));
     await vi.waitFor(() =>
       expect(invoke).toHaveBeenCalledWith("project:edit", { id: "p1", revision: 3, op: { type: "decide", ids: ["x1"], status: "accepted" } }),
     );
@@ -280,7 +280,7 @@ describe("App", () => {
     fireEvent.click(await screen.findByRole("button", { name: "again." }));
     expect(document.querySelector(".captions")?.textContent).toContain("again.");
 
-    fireEvent.change(screen.getByLabelText("Letters"), { target: { value: "upper" } });
+    fireEvent.change(screen.getByLabelText("Capitals"), { target: { value: "upper" } });
     await vi.waitFor(() =>
       expect(invoke).toHaveBeenCalledWith("project:edit", { id: "p1", revision: 3, op: { type: "captions", captions: { case: "upper" } } }),
     );
@@ -309,7 +309,7 @@ describe("App", () => {
     });
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "talk" }));
-    fireEvent.change(await screen.findByLabelText("Made for"), { target: { value: "9:16" } });
+    fireEvent.change(await screen.findByLabelText("Shape"), { target: { value: "9:16" } });
     await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:edit", { id: "p1", revision: 3, op: { type: "aspect", aspectRatio: "9:16" } }));
     const video = await vi.waitFor(() => {
       const v = document.querySelector<HTMLVideoElement>(".project__video--tall");
@@ -334,14 +334,14 @@ describe("App", () => {
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "talk" }));
     fireEvent.click(await screen.findByRole("button", { name: "Hello" }));
-    fireEvent.click(screen.getByRole("button", { name: "Punch in" }));
+    fireEvent.click(screen.getByRole("button", { name: "Zoom in" }));
     await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:edit", { id: "p1", revision: 3, op: { type: "punch", wordIds: ["s1-0"], style: "zoom-in" } }));
     expect(await screen.findByText("“Hello”")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Hello" }).className).toContain("word--punched");
 
-    fireEvent.change(screen.getByLabelText("Zoom for the punch-in at 0:01"), { target: { value: "cut" } });
+    fireEvent.change(screen.getByLabelText("How the zoom at 0:01 moves"), { target: { value: "cut" } });
     await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:edit", { id: "p1", revision: 4, op: { type: "punch-style", id: "k1", style: "cut" } }));
-    fireEvent.click(screen.getByRole("button", { name: "Remove the punch-in at 0:01" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove the zoom at 0:01" }));
     await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:edit", { id: "p1", revision: 4, op: { type: "decide", ids: ["k1"], status: "rejected" } }));
   });
 
@@ -420,7 +420,7 @@ describe("App", () => {
 
     expect(await screen.findByText("Slide, ink, being designed: Three steps")).toBeTruthy();
     expect(((await screen.findByLabelText("What Three steps says")) as HTMLTextAreaElement).value).toBe("Three steps");
-    fireEvent.click(screen.getByRole("button", { name: "Design" }));
+    fireEvent.click(screen.getByRole("button", { name: "Design now" }));
     await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:design-slides", { id: "p1" }));
   });
 
@@ -462,7 +462,7 @@ describe("App", () => {
     await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:set-music", { id: "p1", file: "/m/song.mp3" }));
     emit("project:changed", { id: "p1", revision: 5 });
     expect(await screen.findByText("Preparing…")).toBeTruthy();
-    fireEvent.click(screen.getByLabelText("Dip under speech"));
+    fireEvent.click(screen.getByLabelText("Lower the music while you talk"));
     await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:edit", expect.objectContaining({ op: { type: "music", duck: false } })));
   });
 
@@ -487,7 +487,7 @@ describe("App", () => {
     });
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "talk" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Write again" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Rewrite chapters and article" }));
     await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:writeup", { id: "p1" }));
 
     // The pause from 1 s to 2.5 s isn't cut, so "again." is at 0:03; the first chapter always starts the video.
@@ -519,7 +519,7 @@ describe("App", () => {
     });
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "talk" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Use the frame at 0:00" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Make a thumbnail from 0:00" }));
     await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:thumbnail-frame", { id: "p1", sourceId: "s1", time: 0 }));
     expect(screen.getByText(/The text sits behind you/)).toBeTruthy();
 
@@ -545,7 +545,7 @@ describe("App", () => {
     });
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "talk" }));
-    fireEvent.change(await screen.findByLabelText("Speed"), { target: { value: "1.25" } });
+    fireEvent.change(await screen.findByLabelText("Playback speed"), { target: { value: "1.25" } });
     await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:edit", { id: "p1", revision: 3, op: { type: "speed", speed: 1.25 } }));
     // 75 s with the speed at 1.25× runs a minute.
     expect(await screen.findByText("The edit runs 1:00.")).toBeTruthy();
@@ -561,7 +561,7 @@ describe("App", () => {
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "talk" }));
     expect(await screen.findByText(/Install Claude Code, then reopen ClipCat/)).toBeTruthy();
-    expect((screen.getByRole("button", { name: "Find cuts" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Suggest an edit" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("switches the AI to Codex", async () => {
@@ -576,11 +576,11 @@ describe("App", () => {
     });
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "talk" }));
-    const pick = await screen.findByLabelText("Find cuts with");
+    const pick = await screen.findByLabelText("Use");
     await vi.waitFor(() => expect((pick as HTMLSelectElement).disabled).toBe(false));
     fireEvent.change(pick, { target: { value: "codex" } });
     expect(invoke).toHaveBeenCalledWith("settings:set", { agent: "codex" });
-    expect((screen.getByRole("button", { name: "Find cuts" }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole("button", { name: "Suggest an edit" }) as HTMLButtonElement).disabled).toBe(false);
     const model = screen.getByLabelText("Model") as HTMLSelectElement;
     expect([...model.options].map((o) => o.text)).toEqual(["Codex default (gpt-6.1-sol)", "GPT-6.1-Sol"]);
     fireEvent.change(model, { target: { value: "gpt-6.1-sol" } });
@@ -602,12 +602,12 @@ describe("App", () => {
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "talk" }));
     const keyField = await screen.findByLabelText("Claude API key");
-    expect((screen.getByRole("button", { name: "Find cuts" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Suggest an edit" }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.change(keyField, { target: { value: " sk-ant-test-key " } });
     fireEvent.click(screen.getByRole("button", { name: "Save key" }));
     expect(invoke).toHaveBeenCalledWith("settings:api-key", { key: "sk-ant-test-key" });
     expect(await screen.findByText(/Your API key is saved, encrypted/)).toBeTruthy();
-    expect((screen.getByRole("button", { name: "Find cuts" }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole("button", { name: "Suggest an edit" }) as HTMLButtonElement).disabled).toBe(false);
     fireEvent.change(screen.getByLabelText("Model"), { target: { value: "claude-sonnet-5-5" } });
     expect(invoke).toHaveBeenCalledWith("settings:set", { apiModel: "claude-sonnet-5-5" });
   });
@@ -625,16 +625,16 @@ describe("App", () => {
     });
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "talk" }));
-    const ask = await screen.findByRole("button", { name: "Ask" });
-    await vi.waitFor(() => expect((screen.getByLabelText("Find cuts with") as HTMLSelectElement).disabled).toBe(false));
+    const ask = await screen.findByRole("button", { name: "Send" });
+    await vi.waitFor(() => expect((screen.getByLabelText("Use") as HTMLSelectElement).disabled).toBe(false));
     fireEvent.change(screen.getByLabelText("Ask for a change"), { target: { value: "Cut the part about pricing" } });
     fireEvent.click(ask);
     expect(invoke).toHaveBeenCalledWith("project:request", { id: "p1", request: "Cut the part about pricing" });
 
-    const terms = screen.getByLabelText(/Names and terms/) as HTMLInputElement;
+    const terms = screen.getByLabelText(/Names and words/) as HTMLInputElement;
     await vi.waitFor(() => expect(terms.value).toBe("ClipCat"));
     fireEvent.change(terms, { target: { value: "ClipCat, DaQuan,, ClipCat" } });
-    fireEvent.click(screen.getByRole("button", { name: "Fix transcript" }));
+    fireEvent.click(screen.getByRole("button", { name: "Fix spelling" }));
     expect(invoke).toHaveBeenCalledWith("settings:set", { dictionary: ["ClipCat", "DaQuan"] });
     expect(invoke).toHaveBeenCalledWith("project:correct", { id: "p1" });
   });

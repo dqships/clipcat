@@ -74,7 +74,7 @@ export function Settings({ update, onBack }: Props) {
             Edit from your coding agent
           </h2>
           <p className="settings__body">
-            Connect an agent and, while ClipCat is open, it can read your transcripts, cut words, accept suggested edits, add punch-ins, b-roll and
+            Connect an agent and, while ClipCat is open, it can read your transcripts, cut words, accept suggested edits, add zooms, b-roll and
             sounds, and start exports. Every change shows up here and can be undone.
           </p>
           {agentsError && (

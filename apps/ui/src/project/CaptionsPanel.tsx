@@ -14,7 +14,7 @@ export function CaptionsPanel({ project, onEdit }: Props) {
       </h2>
       <label className="field field--inline">
         <input type="checkbox" checked={c.enabled} onChange={(e) => set({ enabled: e.target.checked })} />
-        Burn captions into the video
+        Add captions to the video
       </label>
       <div className="fields">
         <label className="field">
@@ -25,15 +25,15 @@ export function CaptionsPanel({ project, onEdit }: Props) {
           </select>
         </label>
         <label className="field">
-          <span className="field__label">Letters</span>
+          <span className="field__label">Capitals</span>
           <select className="field__control" value={c.case} disabled={!c.enabled} onChange={(e) => set({ case: e.target.value as Captions["case"] })}>
             <option value="regular">As spoken</option>
-            <option value="upper">UPPERCASE</option>
-            <option value="lower">lowercase</option>
+            <option value="upper">ALL CAPS</option>
+            <option value="lower">all lowercase</option>
           </select>
         </label>
         <label className="field">
-          <span className="field__label">Background</span>
+          <span className="field__label">Caption background</span>
           <select
             className="field__control"
             value={c.background}
@@ -41,7 +41,7 @@ export function CaptionsPanel({ project, onEdit }: Props) {
             onChange={(e) => set({ background: e.target.value as Captions["background"] })}
           >
             <option value="none">None</option>
-            <option value="rounded">Box</option>
+            <option value="rounded">A box</option>
           </select>
         </label>
         <label className="field">

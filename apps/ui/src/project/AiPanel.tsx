@@ -1,6 +1,6 @@
 import type { Project, Proposal } from "@clipcat/core";
 import type { AgentNameValue, AiStatusValue, ApiModelValue } from "@clipcat/ipc";
-import { KeyRound, MessageSquare, Sparkles, SpellCheck } from "lucide-react";
+import { Copy, KeyRound, MessageSquare, Scissors, SpellCheck } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { bridge } from "../bridge";
 import { ICON_STROKE } from "../icons";
@@ -38,8 +38,8 @@ function readiness(ai: AiStatusValue, name: AgentNameValue): { ready: boolean; i
 type Props = { project: Project; jobs: ProjectJobs };
 
 /**
- * Asks the user's Claude Code, Codex or Claude API key for cuts: which one,
- * an optional brief and one button. What comes back is listed with the other
+ * Asks the user's Claude Code, Codex or Claude API key for a first edit:
+ * which one, an optional brief and one button. What comes back is listed with the other
  * suggested cuts to accept or reject.
  */
 export function AiPanel({ project, jobs }: Props) {
@@ -57,6 +57,7 @@ export function AiPanel({ project, jobs }: Props) {
 
   const running = jobs.active?.kind === "analyze" || jobs.active?.kind === "correct";
   const [request, setRequest] = useState("");
+  const [copied, setCopied] = useState(false);
   const [terms, setTerms] = useState<string | null>(null);
 
   useEffect(() => {
@@ -124,6 +125,12 @@ export function AiPanel({ project, jobs }: Props) {
     const dictionary = [...new Set(terms.split(/[,\n]/).map((t) => t.trim()).filter(Boolean))].slice(0, 200).map((t) => t.slice(0, 60));
     bridge()?.invoke("settings:set", { dictionary }).catch(fail);
   };
+  const copyTitle = () => {
+    navigator.clipboard.writeText(project.suggestedTitle).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }, fail);
+  };
   const fixTranscript = () => {
     setError(null);
     saveTerms();
@@ -136,7 +143,7 @@ export function AiPanel({ project, jobs }: Props) {
         AI editor
       </h2>
       <label className="field">
-        <span className="field__label">Find cuts with</span>
+        <span className="field__label">Use</span>
         <select className="field__control" value={agent} disabled={!ai || running} onChange={(e) => choose(e.target.value as AgentNameValue)}>
           {(Object.keys(AGENT_LABEL) as AgentNameValue[]).map((name) => (
             <option key={name} value={name}>
@@ -167,7 +174,7 @@ export function AiPanel({ project, jobs }: Props) {
       {status && !ready && agent !== "api" && (
         <div className="notice ai__notice" role="status">
           <span>
-            {status.installed ? `${label} isn't ready.` : `ClipCat uses your ${label} to find cuts.`} {status.detail}
+            {status.installed ? `${label} isn't ready.` : `ClipCat uses your ${label} to suggest edits.`} {status.detail}
           </span>
           <button type="button" className="button" onClick={check}>
             Check again
@@ -213,7 +220,7 @@ export function AiPanel({ project, jobs }: Props) {
         </div>
       )}
       <label className="ai__label" htmlFor="ai-brief">
-        Brief (optional)
+        What should the edit do? (optional)
       </label>
       <textarea
         id="ai-brief"
@@ -223,12 +230,17 @@ export function AiPanel({ project, jobs }: Props) {
         value={brief}
         onChange={(e) => setBrief(e.target.value)}
       />
+      <p className="ai__hint">Used each time you choose Suggest an edit.</p>
       <div className="ai__actions">
         <button type="button" className="button button--primary" disabled={!ready || !hasWords || running} onClick={findCuts}>
-          <Sparkles className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
-          {running ? "Finding cuts…" : proposals.length > 0 ? "Find cuts again" : "Find cuts"}
+          <Scissors className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
+          {running ? "Suggesting an edit…" : proposals.length > 0 ? "Suggest again" : "Suggest an edit"}
         </button>
-        {!hasWords && <span className="ai__hint">Available once the transcript is ready.</span>}
+        {!hasWords ? (
+          <span className="ai__hint">Available once the transcript is ready.</span>
+        ) : (
+          status && !ready && <span className="ai__hint">Set up {label} above first.</span>
+        )}
       </div>
       <label className="ai__label" htmlFor="ai-request">
         Ask for a change
@@ -247,11 +259,11 @@ export function AiPanel({ project, jobs }: Props) {
         />
         <button type="button" className="button" disabled={!ready || !hasWords || running || !request.trim()} onClick={ask}>
           <MessageSquare className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
-          Ask
+          Send
         </button>
       </div>
       <label className="ai__label" htmlFor="ai-terms">
-        Names and terms you use (help transcription spell them)
+        Names and words to spell right
       </label>
       <div className="ai__row">
         <input
@@ -265,7 +277,7 @@ export function AiPanel({ project, jobs }: Props) {
         />
         <button type="button" className="button" disabled={!ready || !hasWords || running} onClick={fixTranscript}>
           <SpellCheck className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
-          Fix transcript
+          Fix spelling
         </button>
       </div>
       {error && (
@@ -273,7 +285,15 @@ export function AiPanel({ project, jobs }: Props) {
           {error}
         </p>
       )}
-      {project.suggestedTitle && <p className="ai__hint">Suggested title: {project.suggestedTitle}</p>}
+      {project.suggestedTitle && (
+        <p className="ai__hint ai__row">
+          <span>Suggested title: {project.suggestedTitle}</span>
+          <button type="button" className="button" onClick={copyTitle}>
+            <Copy className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
+            {copied ? "Copied" : "Copy"}
+          </button>
+        </p>
+      )}
     </section>
   );
 }

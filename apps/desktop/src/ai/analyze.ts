@@ -149,7 +149,7 @@ export class AnalysisRunner {
       p.brief = brief;
     });
     this.deps.changed(project);
-    this.deps.queue.add(projectId, "analyze", "Finding cuts", (ctx) => this.run(projectId, ctx)).catch(() => {});
+    this.deps.queue.add(projectId, "analyze", "Suggesting an edit", (ctx) => this.run(projectId, ctx)).catch(() => {});
   }
 
   /** Queues cuts for one request, added to the proposals already waiting. */

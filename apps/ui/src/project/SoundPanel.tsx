@@ -141,10 +141,10 @@ export function SoundPanel({ project, onSeek, onEdit }: Props) {
           </select>
           <label className="field field--inline">
             <input type="checkbox" checked={music.duck} onChange={(e) => onEdit({ type: "music", duck: e.target.checked })} />
-            Dip under speech
+            Lower the music while you talk
           </label>
           <button type="button" className="button" onClick={() => void pickMusic()}>
-            Replace
+            Change music
           </button>
           <button type="button" className="button button--icon" aria-label="Remove the music" onClick={() => onEdit({ type: "remove-music" })}>
             <X className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
