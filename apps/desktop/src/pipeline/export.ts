@@ -214,7 +214,9 @@ export class ExportRunner {
         await rm(partial, { force: true });
         throw e;
       }
-      if (cues.length > 0) await writeFile(srtPath(out), toSrt(cues, project.captions.case));
+      // The .srt reads a line at a time, whichever way the burned-in captions appear.
+      const lines = project.captions.mode === "sentence" ? cues : captionCues(outputWords(project, timeline), "sentence", size);
+      if (lines.length > 0) await writeFile(srtPath(out), toSrt(lines, project.captions.case));
     } finally {
       // The chunks can be gigabytes; they go whether the export finished, failed or was cancelled.
       await rm(work, { recursive: true, force: true });

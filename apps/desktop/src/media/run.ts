@@ -14,8 +14,12 @@ export function runFfmpeg(
     const abort = () => child.kill();
     opts.signal?.addEventListener("abort", abort, { once: true });
     child.stdout.setEncoding("utf8");
+    // A line can arrive split across two chunks; the unfinished end waits for the next one.
+    let partial = "";
     child.stdout.on("data", (chunk: string) => {
-      for (const line of chunk.split("\n")) {
+      const lines = (partial + chunk).split("\n");
+      partial = lines.pop() ?? "";
+      for (const line of lines) {
         const p = progressFrom(line, opts.duration);
         if (p !== null) opts.onProgress?.(p);
       }

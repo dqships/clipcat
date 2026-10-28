@@ -322,9 +322,11 @@ function createWindow(): BrowserWindow {
   return win;
 }
 
-if (!squirrelLaunch) {
-  if (!app.requestSingleInstanceLock()) app.quit();
-
+if (!squirrelLaunch && !app.requestSingleInstanceLock()) {
+  // Another ClipCat is running and gets focus ("second-instance" below). This one
+  // leaves before starting anything, so it can't take over the MCP socket or rerun jobs.
+  app.quit();
+} else if (!squirrelLaunch) {
   app.whenReady().then(() => {
     const { store, settings, keys, queue, jobs, pipeline, media, music, thumbnail, analysis, exporter, edit, recordings } = startPipeline();
     app.on("will-quit", () => void recordings.discardAll());
@@ -654,7 +656,13 @@ if (!squirrelLaunch) {
       DEV_URL,
     );
     if (isSmokeRun()) startSmokeTimer();
-    else void pipeline.resume().then(() => media.resume()).then(() => music.resume());
+    else {
+      // Each part picks up its own unfinished work, so one failing doesn't stop the others.
+      const resume = (what: string, run: () => Promise<unknown>) => run().catch((e) => console.error(`Couldn't resume ${what}:`, e));
+      void resume("preparing and transcribing", () => pipeline.resume())
+        .then(() => resume("b-roll", () => media.resume()))
+        .then(() => resume("music", () => music.resume()));
+    }
     createWindow();
   });
 

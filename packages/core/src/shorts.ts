@@ -171,6 +171,8 @@ export function shortProject(parent: Project, plan: ShortPlan, opts: { id: strin
   const duration = (id: string) => sources.find((s) => s.id === id)?.media.duration ?? 0;
   const segments = shortSegments(plan, duration, opts.segmentId);
   const inside = (sourceId: string, [a, b]: Range) => {
+    // A sound sits at a moment, not over a range: it's inside when that moment is kept.
+    if (b - a <= 1e-6) return segments.some((s) => s.sourceId === sourceId && s.included && s.sourceStart <= a && a < s.sourceEnd);
     const kept = keptParts(segments, sourceId, [a, b]);
     return kept.length === 1 && Math.abs(kept[0]![0] - a) < 1e-6 && Math.abs(kept[0]![1] - b) < 1e-6;
   };

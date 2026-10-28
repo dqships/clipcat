@@ -177,15 +177,25 @@ export class AnalysisRunner {
     this.deps.queue.add(projectId, "writeup", "Writing chapters and an article", (ctx) => this.runWriteup(projectId, ctx)).catch(() => {});
   }
 
-  /** Queues designing a slide, unless it is already queued. */
+  /**
+   * Queues designing a slide, unless it is already queued. Asked again while
+   * its job runs (the brief changed), it looks once more when the job ends.
+   */
   design(projectId: string, asset: Pick<Asset, "id" | "name">): void {
     const key = `${projectId}/${asset.id}`;
-    if (this.designing.has(key) || !this.deps.slides) return;
+    if (!this.deps.slides) return;
+    if (this.designing.has(key)) {
+      this.redesign.add(key);
+      return;
+    }
     this.designing.add(key);
     this.deps.queue
       .add(projectId, "design", `Designing “${asset.name}”`, (ctx) => this.runDesign(projectId, asset.id, ctx))
       .catch(() => {})
-      .finally(() => this.designing.delete(key));
+      .finally(() => {
+        this.designing.delete(key);
+        if (this.redesign.delete(key)) this.designMissing(projectId).catch(() => {});
+      });
   }
 
   /** Queues designing every slide in the project that has no design yet. */
@@ -195,6 +205,7 @@ export class AnalysisRunner {
   }
 
   private readonly designing = new Set<string>();
+  private readonly redesign = new Set<string>();
 
   /**
    * Runs `task` with the user's agent: each answer is checked, the first one

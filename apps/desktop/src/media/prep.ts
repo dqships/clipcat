@@ -23,8 +23,11 @@ export function prepArgs(input: string, media: MediaInfo, out: PrepOutputs, enco
   if (hasVideo) {
     args.push("-i", input);
   } else {
-    // Audio only: a still proxy frame keeps every source a video.
-    args.push("-f", "lavfi", "-i", `color=c=black:s=1280x720:r=${fps}`, "-i", input);
+    // Audio only: a still proxy frame keeps every source a video. The colour
+    // source is endless, so it is cut to the audio's length; the thumbnails
+    // read it too, and `-shortest` only ends the proxy.
+    const length = media.duration > 0 ? `:d=${media.duration.toFixed(3)}` : "";
+    args.push("-f", "lavfi", "-i", `color=c=black:s=1280x720:r=${fps}${length}`, "-i", input);
   }
   const v = hasVideo ? "0:v:0" : "0:v";
   const a = hasVideo ? "0:a:0" : "1:a:0";

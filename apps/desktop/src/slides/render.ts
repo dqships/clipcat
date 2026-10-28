@@ -125,17 +125,25 @@ export async function renderVideo(
   child.stderr.on("data", (chunk: string) => {
     tail = (tail + chunk).slice(-2000);
   });
+  let exited = false;
   const closed = new Promise<number | null>((resolve, reject) => {
     child.on("error", reject);
     child.on("close", resolve);
   });
+  // Settled early when ffmpeg dies mid-render; the code is read below, so nothing goes unhandled.
+  closed.then(
+    () => (exited = true),
+    () => (exited = true),
+  );
+  // Writing to an ffmpeg that has quit fails with EPIPE; its exit code tells the story instead.
+  child.stdin.on("error", () => {});
   const abort = () => child.kill();
   opts.signal.addEventListener("abort", abort, { once: true });
   try {
-    for (let n = 0; n < frames; n++) {
+    for (let n = 0; n < frames && !exited; n++) {
       if (opts.signal.aborted) throw new Error("cancelled");
       const pixels = unpremultiply((await capture(page, n / fps, size)).toBitmap());
-      if (!child.stdin.write(pixels)) await new Promise<void>((resolve) => child.stdin.once("drain", () => resolve()));
+      if (!child.stdin.write(pixels)) await Promise.race([new Promise<void>((resolve) => child.stdin.once("drain", () => resolve())), closed]);
       opts.progress?.((n + 1) / frames);
     }
     child.stdin.end();
