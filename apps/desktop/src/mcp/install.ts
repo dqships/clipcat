@@ -22,11 +22,13 @@ import {
   SOCKET_ENV,
   agentTarget,
   isOurs,
+  previewEntry,
   readServer,
   removeServer,
   sameSpec,
   upsertServer,
 } from "./config";
+import type { Seen } from "./sessions";
 
 export type InstallEnv = {
   home: string;
@@ -69,8 +71,14 @@ async function writeConfig(env: InstallEnv, target: AgentTarget, text: string): 
 
 const unavailable = (env: InstallEnv) => (env.transient ? "Move ClipCat to the Applications folder and open it from there first." : null);
 
-/** Every agent ClipCat knows, with whether it's on this computer and whether its config has ClipCat. */
-export async function mcpStatus(env: InstallEnv): Promise<McpAgentValue[]> {
+const NEVER: Seen = { live: false, lastAt: null, client: null };
+
+/**
+ * Every agent ClipCat knows, with whether it's on this computer, whether its
+ * config has ClipCat, what Connect would write, and (from `seen`) whether
+ * the agent has actually opened a session.
+ */
+export async function mcpStatus(env: InstallEnv, seen: (id: AgentId) => Promise<Seen> = async () => NEVER): Promise<McpAgentValue[]> {
   return Promise.all(
     AGENT_TARGETS.map(async (target) => ({
       id: target.id,
@@ -79,9 +87,19 @@ export async function mcpStatus(env: InstallEnv): Promise<McpAgentValue[]> {
       connected: readServer(await readConfig(env, target).catch(() => null), target.format) !== null,
       config: resolvePath(env, target.config),
       unavailable: unavailable(env),
+      entry: previewEntry(target.format, target.entry(env.spec)),
+      session: await seen(target.id),
     })),
   );
 }
+
+/** Our entry as the agent's config has it now, or null when it has none; throws when the file can't be read. */
+export async function registeredEntry(env: InstallEnv, id: AgentId) {
+  const target = agentTarget(id);
+  return readServer(await readConfig(env, target), target.format);
+}
+
+export const configPath = (env: InstallEnv, id: AgentId) => resolvePath(env, agentTarget(id).config);
 
 /** Writes our entry into the agent's config, or takes it out; other servers in the file are left alone. */
 export async function connectAgent(env: InstallEnv, id: AgentId, connect: boolean): Promise<void> {
