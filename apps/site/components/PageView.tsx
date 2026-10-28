@@ -16,6 +16,25 @@ function PageSection({ s }: { s: Section }) {
             <Inline text={p} />
           </p>
         ))}
+        {s.steps && (
+          <ol className="doc-steps">
+            {s.steps.map((st) => (
+              <li key={st.title}>
+                <h3>{st.title}</h3>
+                <p>
+                  <Inline text={st.text} />
+                </p>
+              </li>
+            ))}
+          </ol>
+        )}
+        {s.prompts && (
+          <ul className="doc-prompts" aria-label="Example prompts">
+            {s.prompts.map((p) => (
+              <li key={p}>{p}</li>
+            ))}
+          </ul>
+        )}
         {s.list && (
           <ul className="doc-list">
             {s.list.map((i) => (
