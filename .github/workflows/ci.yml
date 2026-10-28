@@ -48,9 +48,11 @@ jobs:
             app: apps/desktop/out/ClipCat-darwin-x64/ClipCat.app/Contents/MacOS/ClipCat
             ffmpeg: apps/desktop/out/ClipCat-darwin-x64/ClipCat.app/Contents/Resources/bin/ffmpeg
             models: ~/clipcat-models
-            # This runner's virtual machine has no Metal, so Chromium has no WebGL for the face detector
-            # unless it may use its software renderer. Every Intel Mac that runs macOS 14 has Metal.
-            app_args: --enable-unsafe-swiftshader
+            # This runner's virtual machine has no GPU (no Metal, and SwiftShader fails there too), so
+            # Chromium has no WebGL and MediaPipe's face detector can't start. Every Intel Mac that runs
+            # macOS 14 has a Metal GPU. The detector is the same WebAssembly on every system and is
+            # tested on the other runners; here the smoke test checks it fails only for want of WebGL.
+            webgl: false
           - os: windows-latest
             target: win32-x64
             app: apps/desktop/out/ClipCat-win32-x64/ClipCat.exe
@@ -179,13 +181,18 @@ jobs:
       - name: Smoke test the packaged app
         run: |
           out="$RUNNER_TEMP/smoke.json"
-          CLIPCAT_SMOKE=1 CLIPCAT_SMOKE_OUT="$out" "${{ matrix.app }}" ${{ matrix.app_args }} || code=$?
+          CLIPCAT_SMOKE=1 CLIPCAT_SMOKE_OUT="$out" "${{ matrix.app }}" || code=$?
           cat "$out"; echo
           test "${code:-0}" = 0
           grep -q '"ok":true' "$out"
           grep -q '"screen":"library"' "$out"
-          # The face detector (MediaPipe on WebAssembly) loads and runs inside the app.
-          grep -q '"faceDetector":null' "$out"
+          # The face detector (MediaPipe on WebAssembly) loads and runs inside the app; on a runner
+          # without WebGL it loads and stops at its first WebGL call.
+          if [ "${{ matrix.webgl }}" = false ]; then
+            grep -q '"faceDetector":"Cannot read properties of undefined (reading .activeTexture.)"' "$out"
+          else
+            grep -q '"faceDetector":null' "$out"
+          fi
           # So does the subject cutout (ISNet on ONNX Runtime's WebAssembly backend).
           grep -q '"cutout":null' "$out"
           # An outside agent reaches the MCP server through the packaged bridge.
@@ -242,7 +249,7 @@ jobs:
           mkdir -p ${{ matrix.models }}
           CLIPCAT_SMOKE=1 CLIPCAT_SMOKE_OUT="$out" CLIPCAT_SMOKE_IMPORT="${{ steps.clip.outputs.file }}" \
             CLIPCAT_SMOKE_EXPECT_WORDS="${{ steps.clip.outputs.words }}" CLIPCAT_MODEL=base \
-            CLIPCAT_MODELS_DIR="$(cd ${{ matrix.models }} && pwd -W 2>/dev/null || pwd)" "${{ matrix.app }}" ${{ matrix.app_args }} || code=$?
+            CLIPCAT_MODELS_DIR="$(cd ${{ matrix.models }} && pwd -W 2>/dev/null || pwd)" "${{ matrix.app }}" || code=$?
           cat "$out"; echo
           # The speech engine's raw output and the project log, for when the transcript looks wrong.
           data="$HOME/Library/Application Support/ClipCat"; [ "$RUNNER_OS" = "Windows" ] && data="$APPDATA/ClipCat"
@@ -250,7 +257,7 @@ jobs:
           test "${code:-0}" = 0
           grep -q '"ok":true' "$out"
           # The face was found in the sampled frames.
-          if [ "${{ steps.clip.outputs.face }}" = 1 ]; then
+          if [ "${{ steps.clip.outputs.face }}" = 1 ] && [ "${{ matrix.webgl }}" != false ]; then
             node -e '
               const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).import;
               if (!(r.faces > 0)) { console.error(`no face found (faces: ${r.faces})`); process.exit(1); }' "$out"
