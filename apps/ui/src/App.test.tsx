@@ -88,6 +88,9 @@ function fakeBridge(given: Record<string, unknown>) {
   return { invoke, emit };
 }
 
+/** Shows a tab of the tools panel. */
+const openTab = async (name: string) => fireEvent.click(await screen.findByRole("tab", { name: new RegExp(`^${name}`) }));
+
 const summary = { id: "p1", name: "talk", updatedAt: "", duration: 75, sources: 1, thumb: "media/s1/thumb-0001.jpg" };
 
 describe("App", () => {
@@ -158,21 +161,21 @@ describe("App", () => {
     expect(await screen.findByRole("heading", { level: 1, name: "Library" })).toBeTruthy();
   });
 
-  it("docks the transcript and the controls anywhere, splits a shared dock and remembers it", async () => {
+  it("docks the transcript and the tools anywhere, splits a shared dock and remembers it", async () => {
     fakeBridge({ "app:info": info(), "library:list": [summary], "project:get": project, "ai:status": { claude: { status: "ready", version: null, detail: null }, codex: { status: "not-installed", version: null, detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude", models } });
     const view = render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "talk" }));
     await screen.findByRole("button", { name: "again." });
     const dockOf = (title: string) => screen.getByRole("region", { name: title }).parentElement?.className;
     expect(dockOf("Transcript")).toBe("dock dock--right");
-    expect(dockOf("Controls")).toBe("dock dock--bottom");
+    expect(dockOf("Tools")).toBe("dock dock--bottom");
     expect(screen.getByRole("button", { name: "Transcript on the right" }).getAttribute("aria-pressed")).toBe("true");
 
     // Both on the left: one dock, transcript on top, a hairline to split it.
     fireEvent.click(screen.getByRole("button", { name: "Transcript on the left" }));
-    fireEvent.click(screen.getByRole("button", { name: "Controls on the left" }));
+    fireEvent.click(screen.getByRole("button", { name: "Tools on the left" }));
     expect(dockOf("Transcript")).toBe("dock dock--left");
-    expect(dockOf("Controls")).toBe("dock dock--left");
+    expect(dockOf("Tools")).toBe("dock dock--left");
     const split = screen.getByRole("separator", { name: "Resize the left split" });
     expect(split.getAttribute("aria-orientation")).toBe("horizontal");
     fireEvent.keyDown(split, { key: "ArrowDown" });
@@ -189,7 +192,7 @@ describe("App", () => {
     fireEvent.click(await screen.findByRole("button", { name: "talk" }));
     await screen.findByRole("button", { name: "again." });
     expect(dockOf("Transcript")).toBe("dock dock--left");
-    expect(dockOf("Controls")).toBe("dock dock--left");
+    expect(dockOf("Tools")).toBe("dock dock--left");
     expect(screen.getByRole("separator", { name: "Resize the left split" }).getAttribute("aria-valuenow")).toBe("52");
     expect(screen.getByRole("separator", { name: "Resize the left panel" }).getAttribute("aria-valuenow")).toBe("65");
   });
@@ -285,6 +288,7 @@ describe("App", () => {
       expect(invoke).toHaveBeenCalledWith("project:edit", { id: "p1", revision: 3, op: { type: "captions", captions: { case: "upper" } } }),
     );
 
+    await openTab("Export");
     fireEvent.click(screen.getByRole("button", { name: /Export 9:16/ }));
     expect(invoke).toHaveBeenCalledWith("project:export", { id: "p1", format: "9:16" });
     expect(screen.getByText("Last export: talk.mp4 (16:9)")).toBeTruthy();
@@ -487,6 +491,7 @@ describe("App", () => {
     });
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "talk" }));
+    await openTab("Publish");
     fireEvent.click(await screen.findByRole("button", { name: "Rewrite chapters and article" }));
     await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:writeup", { id: "p1" }));
 
@@ -519,6 +524,7 @@ describe("App", () => {
     });
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "talk" }));
+    await openTab("Publish");
     fireEvent.click(await screen.findByRole("button", { name: "Make a thumbnail from 0:00" }));
     await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:thumbnail-frame", { id: "p1", sourceId: "s1", time: 0 }));
     expect(screen.getByText(/The text sits behind you/)).toBeTruthy();
@@ -654,6 +660,7 @@ describe("App", () => {
     fireEvent.click(await screen.findByRole("button", { name: "talk" }));
     fireEvent.change(await screen.findByLabelText("How many"), { target: { value: "5" } });
     fireEvent.change(screen.getByLabelText("Length"), { target: { value: "30" } });
+    await openTab("Publish");
     fireEvent.click(screen.getByRole("button", { name: "Make shorts" }));
     expect(invoke).toHaveBeenCalledWith("project:shorts", { id: "p1", count: 5, seconds: 30 });
     emit("job", { projectId: "p1", jobId: "j5", kind: "shorts", label: "Finding shorts", state: "running", fraction: null });
