@@ -130,11 +130,23 @@ body {
 }
 
 .agents__item {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.agents__row {
   display: flex;
   align-items: center;
   gap: var(--space-4);
-  padding: var(--space-3) 0;
-  border-bottom: 1px solid var(--color-border);
+}
+
+.agents__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
 }
 
 .agents__text {
@@ -157,6 +169,75 @@ body {
   line-height: var(--leading-caption);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Connect asks first: the entry it will write, on a strip of surface. */
+.agents__confirm {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-panel);
+  background: var(--color-surface);
+}
+
+.agents__ask {
+  margin: 0;
+  font-size: var(--text-callout);
+  line-height: var(--leading-callout);
+  font-weight: var(--font-weight-semibold);
+}
+
+.agents__file {
+  font-weight: var(--font-weight-medium);
+  overflow-wrap: anywhere;
+}
+
+.agents__code {
+  margin: 0;
+  padding: var(--space-3);
+  overflow: auto;
+  max-height: calc(var(--space-9) * 2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-background);
+  font: inherit;
+  font-size: var(--text-caption);
+  line-height: var(--leading-caption);
+  font-variant-numeric: tabular-nums;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* The connection check: one line per thing proved, or not. */
+.steps {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.steps__item,
+.steps__running {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.steps__icon {
+  flex: none;
+  margin-top: calc(var(--space-1) / 2);
+}
+
+.steps__item--waiting,
+.steps__item--skipped,
+.steps__running {
+  color: var(--color-text-muted);
+}
+
+.steps__item--failed {
+  color: var(--color-danger);
 }
 
 /* Recorder: what to record, a preview of it, the devices, then Record. */

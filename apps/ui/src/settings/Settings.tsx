@@ -1,19 +1,13 @@
-import type { McpAgentIdValue, McpAgentValue, UpdateStatusValue } from "@clipcat/ipc";
-import { ArrowLeft, Download, FileArchive, FolderOpen, Plug, RefreshCw, RotateCw, Unplug } from "lucide-react";
-import { useEffect, useState } from "react";
+import type { UpdateStatusValue } from "@clipcat/ipc";
+import { ArrowLeft, Download, FileArchive, FolderOpen, RefreshCw, RotateCw } from "lucide-react";
+import { useState } from "react";
 import { bridge } from "../bridge";
 import { ICON_STROKE } from "../icons";
+import { Agents } from "./Agents";
 
 type Props = { update: UpdateStatusValue | null; onBack: () => void };
 
 const message = (e: unknown) => (e instanceof Error ? e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, "") : String(e));
-
-/** What a row says about an agent: connected, ready to connect, or not on this computer. */
-function state(agent: McpAgentValue): string {
-  if (agent.connected) return "Connected. Restart it to pick up ClipCat's tools.";
-  if (agent.unavailable) return agent.unavailable;
-  return agent.detected ? "Not connected." : "Not found on this computer. You can still connect it for later.";
-}
 
 /** One sentence on where updating stands. */
 function updateText(u: UpdateStatusValue | null): string {
@@ -42,26 +36,9 @@ function updateText(u: UpdateStatusValue | null): string {
  * make edits while ClipCat is open.
  */
 export function Settings({ update, onBack }: Props) {
-  const [agents, setAgents] = useState<McpAgentValue[] | null>(null);
-  const [busy, setBusy] = useState<McpAgentIdValue | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    bridge()
-      ?.invoke("mcp:status")
-      .then(setAgents, (e: unknown) => setError(message(e)));
-  }, []);
-
-  const toggle = (agent: McpAgentValue) => {
-    setError(null);
-    setBusy(agent.id);
-    bridge()
-      ?.invoke("mcp:connect", { agent: agent.id, connect: !agent.connected })
-      .then(setAgents, (e: unknown) => setError(message(e)))
-      .finally(() => setBusy(null));
-  };
 
   const saveDiagnostics = () => {
     setError(null);
@@ -89,38 +66,7 @@ export function Settings({ update, onBack }: Props) {
             Connect an agent and, while ClipCat is open, it can read your transcripts, cut words, accept suggested edits, add punch-ins, b-roll and
             sounds, and start exports. Every change shows up here and can be undone.
           </p>
-          {error && (
-            <p className="notice notice--danger" role="alert">
-              {error}
-            </p>
-          )}
-          <ul className="agents" aria-label="Coding agents">
-            {(agents ?? []).map((agent) => (
-              <li key={agent.id} className="agents__item">
-                <div className="agents__text">
-                  <span className="agents__name">{agent.label}</span>
-                  <span className="agents__state">{state(agent)}</span>
-                  <span className="agents__path" title={agent.config}>
-                    {agent.config}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  className={agent.connected ? "button" : "button button--primary"}
-                  disabled={busy !== null || (!agent.connected && agent.unavailable !== null)}
-                  aria-label={`${agent.connected ? "Disconnect" : "Connect"} ${agent.label}`}
-                  onClick={() => toggle(agent)}
-                >
-                  {agent.connected ? (
-                    <Unplug className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
-                  ) : (
-                    <Plug className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
-                  )}
-                  {busy === agent.id ? "Saving…" : agent.connected ? "Disconnect" : "Connect"}
-                </button>
-              </li>
-            ))}
-          </ul>
+          <Agents />
           <p className="settings__hint">
             Then ask it something like "In ClipCat, cut the filler words from my newest project" or "Export my launch video as a vertical short".
           </p>
@@ -174,6 +120,11 @@ export function Settings({ update, onBack }: Props) {
               Show the log
             </button>
           </div>
+          {error && (
+            <p className="notice notice--danger" role="alert">
+              {error}
+            </p>
+          )}
           {saved && <p className="settings__hint">Saved {saved.split(/[\\/]/).at(-1)}.</p>}
         </section>
       </main>
