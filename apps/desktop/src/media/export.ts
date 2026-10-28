@@ -7,6 +7,7 @@
 // however many cuts there are.
 
 import {
+  MUSIC,
   PUNCH,
   type Project,
   type Source,
@@ -14,6 +15,7 @@ import {
   type Timeline,
   type TimelineItem,
   type TimedPunch,
+  type TimedSound,
   cropOffset,
   framingAt,
   overlayBox,
@@ -327,9 +329,66 @@ export function chunkCommand(plan: ChunkPlan): { graph: string; args: string[] }
   return { graph: `${lines.join(";\n")}\n`, args };
 }
 
-export type AudioPlan = Shape & { timeline: FramedTimeline };
+export type AudioPlan = Shape & {
+  timeline: FramedTimeline;
+  /** Sound effects in play order (see timedSounds), with each effect's file and how far into it the sound lands. */
+  sounds?: { cues: TimedSound[]; files: Map<string, string>; hits: Map<string, number> };
+  /** Music under the whole video: the file, how loud, and whether it dips under speech. */
+  music?: { file: string; volume: number; duck: boolean } | null;
+};
 
-/** The sound for the whole edit in one pass: every range cut by sample, joined, then sped up or slowed. */
+/**
+ * Lays the effects and music under the speech: each effect placed so the
+ * sound lands on its moment, the music looped to the length, faded in and
+ * out and (when asked) pressed down while someone speaks, all mixed at their
+ * own levels and kept off the ceiling by a limiter. Only used when there
+ * is one or the other, so speech alone is left untouched.
+ */
+function bedLines(plan: AudioPlan, args: string[], firstInput: number, speech: string): string[] {
+  const cues = plan.sounds?.cues ?? [];
+  const music = plan.music ?? null;
+  const lines: string[] = [];
+  const format = `aformat=sample_rates=${SAMPLE_RATE}:channel_layouts=stereo`;
+  const effects = [...new Set(cues.map((c) => c.effect))];
+  const mix: string[] = [];
+  let input = firstInput;
+  const speechOut = music?.duck ? "[sp]" : speech;
+  effects.forEach((effect, e) => {
+    const file = plan.sounds!.files.get(effect);
+    if (!file) throw new Error(`No file for the sound effect "${effect}"`);
+    args.push("-i", file);
+    const mine = cues.filter((c) => c.effect === effect);
+    lines.push(`[${input++}:a:0]${format},asplit=${mine.length}${mine.map((_, k) => `[e${e}c${k}]`).join("")}`);
+    mine.forEach((cue, k) => {
+      // Placed so the hit (a whoosh's peak, a riser's end) falls on the word; one that would start before the video starts late into its file.
+      const start = cue.time - (plan.sounds!.hits.get(effect) ?? 0);
+      const skip = start < 0 ? `atrim=start=${sec(-start)},asetpts=PTS-STARTPTS,` : "";
+      const delay = Math.round(Math.max(0, start) * 1000);
+      lines.push(`[e${e}c${k}]${skip}volume=${cue.volume.toFixed(3)},adelay=${delay}:all=1[x${e}_${k}]`);
+      mix.push(`[x${e}_${k}]`);
+    });
+  });
+  if (music) {
+    const d = plan.timeline.duration;
+    args.push("-stream_loop", "-1", "-i", music.file);
+    const fadeOut = Math.min(MUSIC.fadeOut, d / 2);
+    lines.push(
+      `[${input++}:a:0]${format},atrim=0:${sec(d)},asetpts=PTS-STARTPTS,afade=t=in:d=${Math.min(MUSIC.fadeIn, d / 2)},afade=t=out:st=${sec(d - fadeOut)}:d=${fadeOut},volume=${music.volume.toFixed(3)}[mus]`,
+    );
+    if (music.duck) {
+      lines.push(`${speech}asplit=2[sp][key]`);
+      lines.push("[mus][key]sidechaincompress=threshold=0.02:ratio=6:attack=30:release=400[bed]");
+      mix.push("[bed]");
+    } else {
+      mix.push("[mus]");
+    }
+  }
+  // The speech comes first, so the mix lasts exactly as long as it does.
+  lines.push(`${speechOut}${mix.join("")}amix=inputs=${mix.length + 1}:duration=first:dropout_transition=0:normalize=0,alimiter=limit=0.95:level=false[outa]`);
+  return lines;
+}
+
+/** The sound for the whole edit in one pass: every range cut by sample, joined, then sped up or slowed, with any effects and music laid under it. */
 export function audioCommand(plan: AudioPlan): { graph: string; args: string[] } {
   const { timeline, fps, project } = plan;
   const step = frameStep(fps, project.speed);
@@ -353,7 +412,10 @@ export function audioCommand(plan: AudioPlan): { graph: string; args: string[] }
     lines.push(`[s${i}a${b}]atrim=start_sample=${a}:end_sample=${e},asetpts=PTS-STARTPTS[a${k}]`);
     parts.push(`[a${k}]`);
   });
-  lines.push(`${parts.join("")}concat=n=${parts.length}:v=0:a=1${project.speed === 1 ? "[outa]" : `[ca];\n[ca]atempo=${project.speed}[outa]`}`);
+  const bed = (plan.sounds?.cues.length ?? 0) > 0 || plan.music;
+  const speech = bed ? "[speech]" : "[outa]";
+  lines.push(`${parts.join("")}concat=n=${parts.length}:v=0:a=1${project.speed === 1 ? speech : `[ca];\n[ca]atempo=${project.speed}${speech}`}`);
+  if (bed) lines.push(...bedLines(plan, args, used.length, speech));
   args.push("-filter_complex_script", plan.graphFile, "-map", "[outa]", "-vn", "-c:a", "aac", "-b:a", "192k", plan.out);
   return { graph: `${lines.join(";\n")}\n`, args };
 }

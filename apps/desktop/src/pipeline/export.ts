@@ -8,7 +8,7 @@
 import { createHash } from "node:crypto";
 import { access, copyFile, mkdir, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join } from "node:path";
-import { type Asset, type Project, buildTimeline, captionCues, outputWords, timedOverlays, timedPunches, toAss, toSrt } from "@clipcat/core";
+import { type Asset, type Project, SOUND_EFFECTS, buildTimeline, captionCues, outputWords, timedOverlays, timedPunches, timedSounds, toAss, toSrt } from "@clipcat/core";
 import type { JobContext, JobQueue } from "../jobs/queue";
 import type { Encoder } from "../media/encoders";
 import {
@@ -23,6 +23,7 @@ import {
   frameTimeline,
   muxArgs,
 } from "../media/export";
+import { soundFile } from "../sound/library";
 import type { ProjectStore } from "../store/projects";
 
 export type ExportDeps = {
@@ -35,6 +36,8 @@ export type ExportDeps = {
   encoder: () => Promise<Encoder>;
   /** The bundled caption fonts. */
   fontsDir: string;
+  /** The bundled sound effects. */
+  sfxDir: string;
   /** Output seconds per video chunk; tests make it small. */
   chunkSeconds?: number;
   /** Renders a slide's video, with transparency, at `out` (absolute). */
@@ -144,8 +147,19 @@ export class ExportRunner {
         await this.deps.ffmpeg(args, { cwd: work, duration, ctx: part });
       };
 
-      // Sound first (quick), then the picture chunk by chunk, then the join.
-      await ffmpeg(audioCommand({ ...shape, timeline, out: "audio.m4a" }), timeline.duration, 0, AUDIO_SHARE);
+      // Sound first (quick), with its effects and music, then the picture chunk by chunk, then the join.
+      const sounds = {
+        cues: timedSounds(project, timeline),
+        files: new Map(SOUND_EFFECTS.map((e) => [e.id, soundFile(this.deps.sfxDir, e.id)])),
+        hits: new Map(SOUND_EFFECTS.map((e) => [e.id, e.hit])),
+      };
+      const music = project.music && {
+        // The original, or the copy made for the preview when the original has moved.
+        file: (await exists(project.music.path)) || !project.music.prep ? project.music.path : join(store.dir(projectId), project.music.prep),
+        volume: project.music.volume,
+        duck: project.music.duck,
+      };
+      await ffmpeg(audioCommand({ ...shape, timeline, sounds, music, out: "audio.m4a" }), timeline.duration, 0, AUDIO_SHARE);
       const chunks = exportChunks(timeline, Math.max(1, Math.round((this.deps.chunkSeconds ?? CHUNK_SECONDS) * fps)));
       const files = chunks.map((_, i) => `chunk-${String(i).padStart(3, "0")}.mp4`);
       done.chunks = chunks.length;

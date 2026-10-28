@@ -1,6 +1,6 @@
 // ClipCat's main process: one window, the UI on app://clipcat, prepared media
-// on media://, and the IPC handlers. All media work lives here, never in the
-// renderer.
+// on media://, sound effects on sound://, and the IPC handlers. All media
+// work lives here, never in the renderer.
 
 import { BrowserWindow, app, dialog, nativeTheme, safeStorage, shell } from "electron";
 import { randomUUID } from "node:crypto";
@@ -18,14 +18,16 @@ import { type Binary, binaryPath, probeVersion } from "./tools";
 import { broadcast, registerIpc } from "./ipc";
 import { JobQueue } from "./jobs/queue";
 import { IMAGE_EXTENSIONS, VIDEO_EXTENSIONS } from "./media/assets";
+import { MUSIC_EXTENSIONS } from "./media/music";
 import { encoderTestArgs, lazyEncoder, pickEncoder } from "./media/encoders";
 import { runFfmpeg } from "./media/run";
 import { closeFaceDetector, faceDetector, faceDetectorProblem, setFacePage } from "./faceDetector";
 import { AssetPipeline } from "./pipeline/assets";
-import { realAssetDeps, realDeps } from "./pipeline/deps";
+import { realAssetDeps, realDeps, realMusicDeps } from "./pipeline/deps";
 import { ExportRunner } from "./pipeline/export";
 import { ImportPipeline } from "./pipeline/import";
-import { APP_ORIGIN, registerSchemes, serveMedia, serveSlides, serveUi } from "./protocol";
+import { MusicPipeline } from "./pipeline/music";
+import { APP_ORIGIN, registerSchemes, serveMedia, serveSlides, serveSounds, serveUi } from "./protocol";
 import { SLIDE_COLORS, SLIDE_CSP, SLIDE_FONTS, fontFaces, slidePage } from "./slides/page";
 import { renderStills, renderVideo } from "./slides/render";
 import { handleSquirrelEvent } from "./squirrel";
@@ -88,6 +90,7 @@ const MODEL: ModelId = process.env.CLIPCAT_MODEL === "base" ? "base" : "large-v3
 const hostEnv = hydrateEnv();
 
 const FONTS_DIR = app.isPackaged ? join(process.resourcesPath, "fonts") : join(REPO_ROOT, "apps", "desktop", "resources", "fonts");
+const SFX_DIR = app.isPackaged ? join(process.resourcesPath, "sfx") : join(REPO_ROOT, "apps", "desktop", "resources", "sfx");
 
 /** Slides being designed, served on slide://draft/<token> while their stills render. */
 const drafts = new Map<string, string>();
@@ -167,6 +170,7 @@ function startPipeline() {
     changed,
     describe: (id) => analysis.describe(id),
   });
+  const music = new MusicPipeline({ ...realMusicDeps({ ffmpeg: tool("ffmpeg"), ffprobe: tool("ffprobe") }), store, queue, changed });
   const exporter = new ExportRunner({
     store,
     queue,
@@ -175,10 +179,11 @@ function startPipeline() {
       runFfmpeg(tool("ffmpeg"), args, { cwd, duration, onProgress: (f) => ctx.progress(f), signal: ctx.signal }),
     encoder,
     fontsDir: FONTS_DIR,
+    sfxDir: SFX_DIR,
     renderSlide: (projectId, asset, size, fps, out, ctx) =>
       renderVideo(tool("ffmpeg"), `slide://${projectId}/${asset.id}`, size, fps, asset.media.duration, out, { signal: ctx.signal, progress: (f) => ctx.progress(f) }),
   });
-  return { store, settings, keys, queue, pipeline, media, analysis, exporter };
+  return { store, settings, keys, queue, pipeline, media, music, analysis, exporter };
 }
 
 /** A file name from the video's title: no characters Windows or macOS refuse. */
@@ -233,7 +238,7 @@ if (!squirrelLaunch) {
   if (!app.requestSingleInstanceLock()) app.quit();
 
   app.whenReady().then(() => {
-    const { store, settings, keys, queue, pipeline, media, analysis, exporter } = startPipeline();
+    const { store, settings, keys, queue, pipeline, media, music, analysis, exporter } = startPipeline();
     const aiStatus = async () => {
       const host = await hostEnv;
       const [claude, codex, current, key] = await Promise.all([probeClaude(host), probeCodex(host), settings.get(), keys.get()]);
@@ -242,6 +247,7 @@ if (!squirrelLaunch) {
     serveUi(UI_ROOT);
     setFacePage(DEV_URL ? new URL("faces.html", DEV_URL).toString() : `${APP_ORIGIN}/faces.html`);
     serveMedia((id) => store.dir(id));
+    serveSounds(SFX_DIR);
     serveSlides(async (host, id) => {
       if (host === "draft") return drafts.get(id) ?? null;
       const slide = (await store.get(host)).assets.find((a) => a.id === id)?.slide;
@@ -285,6 +291,20 @@ if (!squirrelLaunch) {
           const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);
           return result.canceled ? [] : result.filePaths;
         },
+        "music:pick": async (_, event) => {
+          const win = BrowserWindow.fromWebContents(event.sender);
+          const options: Electron.OpenDialogOptions = {
+            title: "Add music",
+            properties: ["openFile"],
+            filters: [
+              { name: "Music", extensions: MUSIC_EXTENSIONS },
+              { name: "All files", extensions: ["*"] },
+            ],
+          };
+          const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);
+          return result.canceled ? null : (result.filePaths[0] ?? null);
+        },
+        "project:set-music": ({ id, file }) => music.set(id, file),
         "project:import": ({ projectId, files }) => pipeline.import(files, projectId),
         "project:add-media": ({ id, files }) => media.add(id, files),
         "project:get": ({ id }) => store.get(id),
@@ -321,6 +341,7 @@ if (!squirrelLaunch) {
           const next = await store.update(id, revision, (p) => applyEdit(p, op, () => `g${randomUUID().slice(0, 8)}`));
           broadcast("project:changed", { id, revision: next.revision });
           if (op.type === "remove-asset") void media.forget(id, op.assetId);
+          if (op.type === "remove-music") void music.forget(id);
           if (op.type === "slide" || op.type === "describe") void analysis.designMissing(id);
           return next;
         },
@@ -348,7 +369,7 @@ if (!squirrelLaunch) {
       DEV_URL,
     );
     if (isSmokeRun()) startSmokeTimer();
-    else void pipeline.resume().then(() => media.resume());
+    else void pipeline.resume().then(() => media.resume()).then(() => music.resume());
     createWindow();
   });
 

@@ -7,15 +7,16 @@ import { mkdtemp, readFile, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { applyEdit, buildTimeline, defaultOverlay, overlayBox, overlayProposal, punchProposal, slideAsset, timedOverlays } from "@clipcat/core";
+import { applyEdit, buildTimeline, defaultOverlay, overlayBox, overlayProposal, punchProposal, slideAsset, soundProposal, timedOverlays, timedSounds } from "@clipcat/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { JobQueue, type JobEvent } from "../jobs/queue";
 import { runFfmpeg } from "../media/run";
 import { ProjectStore } from "../store/projects";
 import { AssetPipeline } from "./assets";
-import { realAssetDeps, realDeps } from "./deps";
+import { realAssetDeps, realDeps, realMusicDeps } from "./deps";
 import { ExportRunner, srtPath } from "./export";
 import { ImportPipeline } from "./import";
+import { MusicPipeline } from "./music";
 
 const binDir = process.env.CLIPCAT_TEST_FFMPEG;
 const exe = (name: string) => join(binDir ?? "", process.platform === "win32" ? `${name}.exe` : name);
@@ -135,6 +136,7 @@ describe.skipIf(!binDir)("prep with real ffmpeg", () => {
         runFfmpeg(exe("ffmpeg"), args, { cwd, duration, signal: ctx.signal }),
       encoder: sw,
       fontsDir: join(__dirname, "..", "..", "resources", "fonts"),
+      sfxDir: join(__dirname, "..", "..", "resources", "sfx"),
     };
     const exporter = new ExportRunner(deps);
     const ctx = { signal: new AbortController().signal, progress: () => {} };
@@ -228,6 +230,7 @@ describe.skipIf(!binDir)("prep with real ffmpeg", () => {
         runFfmpeg(exe("ffmpeg"), args, { cwd, duration, signal: ctx.signal }),
       encoder: sw,
       fontsDir: join(__dirname, "..", "..", "resources", "fonts"),
+      sfxDir: join(__dirname, "..", "..", "resources", "sfx"),
     };
     // Chunks of a second, so b-roll is cut across chunks too.
     const out = join(root, "broll.mp4");
@@ -284,6 +287,7 @@ describe.skipIf(!binDir)("prep with real ffmpeg", () => {
         runFfmpeg(exe("ffmpeg"), args, { cwd, duration, signal: ctx.signal }),
       encoder: sw,
       fontsDir: join(__dirname, "..", "..", "resources", "fonts"),
+      sfxDir: join(__dirname, "..", "..", "resources", "sfx"),
       renderSlide,
     };
     const out = join(root, "slide.mp4");
@@ -308,5 +312,51 @@ describe.skipIf(!binDir)("prep with real ffmpeg", () => {
     expect(cardColour(await pixel(mid, 100, 360))).toBe(true);
     expect(cardColour(await pixel(mid, 1180, 360))).toBe(false);
     expect(cardColour(await pixel(card!.end + 0.3, 100, 360))).toBe(false);
+  }, 180_000);
+
+  it("mixes a sound effect and ducked music under the speech", async () => {
+    expect(projectId).not.toBe("");
+    const s = (await store.get(projectId)).sources[0]!.id;
+    await store.update(projectId, null, (q) => {
+      q.proposals = q.proposals.filter((x) => !x.overlay);
+      q.proposals.push(soundProposal({ id: "fx1", sourceId: s, wordIds: [], reason: "", confidence: 1, status: "accepted" }, { at: 0.5, effect: "boom", volume: 1 }));
+    });
+    // A high tone the recording doesn't have, so the music is easy to hear in the export.
+    const song = join(root, "song.flac");
+    await run(exe("ffmpeg"), ["-hide_banner", "-y", "-f", "lavfi", "-i", "sine=f=2000:d=2.5,volume=0.8", "-ac", "2", song]);
+    const events: JobEvent[] = [];
+    const music = new MusicPipeline({ ...realMusicDeps({ ffmpeg: exe("ffmpeg"), ffprobe: exe("ffprobe") }), store, queue: new JobQueue((e) => events.push(e)), changed: () => {} });
+    await music.set(projectId, song);
+    for (let i = 0; i < 200 && !events.some((e) => e.state === "done" || e.state === "failed"); i++) await new Promise((r) => setTimeout(r, 50));
+    const q = await store.get(projectId);
+    expect(q.music).toMatchObject({ name: "song.flac", duck: true });
+    expect(q.music!.duration).toBeCloseTo(2.5, 1);
+    expect((await stat(join(store.dir(projectId), q.music!.prep!))).size).toBeGreaterThan(1000);
+
+    const deps = {
+      store,
+      queue: new JobQueue(() => {}),
+      changed: () => {},
+      ffmpeg: (args: string[], { cwd, duration, ctx }: { cwd: string; duration: number; ctx: { signal: AbortSignal } }) =>
+        runFfmpeg(exe("ffmpeg"), args, { cwd, duration, signal: ctx.signal }),
+      encoder: sw,
+      fontsDir: join(__dirname, "..", "..", "resources", "fonts"),
+      sfxDir: join(__dirname, "..", "..", "resources", "sfx"),
+    };
+    const out = join(root, "sound.mp4");
+    await new ExportRunner(deps).run(projectId, "16:9", out, { signal: new AbortController().signal, progress: () => {} });
+    const streams = await streamDurations(out);
+    expect(Math.abs(streams.video - streams.audio)).toBeLessThan(0.05);
+
+    /** The loudest moment, in dB, of one band of a stretch of a file's sound. */
+    const peak = async (file: string, from: number, to: number, band: string) => {
+      const { stderr } = await run(exe("ffmpeg"), ["-hide_banner", "-ss", from.toFixed(3), "-to", to.toFixed(3), "-i", file, "-vn", "-af", `${band},volumedetect`, "-f", "null", "-"]);
+      return Number(/max_volume: (-?[\d.]+|-inf) dB/.exec(stderr)?.[1] ?? Number.NEGATIVE_INFINITY);
+    };
+    const [boom] = timedSounds(q, buildTimeline(q));
+    const plain = join(root, "wide.mp4");
+    // The boom's low thump at its moment, and the music past the end of its file, looped.
+    expect((await peak(out, boom!.time, boom!.time + 0.4, "lowpass=f=120")) - (await peak(plain, boom!.time, boom!.time + 0.4, "lowpass=f=120"))).toBeGreaterThan(12);
+    expect((await peak(out, 2.6, 3.0, "highpass=f=1500")) - (await peak(plain, 2.6, 3.0, "highpass=f=1500"))).toBeGreaterThan(12);
   }, 180_000);
 });

@@ -94,6 +94,10 @@ export const methods = {
   "media:pick": { input: z.void(), output: z.array(z.string()) },
   /** Adds pictures and videos to a project's b-roll media, then prepares and describes them. */
   "project:add-media": { input: ProjectRef.extend({ files: Files }), output: Project },
+  /** Asks for a music file; resolves with its path, or null when cancelled. */
+  "music:pick": { input: z.void(), output: z.string().nullable() },
+  /** Puts the music file under the video (replacing any), and queues a copy for the preview. */
+  "project:set-music": { input: ProjectRef.extend({ file: z.string().min(1).max(4096) }), output: Project },
   /** Adds files to a project (a new one when projectId is null) and starts processing them. */
   "project:import": { input: z.object({ projectId: z.string().regex(/^[a-zA-Z0-9-]+$/).nullable(), files: Files }), output: Project },
   "project:get": { input: ProjectRef, output: Project },

@@ -35,8 +35,8 @@ const config = {
       !path.startsWith("/dist/") &&
       path !== "/ui" &&
       !path.startsWith("/ui/"),
-    // bin is staged by the prePackage hook; both end up in Resources (bin/, fonts/).
-    extraResource: [join(STAGE, "bin"), join(__dirname, "resources", "fonts")],
+    // bin is staged by the prePackage hook; both end up in Resources (bin/, fonts/, sfx/).
+    extraResource: [join(STAGE, "bin"), join(__dirname, "resources", "fonts"), join(__dirname, "resources", "sfx")],
     osxSign: process.env.SKIP_SIGN ? undefined : {},
     osxNotarize:
       process.env.APPLE_ID && process.env.APPLE_PASSWORD && process.env.APPLE_TEAM_ID

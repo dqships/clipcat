@@ -123,6 +123,19 @@ playhead and the export renders it frame by frame into a video with
 transparency, once per design and shape. Editing the brief in the B-roll
 panel has it designed again.
 
+Sound effects come from a small library that ships with the app (a whoosh,
+a pop, a ding, a riser and nine more), synthesized by `scripts/make-sfx.mjs`
+so they are ClipCat's own. Each one says what it means, and the AI editor
+reads those meanings to season the edit: at most one effect every 15 seconds,
+never two within 1.5 seconds, each on the word it belongs to. You can land
+one yourself by selecting words and picking from "Sound…", and set how loud
+each plays in the Sound panel, where the library can be listened through.
+Music goes under the whole video from any audio file: it loops to the
+length, fades in and out, and dips while someone speaks (a sidechain
+compressor in the export; the preview approximates it). The export places
+each effect so its hit lands on the word, and mixes speech, effects and
+music with a limiter on top.
+
 Editing happens in the transcript: click a word to jump there, shift-click to
 select a run, and press Delete to cut it (again to restore). Suggested cuts,
 from the pause finder and from Claude, are accepted or rejected under the

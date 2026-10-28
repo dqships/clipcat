@@ -11,6 +11,7 @@ import {
   type Asset,
   type Project,
   SLIDE,
+  SOUND_EFFECTS,
   type SlideLook,
   type Word,
   isWordKept,
@@ -43,7 +44,7 @@ const JSON_ONLY = "Don't run commands or read files; everything you need is belo
 
 export const ANALYSIS_TASK: AgentTask = {
   tool: "submit_analysis",
-  description: "Submit the cut, punch-in, b-roll and slide proposals for this video. Call once with every proposal; if problems come back, fix them and call again.",
+  description: "Submit the cut, punch-in, b-roll, slide and sound proposals for this video. Call once with every proposal; if problems come back, fix them and call again.",
   shape: AgentAnalysis.shape,
   jsonSchema: {
     type: "object",
@@ -55,9 +56,9 @@ export const ANALYSIS_TASK: AgentTask = {
         items: {
           type: "object",
           additionalProperties: false,
-          required: ["type", "from", "to", "keepFrom", "keepTo", "punchStyle", "media", "placement", "brief", "look", "reason", "confidence"],
+          required: ["type", "from", "to", "keepFrom", "keepTo", "punchStyle", "media", "placement", "brief", "look", "sound", "reason", "confidence"],
           properties: {
-            type: { type: "string", enum: ["retake", "cleanup", "tighten", "punch-in", "visual", "slide"] },
+            type: { type: "string", enum: ["retake", "cleanup", "tighten", "punch-in", "visual", "slide", "sound"] },
             from: { type: "integer" },
             to: { type: "integer" },
             keepFrom: { type: ["integer", "null"] },
@@ -67,6 +68,7 @@ export const ANALYSIS_TASK: AgentTask = {
             placement: { type: ["string", "null"], enum: ["full", "pip", null] },
             brief: { type: ["string", "null"] },
             look: { type: ["string", "null"], enum: ["paper", "ink", "overlay", null] },
+            sound: { type: ["string", "null"] },
             reason: { type: "string" },
             confidence: { type: "number" },
           },
@@ -77,7 +79,7 @@ export const ANALYSIS_TASK: AgentTask = {
   },
   toolAnswer:
     "Call submit_analysis once with every proposal. If it reports problems, fix them and call it again with the whole analysis. Once it says the analysis is saved, stop. Don't write anything else.",
-  jsonAnswer: `Answer with only the JSON object the output schema describes: every proposal, and suggestedTitle. Use null for keepFrom and keepTo except on retakes, for punchStyle except on punch-ins, for media and placement except on b-roll, and for brief and look except on slides. ${JSON_ONLY}`,
+  jsonAnswer: `Answer with only the JSON object the output schema describes: every proposal, and suggestedTitle. Use null for keepFrom and keepTo except on retakes, for punchStyle except on punch-ins, for media and placement except on b-roll, for brief and look except on slides, and for sound except on sounds. ${JSON_ONLY}`,
 };
 
 export const CORRECTIONS_TASK: AgentTask = {
@@ -234,7 +236,7 @@ Rules:
 - reason: one sentence the user reads: the hook and why it stands alone.
 - Follow the user's brief when there is one.`;
 
-export const EDITOR_PROMPT = `You are ClipCat's editor. You read the transcript of a talking-head recording and propose cuts that make it tight and watchable, punch-ins that give its best lines weight, b-roll from the user's own media, and motion slides. You never change anything yourself: every proposal is shown to the user, who accepts or rejects it.
+export const EDITOR_PROMPT = `You are ClipCat's editor. You read the transcript of a talking-head recording and propose cuts that make it tight and watchable, punch-ins that give its best lines weight, b-roll from the user's own media, motion slides and sound effects. You never change anything yourself: every proposal is shown to the user, who accepts or rejects it.
 
 Words are numbered [n] across the whole project. Ranges are inclusive word indices.
 
@@ -244,6 +246,7 @@ Proposal types:
 - tighten: a tangent or a rambling stretch that can go without losing anything the viewer needs. Be conservative.
 - punch-in: not a cut. The picture zooms toward the speaker over from..to to give a line weight: the key claim, a punchline, a number worth remembering. from..to covers the words that land it, 1.5 to 8 seconds. Set punchStyle: "cut" snaps in (a punchline or a blunt statement), "zoom-in" pushes in quickly (a key point), "slow-zoom" creeps in over the range (a story building to its point).
 - slide: not a cut. A motion slide ClipCat designs from your brief and shows full-frame over from..to: a title card for a new section, a list of steps as they're named, a number or a short quote worth seeing. from..to covers the words it goes with, ${SLIDE.min} to ${SLIDE.max} seconds. Set brief to exactly what the slide says, in order, in a few words (a heading and up to four short lines), and look: "paper" (ink on warm paper) or "ink" (paper on ink) for a full card, or "overlay" for a short label over the speaker, such as a name or a key term.
+- sound: not a cut. A sound effect from the list after the transcript plays as word from is spoken (to = from). Set sound to its id; pick the one whose meaning fits the moment.
 - visual: b-roll, not a cut. One of the user's media items (listed after the transcript, if there are any) shows over from..to while the speaker keeps talking. Set media to its number and placement: "full" covers the whole frame (the speaker is heard, not seen), "pip" shows it in a window in the corner beside the speaker. from..to covers the words it illustrates, 1.5 to 15 seconds.
 
 Rules:
@@ -252,9 +255,10 @@ Rules:
 - Cut proposals must not overlap each other, and punch-ins must not overlap each other or sit on words you propose to cut.
 - Punch-ins are seasoning: at most one every 10 seconds of the finished video, with at least 6 seconds without one in between. Fewer, well-placed ones are better; skip them in a video that has no line that needs one.
 - Use b-roll only where a media item's description matches what is being said, and never two over the same words. Each item can be used more than once, but don't. With no media list, propose no b-roll.
+- Sound effects are seasoning too: at most one every 15 seconds, on a moment that earns it (a transition, a reveal, a list item appearing, a punchline), and none in a video where they'd feel silly. Never two within 1.5 seconds.
 - Slides are b-roll too: never over the same words as other b-roll. Use them where seeing the words helps: at most one every 30 seconds, and none in a video that doesn't need them.
 - reason: one short sentence the user reads in the editor, e.g. "Second take is complete; first stumbles".
-- confidence: 0 to 1, how sure you are the user wants this cut, punch-in, b-roll or slide.
+- confidence: 0 to 1, how sure you are the user wants this cut, punch-in, b-roll, slide or sound.
 - suggestedTitle: a short, plain title for the finished video.
 - Follow the user's brief when there is one.`;
 
@@ -334,6 +338,9 @@ export function analysisPrompt(project: Pick<Project, "sources" | "transcript" |
     "",
     numberedTranscript(project),
     ...(media.length > 0 ? ["", "## Media for b-roll", mediaList(media)] : []),
+    "",
+    "## Sound effects",
+    ...SOUND_EFFECTS.map((e) => `[${e.id}] ${e.meaning}`),
   ].join("\n");
 }
 

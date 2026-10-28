@@ -3,8 +3,9 @@
 // and the bundled tools ran, 1 when one didn't, 2 when the UI never drew.
 // With CLIPCAT_SMOKE_IMPORT=<file> it also imports that file and waits for
 // prep, transcription and silence analysis, then exports it as 9:16 with
-// captions and a motion slide over its start (rendered in the hidden
-// offscreen window, as a real export does); a failed step is a 1, and so is an empty transcript when
+// captions, a motion slide over its start (rendered in the hidden offscreen
+// window, as a real export does) and a sound effect from the shipped
+// library; a failed step is a 1, and so is an empty transcript when
 // CLIPCAT_SMOKE_EXPECT_WORDS=1. The report says whether the face detector
 // runs and how many frames had a face. CI runs this against the
 // packaged app on macOS and Windows.
@@ -13,7 +14,7 @@ import { app } from "electron";
 import { writeFileSync } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
-import { defaultOverlay, overlayProposal, slideAsset } from "@clipcat/core";
+import { defaultOverlay, overlayProposal, slideAsset, soundProposal } from "@clipcat/core";
 import type { AiStatusValue, AppInfoValue, JobEventValue } from "@clipcat/ipc";
 import type { JobQueue } from "./jobs/queue";
 import type { ExportRunner } from "./pipeline/export";
@@ -65,12 +66,12 @@ export function recordSmokeJob(event: JobEventValue): void {
   if (event.state === "failed") failures.push(`${event.kind}: ${event.error ?? "failed"}`);
 }
 
-/** A designed slide, shown over the first two seconds, so the export renders it. */
+/** A designed slide, shown over the first two seconds, so the export renders it, and a whoosh at its start. */
 const SMOKE_SLIDE = `<style>.t{position:absolute;left:8vw;top:30vh;font-size:12vw;animation:in var(--spring-duration) var(--spring) both}
 .tape{position:absolute;left:8vw;top:45vh;width:40vw;height:2vh;background:var(--tape);transform-origin:left;animation:wipe .5s var(--spring) both .2s}
 @keyframes in{from{opacity:0;transform:translateY(3vh)}}@keyframes wipe{from{transform:scaleX(0)}}</style><div class="t">Smoke</div><div class="tape"></div>`;
 
-async function addSmokeSlide(store: ProjectStore, projectId: string): Promise<void> {
+async function addSmokeExtras(store: ProjectStore, projectId: string): Promise<void> {
   await store.update(projectId, null, (p) => {
     const source = p.sources[0];
     if (!source) return;
@@ -81,11 +82,12 @@ async function addSmokeSlide(store: ProjectStore, projectId: string): Promise<vo
     p.assets.push(card);
     p.proposals.push(
       overlayProposal({ id: "smoke-slide", sourceId: source.id, wordIds: [], reason: "", confidence: 1, status: "accepted" }, defaultOverlay([0, end], card.id, "full")),
+      soundProposal({ id: "smoke-sound", sourceId: source.id, wordIds: [], reason: "", confidence: 1, status: "accepted" }, { at: 0.5, effect: "whoosh", volume: 0.7 }),
     );
   });
 }
 
-/** Exports with the packaged ffmpeg, encoder and caption fonts; the size of the file, or 0. */
+/** Exports with the packaged ffmpeg, encoder, caption fonts and sound effects; the size of the file, or 0. */
 async function smokeExport(exporter: ExportRunner, projectId: string): Promise<number> {
   const out = join(app.getPath("temp"), `clipcat-smoke-${process.pid}.mp4`);
   try {
@@ -107,7 +109,7 @@ export async function smokeImport(
   try {
     const created = await pipeline.import([file], null);
     await queue.idle(created.id);
-    await addSmokeSlide(store, created.id);
+    await addSmokeExtras(store, created.id);
     const exported = await smokeExport(exporter, created.id);
     const renders = await readdir(join(store.dir(created.id), "media", "assets", "smoke-slide")).catch(() => [] as string[]);
     const slide = renders.some((f) => /^render-1080x1920-.*\.mov$/.test(f));

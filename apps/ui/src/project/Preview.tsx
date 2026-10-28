@@ -1,4 +1,5 @@
 import {
+  MUSIC,
   type Project,
   type Source,
   type TimedOverlay,
@@ -16,11 +17,13 @@ import {
   sourceToOutput,
   timedOverlays,
   timedPunches,
+  timedSounds,
 } from "@clipcat/core";
 import { type CSSProperties, type Ref, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { mediaUrl } from "../format";
 import { previewFrame } from "./CaptionOverlay";
 import { SlideFrame, seekSlide } from "./SlideFrame";
+import { EFFECTS, effectUrl, playQuietly } from "./SoundPanel";
 
 /** A moment in one recording. */
 export type Playhead = { sourceId: string; time: number };
@@ -78,8 +81,12 @@ export function brollStyle(o: TimedOverlay, frame: { width: number; height: numb
   return { left: at(box.x), top: at(box.y), width: at(box.width), height: at(box.height), borderRadius: at(box.radius) };
 }
 
-/** Seconds b-roll video may drift from where it should be while playing before it is set right. */
+/** Seconds b-roll video or music may drift from where it should be while playing before it is set right. */
 const DRIFT = 0.3;
+/** How far the music dips under speech in the preview: a stand-in for the export's compressor. */
+const DUCKED = 0.35;
+/** A playhead move longer than this is a jump, which plays no effects on the way. */
+const JUMP = 0.5;
 
 /** The kept stretch to play after `time` in `sourceId`, in timeline order, or null at the end. */
 export function nextKept(timeline: Timeline, sourceId: string, time: number, order: Map<string, number>) {
@@ -94,7 +101,8 @@ export function nextKept(timeline: Timeline, sourceId: string, time: number, ord
 
 /**
  * Plays the edit: the proxies of the recordings in order, jumping over every
- * cut, with punch-ins zooming and b-roll showing over it as the export will.
+ * cut, with punch-ins zooming, b-roll showing over it and its sound effects
+ * and music playing as the export will.
  * A paused seek may land inside a cut, so struck words can still be looked
  * at; playback leaves it at the next kept frame.
  */
@@ -116,8 +124,15 @@ export function Preview({ project, onTime, ref }: Props) {
   const slideTime = useRef(0);
   const [shown, setShown] = useState<TimedOverlay | null>(null);
   const showing = useRef<TimedOverlay | null>(null);
-  const live = useRef({ timeline, order, sourceId, onTime, sources, tall, punches, overlays });
-  live.current = { timeline, order, sourceId, onTime, sources, tall, punches, overlays };
+  const sounds = useMemo(() => timedSounds(project, timeline), [project, timeline]);
+  const music = project.music;
+  const musicEl = useRef<HTMLAudioElement>(null);
+  const effects = useRef(new Map<string, HTMLAudioElement>());
+  /** Output time at the last check while playing; effects between it and now play. */
+  const heard = useRef<number | null>(null);
+  const transcript = project.transcript;
+  const live = useRef({ timeline, order, sourceId, onTime, sources, tall, punches, overlays, sounds, music, transcript });
+  live.current = { timeline, order, sourceId, onTime, sources, tall, punches, overlays, sounds, music, transcript };
 
   useEffect(() => {
     if (!sourceId && sources[0]) setSourceId(sources[0].id);
@@ -142,7 +157,7 @@ export function Preview({ project, onTime, ref }: Props) {
     let handle = 0;
     let reported = Number.NaN;
     const check = () => {
-      const { timeline: tl, order: ord, sourceId: sid, onTime: report, sources: all, tall: narrow, punches: zooms, overlays: rolls } = live.current;
+      const { timeline: tl, order: ord, sourceId: sid, onTime: report, sources: all, tall: narrow, punches: zooms, overlays: rolls, sounds: cues, music: bed, transcript: said } = live.current;
       if (!sid) return;
       const t = v.currentTime;
       const here = all.find((s) => s.id === sid);
@@ -177,6 +192,37 @@ export function Preview({ project, onTime, ref }: Props) {
           if (b.paused) void b.play().catch(() => {});
         }
       }
+      // Each effect starts as the playhead crosses its start, so its hit lands on the word.
+      const before = heard.current;
+      heard.current = v.paused ? null : out;
+      if (out !== null && before !== null && out > before && out - before < JUMP) {
+        for (const cue of cues) {
+          const start = cue.time - (EFFECTS.get(cue.effect)?.hit ?? 0);
+          if (start <= before || start > out) continue;
+          let el = effects.current.get(cue.effect);
+          if (!el) {
+            el = new Audio(effectUrl(cue.effect));
+            effects.current.set(cue.effect, el);
+          }
+          el.volume = cue.volume;
+          el.currentTime = out - start;
+          playQuietly(el);
+        }
+      }
+      // The music runs on the output clock, looping, faded at both ends, and dips while someone speaks.
+      const m = musicEl.current;
+      if (m && bed) {
+        if (v.paused) {
+          if (!m.paused) m.pause();
+        } else if (out !== null) {
+          const want = out % bed.duration;
+          if (Math.abs(m.currentTime - want) > DRIFT) m.currentTime = want;
+          const fade = Math.max(0, Math.min(1, out / MUSIC.fadeIn, (tl.duration - out) / MUSIC.fadeOut));
+          const speaking = bed.duck && said.some((w) => w.sourceId === sid && t >= w.start && t < w.end);
+          m.volume = Math.min(1, bed.volume * fade * (speaking ? DUCKED : 1));
+          if (m.paused) playQuietly(m);
+        }
+      }
       if (v.paused || !(Math.abs(t - reported) < REPORT_STEP)) {
         reported = t;
         report({ sourceId: sid, time: t });
@@ -199,10 +245,12 @@ export function Preview({ project, onTime, ref }: Props) {
     if ("requestVideoFrameCallback" in v) handle = v.requestVideoFrameCallback(frame);
     v.addEventListener("timeupdate", check);
     v.addEventListener("seeked", check);
+    v.addEventListener("pause", check);
     return () => {
       if (handle && "cancelVideoFrameCallback" in v) v.cancelVideoFrameCallback(handle);
       v.removeEventListener("timeupdate", check);
       v.removeEventListener("seeked", check);
+      v.removeEventListener("pause", check);
     };
   }, [sourceId]);
 
@@ -256,6 +304,7 @@ export function Preview({ project, onTime, ref }: Props) {
           if (next.play) void e.currentTarget.play().catch(() => {});
         }}
       />
+      {music?.prep && <audio ref={musicEl} key={music.prep} src={mediaUrl(project.id, music.prep)} preload="auto" />}
       {shown && shownPrep && (
         <div className="broll" style={brollStyle(shown, previewFrame(project))} aria-hidden>
           {shown.asset.kind === "slide" ? (

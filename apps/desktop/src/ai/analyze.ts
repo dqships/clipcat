@@ -29,6 +29,7 @@ import {
   shortProject,
   type SlideLook,
   slideSize,
+  soundIds,
   spaceProposedPunches,
   unusedSlides,
   validateCorrections,
@@ -222,7 +223,7 @@ export class AnalysisRunner {
       (input) => {
         const parsed = AgentAnalysis.safeParse(input);
         if (!parsed.success) return { invalid: parsed.error.issues.map((i) => `${i.path.join(".") || "input"}: ${i.message}`) };
-        const valid = validateProposals(parsed.data, words, project.sources, () => `a${shortId()}`, placeableAssets(project));
+        const valid = validateProposals(parsed.data, words, project.sources, () => `a${shortId()}`, placeableAssets(project), soundIds);
         // Spaced against the punch-ins already accepted; pending ones are being replaced.
         const spaced = spaceProposedPunches(project, valid.proposals, words);
         const { proposals } = spaced;

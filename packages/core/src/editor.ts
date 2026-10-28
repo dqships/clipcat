@@ -24,6 +24,7 @@ import {
 import { defaultOverlay, overlayProposal } from "./overlays";
 import { PUNCH_SCALE, punchProposal, punchRange } from "./punchins";
 import { slideAsset, slideName } from "./slides";
+import { soundProposal } from "./sounds";
 
 export const EditOp = z.discriminatedUnion("type", [
   /** Cut (included: false) or restore (included: true) these words. */
@@ -46,6 +47,14 @@ export const EditOp = z.discriminatedUnion("type", [
   z.object({ type: z.literal("overlay"), wordIds: z.array(z.string()).min(1).max(10_000), assetId: z.string(), placement: OverlayPlacement }),
   /** A motion slide over these words, for the AI editor to design from the brief. An undo step, like b-roll. */
   z.object({ type: z.literal("slide"), wordIds: z.array(z.string()).min(1).max(10_000), brief: z.string().trim().min(1).max(1000), look: SlideLook }),
+  /** A sound effect from the library, landing on this word. An undo step, like a punch-in. */
+  z.object({ type: z.literal("sound"), wordId: z.string(), effect: z.string().regex(/^[a-z0-9-]+$/) }),
+  /** How loud an effect plays. Not an undo step: the list shows it. */
+  z.object({ type: z.literal("sound-volume"), id: z.string(), volume: z.number().min(0).max(1) }),
+  /** How loud the music plays, and whether it dips under speech. Not an undo step. */
+  z.object({ type: z.literal("music"), volume: z.number().min(0).max(1).optional(), duck: z.boolean().optional() }),
+  /** Takes the music out. Not an undo step. */
+  z.object({ type: z.literal("remove-music") }),
   /** Where and how b-roll shows. Not an undo step: the list shows it. */
   z.object({
     type: z.literal("overlay-style"),
@@ -153,6 +162,25 @@ export function applyEdit(project: Project, op: EditOp, id: IdFactory): Project 
     return p;
   }
 
+  if (op.type === "sound-volume") {
+    const proposal = p.proposals.find((x) => x.id === op.id);
+    if (!proposal?.sound) throw new Error(`Unknown sound: ${op.id}`);
+    proposal.sound = { ...proposal.sound, volume: op.volume };
+    return p;
+  }
+
+  if (op.type === "music") {
+    if (!p.music) throw new Error("There is no music");
+    if (op.volume !== undefined) p.music.volume = op.volume;
+    if (op.duck !== undefined) p.music.duck = op.duck;
+    return p;
+  }
+
+  if (op.type === "remove-music") {
+    p.music = null;
+    return p;
+  }
+
   if (op.type === "describe") {
     const asset = p.assets.find((a) => a.id === op.assetId);
     if (!asset) throw new Error(`Unknown media: ${op.assetId}`);
@@ -174,6 +202,15 @@ export function applyEdit(project: Project, op: EditOp, id: IdFactory): Project 
 
   // A new punch-in or b-roll joins as rejected before the undo step is taken, so undoing it takes it away again.
   let added: Proposal | null = null;
+  if (op.type === "sound") {
+    const word = p.transcript.find((w) => w.id === op.wordId);
+    if (!word) throw new Error(`Unknown words: ${op.wordId}`);
+    added = soundProposal(
+      { id: id(), sourceId: word.sourceId, wordIds: [word.id], reason: "", confidence: 1, status: "rejected" },
+      { at: word.start, effect: op.effect, volume: 0.7 },
+    );
+    p.proposals.push(added);
+  }
   if (op.type === "punch" || op.type === "overlay" || op.type === "slide") {
     const ids = new Set(op.wordIds);
     const words = p.transcript.filter((w) => ids.has(w.id));

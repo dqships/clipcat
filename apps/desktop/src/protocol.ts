@@ -1,7 +1,8 @@
 // Serves the built UI from app://clipcat/ so the renderer runs on a real,
 // secure origin instead of file://, a project's prepared media (proxies,
 // thumbnails, waveforms) from media://<project id>/, and motion slides'
-// pages from slide://. The first two refuse any path outside their folder.
+// pages from slide://, and the sound effects from sound://sfx/. Those that
+// serve files refuse any path outside their folder.
 
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
@@ -14,6 +15,7 @@ export const APP_SCHEME = "app";
 export const APP_ORIGIN = "app://clipcat";
 export const MEDIA_SCHEME = "media";
 export const SLIDE_SCHEME = "slide";
+export const SOUND_SCHEME = "sound";
 
 /** Must run before the app is ready. */
 export function registerSchemes(): void {
@@ -21,6 +23,7 @@ export function registerSchemes(): void {
     { scheme: APP_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true } },
     { scheme: MEDIA_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
     { scheme: SLIDE_SCHEME, privileges: { standard: true, secure: true } },
+    { scheme: SOUND_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
   ]);
 }
 
@@ -53,6 +56,7 @@ const TYPES: Record<string, string> = {
   ".png": "image/png",
   ".jpg": "image/jpeg",
   ".wav": "audio/wav",
+  ".m4a": "audio/mp4",
 };
 
 /** Parses a single `bytes=a-b` range against a file size; null when absent or unsatisfiable. */
@@ -77,38 +81,49 @@ export function parseRange(header: string | null, size: number): { start: number
  */
 export function serveMedia(projectDir: (id: string) => string): void {
   protocol.handle(MEDIA_SCHEME, async (request) => {
-    const url = new URL(request.url);
     let root: string;
     try {
-      root = join(projectDir(url.host), "media");
+      root = join(projectDir(new URL(request.url).host), "media");
     } catch {
       return new Response("Not found", { status: 404 });
     }
-    const file = resolveInside(root, url.pathname);
-    if (!file || !(extname(file) in TYPES)) return new Response("Not found", { status: 404 });
-    let size: number;
-    try {
-      const info = await stat(file);
-      if (!info.isFile()) throw new Error("not a file");
-      size = info.size;
-    } catch {
-      return new Response("Not found", { status: 404 });
-    }
-    const type = TYPES[extname(file)]!;
-    const rangeHeader = request.headers.get("range");
-    const range = parseRange(rangeHeader, size);
-    if (rangeHeader && !range) return new Response(null, { status: 416, headers: { "Content-Range": `bytes */${size}` } });
-    const { start, end } = range ?? { start: 0, end: size - 1 };
-    const body = Readable.toWeb(createReadStream(file, { start, end })) as ReadableStream;
-    return new Response(body, {
-      status: range ? 206 : 200,
-      headers: {
-        "Content-Type": type,
-        "Content-Length": String(end - start + 1),
-        "Accept-Ranges": "bytes",
-        ...(range ? { "Content-Range": `bytes ${start}-${end}/${size}` } : {}),
-      },
-    });
+    return serveFile(request, root);
+  });
+}
+
+/** Serves sound://sfx/<id>.wav from the folder the sound effects ship in. */
+export function serveSounds(sfxDir: string): void {
+  protocol.handle(SOUND_SCHEME, (request) =>
+    new URL(request.url).host === "sfx" ? serveFile(request, sfxDir) : new Response("Not found", { status: 404 }),
+  );
+}
+
+/** A file inside `root` named by the request's path, with byte ranges. */
+async function serveFile(request: Request, root: string): Promise<Response> {
+  const file = resolveInside(root, new URL(request.url).pathname);
+  if (!file || !(extname(file) in TYPES)) return new Response("Not found", { status: 404 });
+  let size: number;
+  try {
+    const info = await stat(file);
+    if (!info.isFile()) throw new Error("not a file");
+    size = info.size;
+  } catch {
+    return new Response("Not found", { status: 404 });
+  }
+  const type = TYPES[extname(file)]!;
+  const rangeHeader = request.headers.get("range");
+  const range = parseRange(rangeHeader, size);
+  if (rangeHeader && !range) return new Response(null, { status: 416, headers: { "Content-Range": `bytes */${size}` } });
+  const { start, end } = range ?? { start: 0, end: size - 1 };
+  const body = Readable.toWeb(createReadStream(file, { start, end })) as ReadableStream;
+  return new Response(body, {
+    status: range ? 206 : 200,
+    headers: {
+      "Content-Type": type,
+      "Content-Length": String(end - start + 1),
+      "Accept-Ranges": "bytes",
+      ...(range ? { "Content-Range": `bytes ${start}-${end}/${size}` } : {}),
+    },
   });
 }
 

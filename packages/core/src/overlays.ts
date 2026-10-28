@@ -79,7 +79,7 @@ export function defaultOverlay(range: Range, assetId: string, placement: Overlay
 
 /** A b-roll proposal over `overlay.range` of `sourceId`. */
 export function overlayProposal(fields: Pick<Proposal, "id" | "sourceId" | "wordIds" | "reason" | "confidence" | "status">, overlay: Overlay): Proposal {
-  return { ...fields, type: "visual", cuts: [], keepWordIds: [], punch: null, overlay };
+  return { ...fields, type: "visual", cuts: [], keepWordIds: [], punch: null, overlay, sound: null };
 }
 
 /** The agent's answer when describing media: one sentence or two for each, by its number in the list it was shown. */
