@@ -41,7 +41,8 @@ export function Downloads({ plate = false }: { plate?: boolean }) {
         </a>
       </div>
       <p className="downloads__note">
-        Apple Silicon with macOS 14 or newer, or 64-bit Windows 10 and 11. <a href={SITE.releases} rel="noopener">All releases</a>
+        Apple Silicon with macOS 14 or newer (<a href={SITE.macIntel}>Intel Mac version</a>), or 64-bit Windows 10 and 11.{" "}
+        <a href={SITE.releases} rel="noopener">All releases</a>
       </p>
     </div>
   );

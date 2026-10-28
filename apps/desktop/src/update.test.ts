@@ -17,7 +17,7 @@ function fakeUpdater() {
   return { updater: updater as unknown as AutoUpdater & typeof updater, fire };
 }
 
-const make = (over: { platform?: string; enabled?: boolean; feed?: string | null; manifest?: unknown } = {}) => {
+const make = (over: { platform?: string; arch?: string; enabled?: boolean; feed?: string | null; manifest?: unknown } = {}) => {
   const { updater, fire } = fakeUpdater();
   const seen: UpdateStatusValue[] = [];
   const fetchJson = vi.fn(async () => {
@@ -28,6 +28,7 @@ const make = (over: { platform?: string; enabled?: boolean; feed?: string | null
     feed: over.feed === undefined ? FEED : over.feed,
     version: "0.1.0",
     platform: over.platform ?? "darwin",
+    arch: over.arch ?? "arm64",
     enabled: over.enabled ?? true,
     autoUpdater: updater,
     fetchJson,
@@ -46,9 +47,10 @@ describe("versions and feeds", () => {
     expect(newer("0.1", "0.1.1")).toBe(false);
   });
 
-  it("points Squirrel.Mac at RELEASES.json and Squirrel.Windows at the folder", () => {
-    expect(feedFor(FEED, "darwin")).toEqual({ url: `${FEED}/RELEASES.json`, serverType: "json" });
-    expect(feedFor(`${FEED}/`, "win32")).toEqual({ url: FEED });
+  it("points Squirrel.Mac at its processor's manifest and Squirrel.Windows at the folder", () => {
+    expect(feedFor(FEED, "darwin", "arm64")).toEqual({ url: `${FEED}/RELEASES.json`, serverType: "json" });
+    expect(feedFor(FEED, "darwin", "x64")).toEqual({ url: `${FEED}/RELEASES-x64.json`, serverType: "json" });
+    expect(feedFor(`${FEED}/`, "win32", "x64")).toEqual({ url: FEED });
     expect(releasePage(FEED)).toBe("https://github.com/dqships/clipcat/releases/latest");
   });
 });
@@ -75,6 +77,15 @@ describe("Updater", () => {
     expect(u.current).toMatchObject({ state: "ready", version: "0.2.0" });
     u.install();
     expect(updater.quitAndInstall).toHaveBeenCalledOnce();
+    u.stop();
+  });
+
+  it("on an Intel Mac, reads the Intel manifest", async () => {
+    const { u, updater, fetchJson } = make({ arch: "x64", manifest: { currentRelease: "0.2.0" } });
+    u.start();
+    await vi.waitFor(() => expect(updater.checkForUpdates).toHaveBeenCalledOnce());
+    expect(fetchJson).toHaveBeenCalledWith(`${FEED}/RELEASES-x64.json`);
+    expect(updater.setFeedURL).toHaveBeenCalledWith({ url: `${FEED}/RELEASES-x64.json`, serverType: "json" });
     u.stop();
   });
 

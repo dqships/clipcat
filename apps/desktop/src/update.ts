@@ -1,10 +1,12 @@
 // Updates from the release feed: a base URL where each release's files sit
 // side by side (GitHub's `releases/latest/download` works), set as
 // `clipcat.updateFeed` in apps/desktop/package.json. Windows asks Squirrel at
-// the base URL (it reads RELEASES and the nupkg); macOS reads RELEASES.json,
-// which the ZIP maker writes. Squirrel.Mac only installs into a signed app, so
-// an unsigned Mac build checks RELEASES.json itself and offers the download
-// page instead of installing.
+// the base URL (it reads RELEASES and the nupkg); macOS reads RELEASES.json
+// (RELEASES-x64.json on an Intel Mac), which the ZIP maker writes. Each Mac
+// processor has its own build; an Intel build running under Rosetta on Apple
+// Silicon follows the Apple Silicon manifest, so its next update is native.
+// Squirrel.Mac only installs into a signed app, so an unsigned Mac build checks
+// the manifest itself and offers the download page instead of installing.
 
 import type { UpdateStatusValue } from "@clipcat/ipc";
 
@@ -24,10 +26,11 @@ export function releasePage(feed: string): string {
   return feed.replace(/\/download\/?$/, "");
 }
 
-/** What Squirrel is pointed at on each system. */
-export function feedFor(feed: string, platform: string): { url: string; serverType?: "json" | "default" } {
+/** What Squirrel is pointed at on each system; `arch` is the processor's, not the running build's. */
+export function feedFor(feed: string, platform: string, arch: string): { url: string; serverType?: "json" | "default" } {
   const base = feed.replace(/\/$/, "");
-  return platform === "darwin" ? { url: `${base}/RELEASES.json`, serverType: "json" } : { url: base };
+  if (platform !== "darwin") return { url: base };
+  return { url: `${base}/${arch === "arm64" ? "RELEASES.json" : `RELEASES-${arch}.json`}`, serverType: "json" };
 }
 
 /** The part of Electron's autoUpdater this uses, so it can be stood in for. */
@@ -44,6 +47,8 @@ export type UpdaterDeps = {
   feed: string | null;
   version: string;
   platform: string;
+  /** The processor: "arm64" on Apple Silicon even when an Intel build runs under Rosetta. */
+  arch: string;
   /** Whether this copy can update itself; false for a dev run, a smoke run or Squirrel's own launches. */
   enabled: boolean;
   autoUpdater: AutoUpdater;
@@ -70,9 +75,9 @@ export class Updater {
   }
 
   start(): void {
-    const { feed, enabled, autoUpdater, platform } = this.deps;
+    const { feed, enabled, autoUpdater, platform, arch } = this.deps;
     if (!enabled || !feed) return;
-    autoUpdater.setFeedURL(feedFor(feed, platform));
+    autoUpdater.setFeedURL(feedFor(feed, platform, arch));
     autoUpdater.on("update-available", () => this.set({ state: "downloading" }));
     autoUpdater.on("update-not-available", () => this.set({ state: "idle" }));
     autoUpdater.on("update-downloaded", (_event, _notes, name) =>
@@ -98,7 +103,7 @@ export class Updater {
 
   /** Looks for a newer release; on a Mac it reads the feed first, so it can name the version. */
   async check(): Promise<UpdateStatusValue> {
-    const { feed, enabled, platform, autoUpdater } = this.deps;
+    const { feed, enabled, platform, arch, autoUpdater } = this.deps;
     if (!enabled || !feed || this.status.state === "ready" || this.status.state === "downloading") return this.status;
     this.set({ state: "checking", detail: null, checkedAt: this.deps.now().toISOString() });
     if (platform !== "darwin") {
@@ -106,7 +111,7 @@ export class Updater {
       return this.status;
     }
     try {
-      const manifest = (await this.deps.fetchJson(feedFor(feed, platform).url)) as { currentRelease?: unknown };
+      const manifest = (await this.deps.fetchJson(feedFor(feed, platform, arch).url)) as { currentRelease?: unknown };
       const latest = typeof manifest.currentRelease === "string" ? manifest.currentRelease : null;
       if (!latest || !newer(latest, this.deps.version)) return this.set({ state: "idle", version: null });
       this.set({ version: latest });

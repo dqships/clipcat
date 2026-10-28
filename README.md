@@ -4,7 +4,7 @@ A personal AI video editor for talking-head videos. Drop in raw takes; ClipCat
 transcribes them locally, proposes cuts for retakes and silences using your own
 Claude Code or Codex, and exports a captioned video in 16:9 and 9:16.
 
-Electron app for macOS (Apple Silicon first) and Windows. The design system is
+Electron app for macOS (Apple Silicon and Intel) and Windows. The design system is
 in [DESIGN.md](DESIGN.md); read it before touching any screen.
 
 ## Layout
@@ -241,15 +241,22 @@ write the same files with `export_timeline`.
 ## Releases and updates
 
 Pushing a tag that matches `apps/desktop/package.json`'s version (`v0.2.0`)
-makes CI build, smoke test and publish a GitHub release with the Mac DMG and
-zip and the Windows installer. The newest installers are always at
+makes CI build, smoke test and publish a GitHub release with a DMG and zip for
+each Mac processor and the Windows installer. The newest installers are always at
 `https://github.com/dqships/clipcat/releases/latest/download/ClipCat-arm64.dmg`
-and `.../ClipCat-x64-Setup.exe`.
+(Apple Silicon), `.../ClipCat-x64.dmg` (Intel Macs) and `.../ClipCat-x64-Setup.exe`.
+The Macs get separate builds rather than one universal app: a universal app
+would double the download and every update for Apple Silicon, and Parakeet only
+exists for Apple Silicon anyway. Each build is smoke tested on its own runner
+(`macos-14` and `macos-15-intel`). On Intel, whisper.cpp runs on the CPU (AVX2
+and Accelerate) rather than Metal.
 
 Installed copies update from the same place (`clipcat.updateFeed` in
 `apps/desktop/package.json`): every four hours and from Settings, Windows
 through Squirrel and the release's `RELEASES` and nupkg, macOS through the
-`RELEASES.json` the zip maker writes. A Mac only installs an update into a
+`RELEASES.json` the zip maker writes (`RELEASES-x64.json` for Intel, renamed in
+forge.config.js's postMake hook). An Intel copy running under Rosetta on Apple
+Silicon follows `RELEASES.json`, so its next update brings the native build. A Mac only installs an update into a
 signed app; an unsigned one says a new version is out and opens the release
 page. To sign and notarize Mac releases, add these repository secrets:
 `MACOS_CERT_P12` (a Developer ID Application certificate, base64) and

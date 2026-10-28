@@ -1,8 +1,9 @@
 // Builds whisper.cpp's `whisper-cli` from a pinned commit into
 // vendor/bin/<platform>-<arch>/. Needs git, cmake and a C++ compiler
 // (Xcode command line tools on macOS, Visual Studio Build Tools on Windows).
-// Statically linked; on macOS the Metal shaders are embedded, so the binary
-// stands alone inside the app.
+// Statically linked; on Apple Silicon the Metal shaders are embedded, so the
+// binary stands alone inside the app. Intel Macs run it on the CPU (AVX2 and
+// Accelerate): ggml's Metal kernels are written for Apple GPUs.
 //
 //   npm run build:whisper
 
@@ -53,7 +54,9 @@ run(
     "-DGGML_NATIVE=OFF",
     // ggml's own thread pool instead of OpenMP, which would need vcomp140.dll / libomp beside the binary.
     "-DGGML_OPENMP=OFF",
-    ...(process.platform === "darwin" ? ["-DGGML_METAL=ON", "-DGGML_METAL_EMBED_LIBRARY=ON"] : []),
+    ...(process.platform === "darwin" ? ["-DCMAKE_OSX_DEPLOYMENT_TARGET=14.0"] : []),
+    ...(target === "darwin-arm64" ? ["-DGGML_METAL=ON", "-DGGML_METAL_EMBED_LIBRARY=ON"] : []),
+    ...(target === "darwin-x64" ? ["-DGGML_METAL=OFF"] : []),
     ...(process.platform === "win32" ? ["-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded"] : []),
   ],
   root,
