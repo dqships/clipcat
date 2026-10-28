@@ -5,6 +5,7 @@ import { defaultOverlay, overlayProposal } from "./overlays";
 import { punchProposal } from "./punchins";
 import { buildTimeline } from "./timeline";
 import { Project } from "./project";
+import { soundProposal } from "./sounds";
 import { keptParts, shortProject, shortSegments, validateShorts } from "./shorts";
 
 // 20 words at 0.6 s steps: 12 s of speech in "a", then 5 words in "b".
@@ -124,6 +125,8 @@ describe("shortProject", () => {
         punchProposal({ id: "zoom-in", sourceId: "a", wordIds: [], reason: "", confidence: 0.5, status: "pending" }, [4, 6], "cut"),
         punchProposal({ id: "zoom-out", sourceId: "a", wordIds: [], reason: "", confidence: 0.5, status: "pending" }, [9, 11], "cut"),
         overlayProposal({ id: "broll-out", sourceId: "a", wordIds: [], reason: "", confidence: 0.5, status: "pending" }, defaultOverlay([10, 12], "m1", "full")),
+        soundProposal({ id: "pop-in", sourceId: "a", wordIds: [], reason: "", confidence: 0.5, status: "pending" }, { at: 5, effect: "pop", volume: 0.7 }),
+        soundProposal({ id: "pop-out", sourceId: "a", wordIds: [], reason: "", confidence: 0.5, status: "pending" }, { at: 9.5, effect: "pop", volume: 0.7 }),
       ],
       assets: [asset("m1")],
       captions: { size: 70 },
@@ -137,7 +140,7 @@ describe("shortProject", () => {
     expect(short.sources.map((s) => s.id)).toEqual(["a"]);
     expect(short.transcript.every((w) => w.sourceId === "a")).toBe(true);
     // Suggestions outside the short stay behind, punch-ins and b-roll included; the media comes along.
-    expect(short.proposals.map((p) => p.id)).toEqual(["in", "zoom-in"]);
+    expect(short.proposals.map((p) => p.id)).toEqual(["in", "zoom-in", "pop-in"]);
     expect(short.assets.map((a) => a.id)).toEqual(["m1"]);
     expect(short.captions.size).toBe(70);
   });

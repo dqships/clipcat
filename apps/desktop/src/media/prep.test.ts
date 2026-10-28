@@ -15,6 +15,8 @@ describe("prepArgs", () => {
     const args = prepArgs("/in/voice.m4a", { ...video, width: 0, height: 0, videoCodec: null, fps: 0 }, out, "h264_mf");
     expect(args).toContain("lavfi");
     expect(args).toContain("-shortest");
+    // The colour source ends with the audio, or the thumbnails would never stop.
+    expect(args).toContain("color=c=black:s=1280x720:r=30:d=60.000");
     expect(args.slice(args.indexOf("-map"), args.indexOf("-map") + 4)).toEqual(["-map", "0:v", "-map", "1:a:0"]);
   });
 });

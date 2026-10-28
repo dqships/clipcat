@@ -355,6 +355,34 @@ describe("AnalysisRunner slides", () => {
     expect(replies[0]!.images).toHaveLength(3);
   });
 
+  it("designs a slide again when its brief changes while it is being designed", async () => {
+    let rebrief: (() => Promise<void>) | null = null;
+    let pending: Promise<void> | null = null;
+    const { store, queue, runner, id, rendered } = await studio([slide], ["<h1>One</h1>", "<h1>Two</h1>"], () => {
+      if (rebrief) {
+        pending = rebrief();
+        rebrief = null;
+      }
+      return { duration: 1, errors: [] };
+    });
+    rebrief = async () => {
+      await store.update(id, null, (p) => {
+        p.assets[0]!.slide!.brief = "Four steps";
+      });
+      await runner.designMissing(id); // what an edit to the brief does
+    };
+    await runner.analyze(id, "");
+    for (let i = 0; i < 4; i++) {
+      await queue.idle(id);
+      await pending;
+      await new Promise((r) => setTimeout(r, 10));
+    }
+
+    const made = (await store.get(id)).assets[0]!;
+    expect(made.slide).toMatchObject({ brief: "Four steps", html: "<h1>Two</h1>" });
+    expect(rendered).toHaveLength(4);
+  });
+
   it("drops a slide whose proposal a rerun replaced", async () => {
     const { store, queue, runner, id, forgotten } = await studio([slide], ["<h1>One</h1>", "<h1>One</h1>"]);
     await runner.analyze(id, "");

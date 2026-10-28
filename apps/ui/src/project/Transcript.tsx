@@ -30,7 +30,8 @@ export function Transcript({ project, playhead, onSeek, onEdit }: Props) {
   const [anchor, setAnchor] = useState<number | null>(null);
   const [focus, setFocus] = useState<number | null>(null);
   const proposed = useMemo(
-    () => new Set(project.proposals.filter((p) => p.type !== "silence" && !p.punch && !p.overlay && p.status === "pending").flatMap((p) => p.wordIds)),
+    // Only suggested cuts: a suggested zoom, b-roll or sound leaves its words in.
+    () => new Set(project.proposals.filter((p) => p.cuts.length > 0 && p.type !== "silence" && p.status === "pending").flatMap((p) => p.wordIds)),
     [project.proposals],
   );
   const punched = useMemo(
