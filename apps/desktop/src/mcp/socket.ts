@@ -24,19 +24,27 @@ export function socketPath(userData: string, platform: NodeJS.Platform): string 
 /**
  * Listens on `path`, giving each connection its own server from `create`.
  * A socket file left by a crash is removed first; the app's single-instance
- * lock means nothing else is listening on it.
+ * lock means nothing else is listening on it. `onSessions` hears how many
+ * sessions are open each time one opens or closes.
  */
-export async function listen(path: string, create: () => McpServer, platform: NodeJS.Platform = process.platform): Promise<Server> {
+export async function listen(
+  path: string,
+  create: () => McpServer,
+  platform: NodeJS.Platform = process.platform,
+  onSessions?: (open: number) => void,
+): Promise<Server> {
   if (platform !== "win32") await unlink(path).catch(() => {});
   const sessions = new Set<Socket>();
   const server = createServer((socket) => {
     sessions.add(socket);
+    onSessions?.(sessions.size);
     const mcp = create();
     const transport = new StdioServerTransport(socket, socket);
     socket.on("error", () => socket.destroy());
     socket.on("close", () => {
       sessions.delete(socket);
       void mcp.close().catch(() => {});
+      onSessions?.(sessions.size);
     });
     void mcp.connect(transport).catch(() => socket.destroy());
   });

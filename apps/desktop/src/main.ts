@@ -14,13 +14,15 @@ import { dirname, extname, join, resolve } from "node:path";
 import type { AppInfoValue } from "@clipcat/ipc";
 import { AnalysisRunner } from "./ai/analyze";
 import { apiAgent, verifyKey } from "./ai/api";
-import { claudeAgent, probeClaude } from "./ai/claude";
-import { codexAgent, probeCodex } from "./ai/codex";
+import { CLAUDE_MODELS, claudeAgent, probeClaude } from "./ai/claude";
+import { type CliDeps, cliStatus, runCli } from "./ai/cli";
+import { codexAgent, codexModels, probeCodex, resolveCodex } from "./ai/codex";
 import { hydrateEnv } from "./ai/env";
 import { type Binary, binaryPath, probeVersion } from "./tools";
 import { broadcast, registerIpc } from "./ipc";
 import { JobLog } from "./jobs/log";
 import { JobQueue } from "./jobs/queue";
+import { BACKGROUND_ARG } from "./mcp/config";
 import { type InstallEnv, connectAgent, healRegistrations, mcpStatus, serverSpec } from "./mcp/install";
 import { checkAgent } from "./mcp/check";
 import { createMcpServer } from "./mcp/server";
@@ -172,16 +174,16 @@ function startPipeline() {
     queue,
     agent: async () => {
       const host = await hostEnv;
-      const { agent } = await settings.get();
+      const { agent, claudeModel, codexModel } = await settings.get();
       if (agent === "api") return apiAgent({ key: () => keys.get(), model: async () => (await settings.get()).apiModel });
       if (agent === "codex") {
         const status = await probeCodex(host);
         if (status.status !== "ready") throw new Error(status.detail ?? "Codex isn't ready");
-        return codexAgent(host);
+        return codexAgent(host, codexModel);
       }
       const status = await probeClaude(host);
       if (status.status !== "ready") throw new Error(status.detail ?? "Claude Code isn't ready");
-      return claudeAgent(host, app.getVersion());
+      return claudeAgent(host, app.getVersion(), claudeModel);
     },
     dictionary: async () => (await settings.get()).dictionary,
     changed,
@@ -281,6 +283,28 @@ const articleFile = (a: Article) => `${a.title.trim() ? `# ${a.title.trim()}\n\n
 /** The app's window; the face detector's hidden window is never it. */
 let mainWindow: BrowserWindow | null = null;
 
+/**
+ * Started by the MCP bridge for an agent (the Claude desktop app starts its
+ * servers as it opens), not by the person: no window and no Dock icon until
+ * they open ClipCat, and gone when the last agent session ends.
+ */
+let background = process.argv.includes(BACKGROUND_ARG);
+
+/** The person opened ClipCat: from here on it's an ordinary app with its window. */
+function showWindow(): void {
+  if (background) {
+    background = false;
+    void app.dock?.show();
+  }
+  const win = mainWindow;
+  if (!win) {
+    createWindow();
+    return;
+  }
+  if (win.isMinimized()) win.restore();
+  win.focus();
+}
+
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
     width: 1280,
@@ -329,6 +353,7 @@ if (!squirrelLaunch && !app.requestSingleInstanceLock()) {
   // leaves before starting anything, so it can't take over the MCP socket or rerun jobs.
   app.quit();
 } else if (!squirrelLaunch) {
+  if (background) app.dock?.hide();
   app.whenReady().then(() => {
     const { store, settings, keys, queue, jobs, pipeline, media, music, thumbnail, analysis, exporter, edit, recordings } = startPipeline();
     app.on("will-quit", () => void recordings.discardAll());
@@ -368,41 +393,76 @@ if (!squirrelLaunch && !app.requestSingleInstanceLock()) {
     });
     const socket = socketPath(app.getPath("userData"), process.platform);
     const installEnv = mcpEnv(socket);
+    let agentSessions = 0;
+    // In the background, ClipCat leaves once no agent is connected and the jobs they started have finished.
+    const leaveWhenDone = () => {
+      if (!background || agentSessions > 0) return;
+      if (jobs.list(null).some((j) => j.state === "queued" || j.state === "running")) setTimeout(leaveWhenDone, 5_000);
+      else app.quit();
+    };
+    // In case the bridge that started it gave up before connecting.
+    if (background) setTimeout(leaveWhenDone, 60_000);
     // Which agents really opened a session, so Settings shows what happened rather than what a file says.
     const agentStatus = () => mcpStatus(installEnv, (id) => sessions.seen(id));
     const sessions = new SessionLog(join(app.getPath("userData"), "agent-sessions.json"), () => {
       void agentStatus().then((agents) => broadcast("mcp:agents", agents), () => {});
     });
-    const mcp = listen(socket, () => {
-      const server = createMcpServer({
-        version: app.getVersion(),
-        list: () => store.list(),
-        get: (id) => store.get(id),
-        edit,
-        analyze: (id, brief) => analysis.analyze(id, brief),
-        request: async (id, request) => analysis.request(id, request),
-        writeup: async (id) => analysis.writeup(id),
-        shorts: async (id, count, seconds) => analysis.shorts(id, count, seconds),
-        exportVideo: async (id, format, path) => {
-          await store.get(id);
-          exporter.export(id, format, path);
-        },
-        importFiles: (files, projectId) => pipeline.import(files, projectId),
-        exportTimeline: (id, format, path) => writeTimeline(store, id, format, path),
-        jobs: (projectId) => jobs.list(projectId),
-      });
-      sessions.track(server);
-      return server;
-    }).then(
+    const mcp = listen(
+      socket,
+      () => {
+        const server = createMcpServer({
+          version: app.getVersion(),
+          list: () => store.list(),
+          get: (id) => store.get(id),
+          edit,
+          analyze: (id, brief) => analysis.analyze(id, brief),
+          request: async (id, request) => analysis.request(id, request),
+          writeup: async (id) => analysis.writeup(id),
+          shorts: async (id, count, seconds) => analysis.shorts(id, count, seconds),
+          exportVideo: async (id, format, path) => {
+            await store.get(id);
+            exporter.export(id, format, path);
+          },
+          importFiles: (files, projectId) => pipeline.import(files, projectId),
+          exportTimeline: (id, format, path) => writeTimeline(store, id, format, path),
+          jobs: (projectId) => jobs.list(projectId),
+        });
+        sessions.track(server);
+        return server;
+      },
+      process.platform,
+      (open) => {
+        agentSessions = open;
+        if (open === 0) leaveWhenDone();
+      },
+    ).then(
       () => null,
-      (e: unknown) => `The MCP socket didn't open: ${e instanceof Error ? e.message : String(e)}`,
+      (e: unknown) => {
+        // Nothing to serve and nothing on screen.
+        if (background) app.quit();
+        return `The MCP socket didn't open: ${e instanceof Error ? e.message : String(e)}`;
+      },
     );
     if (!isSmokeRun()) void healRegistrations(installEnv);
     const aiStatus = async () => {
       const host = await hostEnv;
-      const [claude, codex, current, key] = await Promise.all([probeClaude(host), probeCodex(host), settings.get(), keys.get()]);
-      return { claude, codex, api: { hasKey: key !== null, model: current.apiModel }, agent: current.agent };
+      const [claude, codex, current, key, codexOffers] = await Promise.all([probeClaude(host), probeCodex(host), settings.get(), keys.get(), codexModels(host)]);
+      return {
+        claude,
+        codex,
+        api: { hasKey: key !== null, model: current.apiModel },
+        agent: current.agent,
+        models: {
+          claude: { choices: CLAUDE_MODELS, fallback: null, selected: current.claudeModel },
+          codex: { ...codexOffers, selected: current.codexModel },
+        },
+      };
     };
+    const cliDeps = async (): Promise<CliDeps> => {
+      const host = await hostEnv;
+      return { host, codexRuns: async () => (await resolveCodex(host))?.binary ?? null };
+    };
+    const cliRuns = new Map<string, ReturnType<typeof runCli>>();
     serveUi(UI_ROOT);
     setFacePage(DEV_URL ? new URL("faces.html", DEV_URL).toString() : `${APP_ORIGIN}/faces.html`);
     setCutoutPage(DEV_URL ? new URL("cutout.html", DEV_URL).toString() : `${APP_ORIGIN}/cutout.html`);
@@ -656,6 +716,17 @@ if (!squirrelLaunch && !app.requestSingleInstanceLock()) {
           await writeFile(path, zip);
           return { path };
         },
+        "cli:status": async ({ id }) => cliStatus(id, await cliDeps()),
+        "cli:run": async ({ id }) => {
+          // One run per CLI: a second press while one is going waits for it.
+          const running = cliRuns.get(id);
+          if (running) return running;
+          const run = cliDeps()
+            .then((deps) => runCli(id, deps, (line) => broadcast("cli:progress", { id, line })))
+            .finally(() => cliRuns.delete(id));
+          cliRuns.set(id, run);
+          return run;
+        },
         "mcp:status": agentStatus,
         "mcp:connect": async ({ agent, connect }) => {
           await connectAgent(installEnv, agent, connect);
@@ -673,22 +744,17 @@ if (!squirrelLaunch && !app.requestSingleInstanceLock()) {
         .then(() => resume("b-roll", () => media.resume()))
         .then(() => resume("music", () => music.resume()));
     }
-    createWindow();
+    if (!background) createWindow();
   });
 
-  app.on("second-instance", () => {
-    const win = mainWindow;
-    if (win) {
-      if (win.isMinimized()) win.restore();
-      win.focus();
-    }
-  });
+  app.on("second-instance", () => showWindow());
 
   app.on("activate", () => {
-    if (!mainWindow) createWindow();
+    if (!mainWindow) showWindow();
   });
 
   app.on("window-all-closed", () => {
-    if (process.platform !== "darwin") app.quit();
+    // In the background the only windows are hidden helpers, and closing them leaves the agent's session running.
+    if (process.platform !== "darwin" && !background) app.quit();
   });
 }

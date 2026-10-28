@@ -43,8 +43,23 @@ export const ApiModel = z.enum(["claude-opus-5-5", "claude-sonnet-5-5", "claude-
 /** The Claude API's state: whether a key is saved, and which model it uses. */
 export const ApiStatus = z.object({ hasKey: z.boolean(), model: ApiModel });
 
-/** Each agent's state, and which one finds cuts. */
-export const AiStatus = z.object({ claude: AgentStatus, codex: AgentStatus, api: ApiStatus, agent: AgentName });
+/** A model picked for Claude Code or Codex; null runs the CLI's own default. */
+export const AgentModel = z.string().trim().min(1).max(100).regex(/^[\w.:/[\]-]+$/).nullable();
+
+/** A model the user can pick for an agent CLI. */
+export const ModelChoice = z.object({ id: z.string(), label: z.string() });
+
+/** The models an agent CLI offers, the one it runs when none is picked (null when it doesn't say), and the pick. */
+export const AgentModels = z.object({ choices: z.array(ModelChoice), fallback: z.string().nullable(), selected: AgentModel });
+
+/** Each agent's state, its models, and which one finds cuts. */
+export const AiStatus = z.object({
+  claude: AgentStatus,
+  codex: AgentStatus,
+  api: ApiStatus,
+  agent: AgentName,
+  models: z.object({ claude: AgentModels, codex: AgentModels }),
+});
 
 /** App-wide settings. */
 const Term = z.string().trim().min(1).max(60);
@@ -56,6 +71,10 @@ export const Settings = z.object({
   dictionary: z.array(Term).max(200).default([]),
   /** The model the Claude API runs; the key itself is kept apart, encrypted. */
   apiModel: ApiModel.default("claude-opus-5-5"),
+  /** The model Claude Code runs; null is Claude Code's own default. */
+  claudeModel: AgentModel.default(null),
+  /** The model Codex runs; null is the default in the user's ~/.codex/config.toml. */
+  codexModel: AgentModel.default(null),
 });
 
 export const ProjectSummary = z.object({
@@ -77,6 +96,28 @@ export const JobEvent = z.object({
   state: z.enum(["queued", "running", "done", "failed", "cancelled"]),
   fraction: z.number().nullable(),
   error: z.string().optional(),
+});
+
+/** The agent command-line tools ClipCat can install and update. */
+export const CliId = z.enum(["claude", "codex"]);
+
+/** One CLI, as Settings shows it: the user's copy, the newest release, and what its button does. */
+export const CliStatus = z.object({
+  id: CliId,
+  label: z.string(),
+  /** The `claude` or `codex` the user's terminal runs; null when there is none. */
+  path: z.string().nullable(),
+  version: z.string().nullable(),
+  source: z.enum(["native", "npm", "bun", "brew", "winget", "app", "unknown"]).nullable(),
+  /** The newest release on the copy's channel; null when it couldn't be checked. */
+  latest: z.string().nullable(),
+  action: z.enum(["install", "update"]).nullable(),
+  /** The command the button runs, as it would be typed in a terminal. */
+  command: z.string().nullable(),
+  /** Why ClipCat can't update this copy itself, and what to do instead. */
+  manual: z.string().nullable(),
+  /** A problem beyond being old, such as an older Codex than the app sharing its config. */
+  warning: z.string().nullable(),
 });
 
 /** The coding agents ClipCat can register its MCP server with. */
@@ -176,7 +217,10 @@ export const methods = {
   "ai:status": { input: z.void(), output: AiStatus },
   /** Changes app-wide settings; resolves with all of them. */
   "settings:get": { input: z.void(), output: Settings },
-  "settings:set": { input: z.object({ agent: AgentName, dictionary: z.array(Term).max(200), apiModel: ApiModel }).partial(), output: Settings },
+  "settings:set": {
+    input: z.object({ agent: AgentName, dictionary: z.array(Term).max(200), apiModel: ApiModel, claudeModel: AgentModel, codexModel: AgentModel }).partial(),
+    output: Settings,
+  },
   /** Checks and saves a Claude API key (encrypted), or removes it with null. */
   "settings:api-key": { input: z.object({ key: z.string().trim().min(10).max(500).nullable() }), output: ApiStatus },
   /** Saves the brief and queues an AI pass that proposes retake, cleanup and tighten cuts. */
@@ -255,6 +299,10 @@ export const methods = {
   "app:diagnostics": { input: z.void(), output: z.object({ path: z.string().nullable() }) },
   /** Shows the log folder. */
   "app:reveal-logs": { input: z.void(), output: z.void() },
+  /** Where an agent CLI stands: installed version, newest release, and what Install or Update would run. */
+  "cli:status": { input: z.object({ id: CliId }), output: CliStatus },
+  /** Installs or updates an agent CLI with its official method; progress comes as cli:progress events. */
+  "cli:run": { input: z.object({ id: CliId }), output: CliStatus },
   /** The coding agents ClipCat's MCP server can be added to, and which have it. */
   "mcp:status": { input: z.void(), output: z.array(McpAgent) },
   /** Adds ClipCat's MCP server to an agent's config (connect: true) or takes it out; resolves with every agent's state. */
@@ -268,6 +316,8 @@ export const events = {
   job: JobEvent,
   "project:changed": z.object({ id: z.string(), revision: z.number().int() }),
   update: UpdateStatus,
+  /** The latest line from a running CLI install or update. */
+  "cli:progress": z.object({ id: CliId, line: z.string() }),
   /** An agent opened or closed an MCP session: every agent's state. */
   "mcp:agents": z.array(McpAgent),
 } as const;
@@ -305,6 +355,9 @@ export type AiStatusValue = z.output<typeof AiStatus>;
 export type AgentNameValue = z.output<typeof AgentName>;
 export type ApiModelValue = z.output<typeof ApiModel>;
 export type ApiStatusValue = z.output<typeof ApiStatus>;
+export type AgentModelsValue = z.output<typeof AgentModels>;
+export type CliIdValue = z.output<typeof CliId>;
+export type CliStatusValue = z.output<typeof CliStatus>;
 export type SettingsValue = z.output<typeof Settings>;
 export type UpdateStatusValue = z.output<typeof UpdateStatus>;
 export type RecordSetupValue = z.output<typeof RecordSetup>;

@@ -61,9 +61,30 @@ file, shell or web access. Proposals are checked against the transcript and
 nothing is cut until you accept it.
 
 Codex works too: install the Codex CLI, run `codex login`, and pick Codex under
-"Find cuts with" (or set `CLIPCAT_CODEX_PATH`). ClipCat runs `codex exec` in a
-read-only sandbox in an empty temporary folder, with the prompt on stdin and
-the answer held to a JSON schema; it is checked exactly like Claude's.
+"Find cuts with". ClipCat runs the newest `codex` it finds (on PATH, in the
+usual install folders, or inside the ChatGPT app), unless `CLIPCAT_CODEX_PATH`
+names one: an old CLI can be refused the model a newer one set in
+`~/.codex/config.toml`. It runs `codex exec` in a read-only sandbox in an empty
+temporary folder, with the prompt on stdin and the answer held to a JSON
+schema; it is checked exactly like Claude's.
+
+Settings shows each CLI's version next to the newest release (npm's dist-tags,
+on Claude Code's release channel) and can install or update it. A missing CLI
+is installed with its maker's script (`curl -fsSL https://claude.ai/install.sh
+| bash`, `curl -fsSL https://chatgpt.com/codex/install.sh | sh`, or the
+PowerShell `install.ps1` on Windows). An installed one is updated by whatever
+installed it: `claude update`, the Codex installer again, `npm install -g`,
+`bun add -g`, `brew upgrade` or `winget upgrade`, so no second copy ends up on
+PATH. A copy that came with an app is left to the app. The installer's output
+streams into Settings, and a failure shows its last lines. When your `codex` is
+older than another Codex on the computer (usually the ChatGPT app's), Settings
+warns that the newer one's `~/.codex/config.toml` settings, the model above
+all, may not work in it.
+
+For Claude Code and Codex, "Model" picks the model per agent. Left on the
+default, each runs its own: Claude Code's built-in default, and Codex the
+`model` in `~/.codex/config.toml`. Codex's list is the one it caches for your
+login in `~/.codex/models_cache.json`.
 
 Or use the Claude API with your own key: pick "Claude API (your key)", paste a
 key from console.anthropic.com (it is checked with one call, then stored
@@ -189,7 +210,11 @@ transcript, cut and restore words, decide proposals, take any edit op, start
 the app's own AI passes and exports, and import recordings. Every change goes
 through the same revision check as the editor, so nothing overwrites an edit
 made in the window. A packaged ClipCat that isn't running is started by the
-bridge, and entries are pointed at the current copy of the app on every launch.
+bridge in the background (`--mcp-background`): no window and no Dock icon, since
+the Claude desktop app starts its MCP servers as it opens. It becomes the
+ordinary app when you open ClipCat, and otherwise quits once the last agent
+disconnects and its jobs finish. Entries are pointed at the current copy of the
+app on every launch.
 
 Export renders the edit with ffmpeg: 16:9 at the recordings' own height (up to
 1440p) or 9:16 at 1080×1920, cropped around the speaker, at the speed set in the
