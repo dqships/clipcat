@@ -600,24 +600,47 @@ body {
   }
 }
 
-/* Project: preview on the left, transcript on the right. */
+/* Project: the preview stays put in the middle; the transcript and the
+   controls are panels docked left, right or below it (DESIGN.md, Panels). */
 .project {
-  display: grid;
-  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
-  gap: var(--space-5);
+  display: flex;
+  min-height: 0;
   padding: var(--space-5);
   overflow: hidden;
 }
 
-.project > .notice {
-  grid-column: 1 / -1;
+.project__middle {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: var(--panel-min);
+  min-height: 0;
 }
 
-.project__preview {
-  display: grid;
-  align-content: start;
+.project__middle > .notice {
+  flex: none;
+  margin-bottom: var(--space-3);
+}
+
+/* The monitor never scrolls: the picture shrinks to the room it has. */
+.project__monitor {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
   gap: var(--space-3);
-  overflow: auto;
+  min-height: var(--panel-min);
+}
+
+.project__monitor > :not(.project__screen) {
+  flex: none;
+}
+
+.project__screen {
+  display: grid;
+  flex: 1 1 0;
+  place-items: center;
+  min-height: 0;
+  container-type: size;
 }
 
 .project__video {
@@ -632,13 +655,6 @@ body {
   display: block;
   aspect-ratio: 9 / 16;
   object-fit: cover;
-}
-
-.project__transcript {
-  display: grid;
-  align-content: start;
-  gap: var(--space-3);
-  overflow: auto;
 }
 
 .section-title {
@@ -1030,12 +1046,12 @@ body {
 /* Preview stage: the video with the caption overlay sized to it. */
 .stage {
   position: relative;
+  width: min(100cqw, calc(100cqh * 16 / 9));
   container-type: inline-size;
 }
 
 .stage--tall {
-  width: min(100%, calc(70vh * 9 / 16));
-  justify-self: center;
+  width: min(100cqw, calc(100cqh * 9 / 16));
 }
 
 .captions {
@@ -1066,6 +1082,155 @@ body {
 
 .captions__word--now {
   color: var(--color-accent);
+}
+
+/* Docks: a side dock is a column, the bottom dock a row. Two panels in one
+   dock split it, with a hairline between them to resize the split. */
+.dock {
+  display: flex;
+  flex-grow: 0;
+  flex-shrink: 0;
+  min-width: 0;
+  min-height: 0;
+}
+
+.dock--left,
+.dock--right {
+  flex-direction: column;
+  min-width: var(--panel-min);
+}
+
+.dock--bottom {
+  min-height: var(--panel-min);
+}
+
+.dock-panel {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  min-height: 0;
+}
+
+.dock-panel__head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.dock-panel__docks {
+  display: flex;
+  gap: var(--space-1);
+  margin-left: auto;
+}
+
+.dock-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--control-height);
+  height: var(--control-height);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.dock-button:hover {
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.dock-button--on,
+.dock-button--on:hover {
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+.dock-button:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.dock-panel__body {
+  display: grid;
+  flex: 1 1 0;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: var(--space-3);
+  min-height: 0;
+  overflow: auto;
+}
+
+/* The panel's title row already heads the first section. */
+.dock-panel__body > :first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+/* The hairline between areas. It turns to splice tape while it's grabbed. */
+.resizer {
+  position: relative;
+  flex: none;
+  touch-action: none;
+}
+
+.resizer--vertical {
+  width: var(--space-5);
+  cursor: col-resize;
+}
+
+.resizer--horizontal {
+  height: var(--space-5);
+  cursor: row-resize;
+}
+
+.resizer::after {
+  content: "";
+  position: absolute;
+  background: var(--color-border);
+}
+
+.resizer--vertical::after {
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+}
+
+.resizer--horizontal::after {
+  top: 50%;
+  right: 0;
+  left: 0;
+  height: 1px;
+}
+
+.resizer:hover::after,
+.resizer:focus-visible::after,
+.resizer--dragging::after {
+  background: var(--color-accent);
+}
+
+.resizer--vertical:hover::after,
+.resizer--vertical:focus-visible::after,
+.resizer--vertical.resizer--dragging::after {
+  width: var(--space-1);
+  transform: translateX(-50%);
+}
+
+.resizer--horizontal:hover::after,
+.resizer--horizontal:focus-visible::after,
+.resizer--horizontal.resizer--dragging::after {
+  height: var(--space-1);
+  transform: translateY(-50%);
+}
+
+.resizer:focus-visible {
+  outline: none;
 }
 
 /* Settings panels below the preview: captions, export. */

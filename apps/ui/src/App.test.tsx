@@ -5,6 +5,7 @@ import { App } from "./App";
 afterEach(() => {
   cleanup();
   delete window.clipcat;
+  localStorage.clear();
 });
 
 const tool = (path: string, version: string | null = "ffmpeg version 6.1.1") => ({ available: version !== null, version, path });
@@ -149,6 +150,42 @@ describe("App", () => {
     expect(screen.getByText("1 cut to review, 0:02 in all.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Back to library" }));
     expect(await screen.findByRole("heading", { level: 1, name: "Library" })).toBeTruthy();
+  });
+
+  it("docks the transcript and the controls anywhere, splits a shared dock and remembers it", async () => {
+    fakeBridge({ "app:info": info(), "library:list": [summary], "project:get": project, "ai:status": { claude: { status: "ready", version: null, detail: null }, codex: { status: "not-installed", version: null, detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude" } });
+    const view = render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "talk" }));
+    await screen.findByRole("button", { name: "again." });
+    const dockOf = (title: string) => screen.getByRole("region", { name: title }).parentElement?.className;
+    expect(dockOf("Transcript")).toBe("dock dock--right");
+    expect(dockOf("Controls")).toBe("dock dock--bottom");
+    expect(screen.getByRole("button", { name: "Transcript on the right" }).getAttribute("aria-pressed")).toBe("true");
+
+    // Both on the left: one dock, transcript on top, a hairline to split it.
+    fireEvent.click(screen.getByRole("button", { name: "Transcript on the left" }));
+    fireEvent.click(screen.getByRole("button", { name: "Controls on the left" }));
+    expect(dockOf("Transcript")).toBe("dock dock--left");
+    expect(dockOf("Controls")).toBe("dock dock--left");
+    const split = screen.getByRole("separator", { name: "Resize the left split" });
+    expect(split.getAttribute("aria-orientation")).toBe("horizontal");
+    fireEvent.keyDown(split, { key: "ArrowDown" });
+    expect(split.getAttribute("aria-valuenow")).toBe("52");
+    expect(screen.queryByRole("separator", { name: "Resize the right panel" })).toBeNull();
+    const width = screen.getByRole("separator", { name: "Resize the left panel" });
+    fireEvent.keyDown(width, { key: "End" });
+    expect(width.getAttribute("aria-valuenow")).toBe("65");
+
+    // The preview is still the one it was, and the layout comes back next time.
+    expect(screen.getByRole("region", { name: "Preview" })).toBeTruthy();
+    view.unmount();
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "talk" }));
+    await screen.findByRole("button", { name: "again." });
+    expect(dockOf("Transcript")).toBe("dock dock--left");
+    expect(dockOf("Controls")).toBe("dock dock--left");
+    expect(screen.getByRole("separator", { name: "Resize the left split" }).getAttribute("aria-valuenow")).toBe("52");
+    expect(screen.getByRole("separator", { name: "Resize the left panel" }).getAttribute("aria-valuenow")).toBe("65");
   });
 
   it("asks Claude for cuts with the brief and lists what came back", async () => {

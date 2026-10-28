@@ -108,6 +108,22 @@ content as clips on the lane. Lanes use `--color-surface`, clips
 mark blown up and cropped off its edge. On a phone the track names shrink to
 their short label and clips stack.
 
+## The editor's panels
+
+The preview sits still in the middle of the editor and never scrolls; the
+picture shrinks to the room it has. The transcript and the controls are
+panels around it. Each panel's title row has three ghost icon buttons
+(Lucide `panel-left`, `panel-bottom`, `panel-right`) that dock it on the
+left, at the bottom or on the right; the current one is filled with splice
+tape. Two panels in one dock split it: stacked in a side dock, side by side
+at the bottom, transcript first. Panels sit flat on the background.
+
+Between areas is a `--space-5` gap with a 1 px `--color-border` hairline down
+its middle. It is the resize handle: on hover, focus or drag it becomes a
+`--space-1` strip of `--color-accent`. Arrow keys move it too. No panel or
+the preview gets narrower or shorter than `--panel-min` (240 px). The layout
+is remembered for every project.
+
 ## Shape and depth
 
 - Radius: `--radius-control` 4 px (buttons, inputs, clips), `--radius-panel` 8 px
