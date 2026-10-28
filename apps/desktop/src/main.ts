@@ -15,7 +15,8 @@ import type { AppInfoValue } from "@clipcat/ipc";
 import { AnalysisRunner } from "./ai/analyze";
 import { apiAgent, verifyKey } from "./ai/api";
 import { CLAUDE_MODELS, claudeAgent, probeClaude } from "./ai/claude";
-import { codexAgent, codexModels, probeCodex } from "./ai/codex";
+import { type CliDeps, cliStatus, runCli } from "./ai/cli";
+import { codexAgent, codexModels, probeCodex, resolveCodex } from "./ai/codex";
 import { hydrateEnv } from "./ai/env";
 import { type Binary, binaryPath, probeVersion } from "./tools";
 import { broadcast, registerIpc } from "./ipc";
@@ -403,6 +404,11 @@ if (!squirrelLaunch && !app.requestSingleInstanceLock()) {
         },
       };
     };
+    const cliDeps = async (): Promise<CliDeps> => {
+      const host = await hostEnv;
+      return { host, codexRuns: async () => (await resolveCodex(host))?.binary ?? null };
+    };
+    const cliRuns = new Map<string, ReturnType<typeof runCli>>();
     serveUi(UI_ROOT);
     setFacePage(DEV_URL ? new URL("faces.html", DEV_URL).toString() : `${APP_ORIGIN}/faces.html`);
     setCutoutPage(DEV_URL ? new URL("cutout.html", DEV_URL).toString() : `${APP_ORIGIN}/cutout.html`);
@@ -655,6 +661,17 @@ if (!squirrelLaunch && !app.requestSingleInstanceLock()) {
           });
           await writeFile(path, zip);
           return { path };
+        },
+        "cli:status": async ({ id }) => cliStatus(id, await cliDeps()),
+        "cli:run": async ({ id }) => {
+          // One run per CLI: a second press while one is going waits for it.
+          const running = cliRuns.get(id);
+          if (running) return running;
+          const run = cliDeps()
+            .then((deps) => runCli(id, deps, (line) => broadcast("cli:progress", { id, line })))
+            .finally(() => cliRuns.delete(id));
+          cliRuns.set(id, run);
+          return run;
         },
         "mcp:status": () => mcpStatus(installEnv),
         "mcp:connect": async ({ agent, connect }) => {

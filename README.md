@@ -68,6 +68,19 @@ names one: an old CLI can be refused the model a newer one set in
 temporary folder, with the prompt on stdin and the answer held to a JSON
 schema; it is checked exactly like Claude's.
 
+Settings shows each CLI's version next to the newest release (npm's dist-tags,
+on Claude Code's release channel) and can install or update it. A missing CLI
+is installed with its maker's script (`curl -fsSL https://claude.ai/install.sh
+| bash`, `curl -fsSL https://chatgpt.com/codex/install.sh | sh`, or the
+PowerShell `install.ps1` on Windows). An installed one is updated by whatever
+installed it: `claude update`, the Codex installer again, `npm install -g`,
+`bun add -g`, `brew upgrade` or `winget upgrade`, so no second copy ends up on
+PATH. A copy that came with an app is left to the app. The installer's output
+streams into Settings, and a failure shows its last lines. When your `codex` is
+older than another Codex on the computer (usually the ChatGPT app's), Settings
+warns that the newer one's `~/.codex/config.toml` settings, the model above
+all, may not work in it.
+
 For Claude Code and Codex, "Model" picks the model per agent. Left on the
 default, each runs its own: Claude Code's built-in default, and Codex the
 `model` in `~/.codex/config.toml`. Codex's list is the one it caches for your

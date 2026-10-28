@@ -35,7 +35,7 @@ export function refusedModel(text: string): string | null {
 }
 
 /** The ChatGPT app ships its own Codex CLI, kept current with the models it offers. */
-function bundledDirs(): string[] {
+export function bundledDirs(): string[] {
   if (process.platform !== "darwin") return [];
   return ["/Applications", join(homedir(), "Applications")].map((apps) => join(apps, "ChatGPT.app", "Contents", "Resources", "codex-cli", "bin"));
 }
@@ -78,7 +78,7 @@ export async function resolveCodex(host: HostEnv): Promise<CodexBinary | null> {
 export type CodexModels = { choices: { id: string; label: string }[]; fallback: string | null };
 
 /** Codex's own folder: `CODEX_HOME`, else ~/.codex. */
-function codexHome(host: HostEnv): string {
+export function codexHome(host: HostEnv): string {
   return host.env.CODEX_HOME || join(homedir(), ".codex");
 }
 

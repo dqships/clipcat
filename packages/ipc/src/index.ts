@@ -98,6 +98,28 @@ export const JobEvent = z.object({
   error: z.string().optional(),
 });
 
+/** The agent command-line tools ClipCat can install and update. */
+export const CliId = z.enum(["claude", "codex"]);
+
+/** One CLI, as Settings shows it: the user's copy, the newest release, and what its button does. */
+export const CliStatus = z.object({
+  id: CliId,
+  label: z.string(),
+  /** The `claude` or `codex` the user's terminal runs; null when there is none. */
+  path: z.string().nullable(),
+  version: z.string().nullable(),
+  source: z.enum(["native", "npm", "bun", "brew", "winget", "app", "unknown"]).nullable(),
+  /** The newest release on the copy's channel; null when it couldn't be checked. */
+  latest: z.string().nullable(),
+  action: z.enum(["install", "update"]).nullable(),
+  /** The command the button runs, as it would be typed in a terminal. */
+  command: z.string().nullable(),
+  /** Why ClipCat can't update this copy itself, and what to do instead. */
+  manual: z.string().nullable(),
+  /** A problem beyond being old, such as an older Codex than the app sharing its config. */
+  warning: z.string().nullable(),
+});
+
 /** The coding agents ClipCat can register its MCP server with. */
 export const McpAgentId = z.enum(["claude-code", "claude-desktop", "codex"]);
 
@@ -259,6 +281,10 @@ export const methods = {
   "app:diagnostics": { input: z.void(), output: z.object({ path: z.string().nullable() }) },
   /** Shows the log folder. */
   "app:reveal-logs": { input: z.void(), output: z.void() },
+  /** Where an agent CLI stands: installed version, newest release, and what Install or Update would run. */
+  "cli:status": { input: z.object({ id: CliId }), output: CliStatus },
+  /** Installs or updates an agent CLI with its official method; progress comes as cli:progress events. */
+  "cli:run": { input: z.object({ id: CliId }), output: CliStatus },
   /** The coding agents ClipCat's MCP server can be added to, and which have it. */
   "mcp:status": { input: z.void(), output: z.array(McpAgent) },
   /** Adds ClipCat's MCP server to an agent's config (connect: true) or takes it out; resolves with every agent's state. */
@@ -270,6 +296,8 @@ export const events = {
   job: JobEvent,
   "project:changed": z.object({ id: z.string(), revision: z.number().int() }),
   update: UpdateStatus,
+  /** The latest line from a running CLI install or update. */
+  "cli:progress": z.object({ id: CliId, line: z.string() }),
 } as const;
 
 export type Events = typeof events;
@@ -306,6 +334,8 @@ export type AgentNameValue = z.output<typeof AgentName>;
 export type ApiModelValue = z.output<typeof ApiModel>;
 export type ApiStatusValue = z.output<typeof ApiStatus>;
 export type AgentModelsValue = z.output<typeof AgentModels>;
+export type CliIdValue = z.output<typeof CliId>;
+export type CliStatusValue = z.output<typeof CliStatus>;
 export type SettingsValue = z.output<typeof Settings>;
 export type UpdateStatusValue = z.output<typeof UpdateStatus>;
 export type RecordSetupValue = z.output<typeof RecordSetup>;

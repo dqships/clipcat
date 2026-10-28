@@ -3,10 +3,14 @@ import { ArrowLeft, Download, FileArchive, FolderOpen, Plug, RefreshCw, RotateCw
 import { useEffect, useState } from "react";
 import { bridge } from "../bridge";
 import { ICON_STROKE } from "../icons";
+import { AgentCli } from "./AgentCli";
 
 type Props = { update: UpdateStatusValue | null; onBack: () => void };
 
 const message = (e: unknown) => (e instanceof Error ? e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, "") : String(e));
+
+/** The command-line tool behind an agent row, for the ones that have one. */
+const CLI_OF: Partial<Record<McpAgentIdValue, "claude" | "codex">> = { "claude-code": "claude", codex: "codex" };
 
 /** What a row says about an agent: connected, ready to connect, or not on this computer. */
 function state(agent: McpAgentValue): string {
@@ -103,6 +107,7 @@ export function Settings({ update, onBack }: Props) {
                   <span className="agents__path" title={agent.config}>
                     {agent.config}
                   </span>
+                  {CLI_OF[agent.id] && <AgentCli cli={CLI_OF[agent.id]!} />}
                 </div>
                 <button
                   type="button"
