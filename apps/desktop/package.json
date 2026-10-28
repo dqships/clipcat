@@ -7,7 +7,7 @@
   "license": "UNLICENSED",
   "main": "dist/main.cjs",
   "clipcat": {
-    "updateFeed": "https://github.com/dqships/video-editor/releases/latest/download"
+    "updateFeed": "https://github.com/dqships/clipcat/releases/latest/download"
   },
   "scripts": {
     "build:main": "esbuild src/main.ts --bundle --platform=node --format=cjs --target=node22 --external:electron --outfile=dist/main.cjs \"--banner:js=const __importMetaUrl = require('node:url').pathToFileURL(__filename).href;\" --define:import.meta.url=__importMetaUrl",

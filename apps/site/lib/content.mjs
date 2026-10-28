@@ -2,7 +2,7 @@
 // and as Markdown for agents (the same URL with `Accept: text/markdown`, or the
 // `.md` file beside it). Inline text may use [links](/path) and **bold**.
 
-const REPO = "https://github.com/dqships/video-editor";
+const REPO = "https://github.com/dqships/clipcat";
 const DOWNLOAD = `${REPO}/releases/latest/download`;
 
 export const SITE = {
@@ -12,7 +12,7 @@ export const SITE = {
   releases: `${REPO}/releases`,
   mac: `${DOWNLOAD}/ClipCat-arm64.dmg`,
   windows: `${DOWNLOAD}/ClipCat-x64-Setup.exe`,
-  tagline: "Edit talking-head videos by editing the transcript.",
+  tagline: "Raw takes in, finished video out: a free AI video editor for talking-head videos.",
 };
 
 /** When the pages last changed in substance, for the sitemap. */
@@ -22,52 +22,102 @@ export const PAGES = [
   {
     path: "/",
     nav: "Home",
-    title: "ClipCat: edit talking-head videos by editing the text",
+    title: "ClipCat: a free AI video editor for Mac and Windows",
     description:
-      "ClipCat is a free desktop video editor for Mac and Windows. It transcribes takes on your computer and cuts retakes and pauses with your own Claude or Codex.",
-    h1: "Edit your talking-head videos by editing the words",
+      "ClipCat turns raw talking-head recordings into an edited video, shorts and a write-up, on your computer, with the Claude or Codex plan you already have.",
+    kicker: "AI video editor for Mac and Windows. Free.",
+    h1: "Raw takes in. Finished video out.",
     lede:
-      "Drop in your raw takes. ClipCat transcribes them on your computer, finds the retakes, stumbles and long pauses, and lets you cut by deleting words. Then it captions what's left and exports it wide for YouTube and tall for Shorts.",
+      "Drop in your recordings. ClipCat makes the first edit with your own Claude or Codex: retakes and pauses out, punch-ins, b-roll, motion slides, sound and captions. Then it cuts the shorts and writes the chapters. You review every change, and it all runs on your computer.",
     hero: true,
     updated: UPDATED,
     sections: [
       {
-        h2: "How it works",
+        kind: "timeline",
+        caption:
+          "An example of the first edit ClipCat proposes for seven takes. Yellow marks are cuts. Every change comes with a reason, and you can undo any of them.",
+      },
+      {
+        h2: "From raw takes to posted in three steps",
         steps: [
           {
-            title: "Bring in your takes",
-            text: "Drag in recordings from your camera or phone, or record straight into ClipCat: your camera, your screen or just your voice.",
+            title: "Record or import",
+            text: "Drag in the files from your camera or phone, or record your camera, your screen or just your voice straight into a project.",
           },
           {
-            title: "Read, then cut",
-            text: "Every word is on the page. ClipCat marks the retakes and pauses it would cut, with a reason for each, and nothing is cut until you accept it. Delete any word yourself to cut it from the video.",
+            title: "Get a first edit",
+            text: "ClipCat transcribes on your computer. Then your Claude or Codex proposes the cuts, zooms, b-roll, slides and sounds, each with a reason.",
           },
           {
-            title: "Export and post",
-            text: "Render a captioned video in 16:9 and 9:16, with chapters, a description and a thumbnail ready to paste into YouTube.",
+            title: "Review and export",
+            text: "Accept or reject each change, or edit the transcript like a document. Export the long video, the shorts and the write-up.",
           },
         ],
       },
       {
-        h2: "What it does",
+        kind: "features",
+        h2: "Everything in the first edit",
+        body: ["Each change lands on its own track, so you can see it, adjust it or turn it off."],
         cards: [
-          { title: "Cuts retakes and silences", text: "Your own Claude Code or Codex reads the transcript and proposes cuts. Each one is checked against the words before you see it." },
-          { title: "Captions you can read", text: "Burned-in captions in Jost, a word or a sentence at a time, plus an .srt file beside every export." },
-          { title: "Shorts that follow you", text: "Pick how many and how long. Each short opens on a hook, and the vertical crop follows your face." },
-          { title: "Punch-ins, b-roll and slides", text: "Zoom in to land a line, lay your own clips over the talking, and add animated title cards." },
-          { title: "Sound and music", text: "A small library of effects placed on the right word, and music that ducks under your voice." },
-          { title: "Works with your agent", text: "Claude Code, Codex and the Claude app can open your projects and make edits through ClipCat's MCP server." },
+          { track: "A1", title: "Retakes and pauses out", text: "Repeated lines, stumbles and dead air are marked with a reason. Nothing is cut until you accept it." },
+          { track: "V1", title: "Punch-ins", text: "A snap, a quick push or a slow creep toward you, to land the lines that matter." },
+          { track: "V2", title: "B-roll from your files", text: "Your own screenshots and clips, placed where you talk about them, full frame or picture in picture." },
+          { track: "V3", title: "Motion slides", text: "Animated title, list and number cards, designed for the moment and timed to your words." },
+          { track: "A2", title: "Sound and music", text: "Effects on the right word, and a music bed that ducks while you talk." },
+          { track: "T1", title: "Captions", text: "Burned in a word or a sentence at a time, plus an .srt file beside every export." },
+          { track: "9:16", title: "Shorts", text: "Clips that open on a hook and stand on their own, framed on your face." },
+          { track: "TXT", title: "The write-up", text: "Chapters, a YouTube description, an article and a thumbnail with you cut out in front of the title." },
         ],
         more: "[See every feature](/features)",
       },
       {
-        h2: "Your videos stay on your computer",
+        kind: "shorts",
+        h2: "One recording, a week of shorts",
         body: [
-          "Transcription runs locally: NVIDIA's Parakeet on the Neural Engine on Apple Silicon, whisper.cpp everywhere else. Only the text of the transcript goes to the AI you choose, and only when you ask it for cuts. There is no ClipCat account and no ClipCat server. [Read the privacy page](/privacy).",
+          "Pick how many and how long. ClipCat finds the moments that work on their own, opens each one on a hook and keeps the long edit's cuts. A face tracker that runs on your computer keeps you in the 9:16 frame.",
+        ],
+        note: "Up to 30, 60 or 90 seconds each, at 1080×1920.",
+        shorts: [
+          { length: "0:41", caption: "Nobody reads your", key: "App Store", rest: "page" },
+          { length: "0:58", caption: "Launch", key: "twice.", rest: "Here's why" },
+          { length: "0:33", caption: "The", key: "one", rest: "line every video needs" },
         ],
       },
       {
-        h2: "Get ClipCat",
+        kind: "agents",
+        h2: "Uses the AI you already pay for",
+        body: [
+          "ClipCat runs no AI service of its own and has no account. It hands the transcript to the agent you're signed in to, and checks every suggestion it gets back against your words.",
+        ],
+        cards: [
+          { title: "Claude Code", text: "Counts against your Claude plan. This is the default." },
+          { title: "Codex", text: "Counts against your ChatGPT plan." },
+          { title: "Claude API key", text: "Billed per use to your own Anthropic account." },
+        ],
+        h3: "Or let your agent drive",
+        detail:
+          "ClipCat's MCP server lets Claude Code, Codex and the Claude app open your projects, cut words, accept suggestions, make shorts and start exports while ClipCat is open. Every change goes through the same undo history as the editor.",
+        session: [
+          "> cut the part about pricing, then make three shorts",
+          "clipcat  get_transcript  launch-video",
+          "clipcat  cut_words       words 812–951 (4:12–5:03)",
+          "clipcat  make_shorts     3, up to 60 s each",
+          "clipcat  export_video    16:9 and 9:16",
+        ],
+      },
+      {
+        kind: "facts",
+        h2: "Your footage never leaves your computer",
+        cards: [
+          { title: "Transcribed on your computer", text: "NVIDIA's Parakeet on the Neural Engine on Apple Silicon, and whisper.cpp everywhere else." },
+          { title: "Only text goes out", text: "The transcript goes to the AI you chose, and only when you ask it for something." },
+          { title: "No account, no tracking", text: "No ClipCat server, no analytics, no watermark and no export limit." },
+        ],
+        more: "[Read the privacy page](/privacy)",
+      },
+      {
+        kind: "end",
+        h2: "Your next video, mostly edited",
         body: ["ClipCat is free. It runs on Apple Silicon Macs with macOS 14 or newer and on 64-bit Windows 10 and 11."],
         download: true,
       },
@@ -211,7 +261,7 @@ export const PAGES = [
       {
         h2: "The idea",
         body: [
-          "Talking-head videos are mostly words. So ClipCat makes the words the editor: read the transcript, delete what you don't want, and the video follows. The AI does the tedious first pass, finding the retakes and pauses, and you make every call.",
+          "Editing a talking-head video is mostly the same chores every time: cut the retakes and pauses, punch in on the good lines, add the screenshots, the captions and a little sound, then cut shorts and write the description. ClipCat does that first pass with the AI you already use, lays every change out on the timeline with a reason, and leaves every call to you.",
         ],
       },
       {

@@ -1,6 +1,6 @@
 // Fails when app styles or components use a raw value instead of a design
 // token (DESIGN.md: "Never hardcode a color, font size or spacing value").
-// Scans apps/ui/src and the site's stylesheets. Allowed raw values: 0, 1px hairlines, percentages, and
+// Scans apps/ui/src and the site's styles, components and pages. Allowed raw values: 0, 1px hairlines, percentages, and
 // unitless numbers inside calc(). Add a token to DESIGN.md and
 // design/tokens.css instead of adding an exception here.
 
@@ -9,7 +9,7 @@ import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const scanned = [join(root, "apps", "ui", "src"), join(root, "apps", "site", "styles")];
+const scanned = [join(root, "apps", "ui", "src"), ...["styles", "components", "pages"].map((d) => join(root, "apps", "site", d))];
 
 const RULES = [
   { name: "hex color", re: /#[0-9a-fA-F]{3,8}\b/g },
@@ -24,7 +24,8 @@ const files = (dir) =>
   readdirSync(dir).flatMap((name) => {
     const path = join(dir, name);
     if (statSync(path).isDirectory()) return files(path);
-    return /\.(css|tsx?)$/.test(name) && !/\.test\.tsx?$/.test(name) ? [path] : [];
+    // tokens.css is the site's copy of the tokens themselves.
+    return /\.(css|tsx?)$/.test(name) && !/\.test\.tsx?$/.test(name) && name !== "tokens.css" ? [path] : [];
   });
 
 const problems = [];
@@ -32,7 +33,8 @@ for (const file of scanned.flatMap(files)) {
   const lines = readFileSync(file, "utf8").split("\n");
   lines.forEach((line, i) => {
     // Comments may talk about values; SVG geometry in viewBox/coordinates is unitless and not matched.
-    const code = line.replace(/\/\/.*$/, "").replace(/\/\*.*?\*\//g, "");
+    // Media queries can't read custom properties, so DESIGN.md's one breakpoint is written out.
+    const code = line.replace(/\/\/.*$/, "").replace(/\/\*.*?\*\//g, "").replace(/@media \(max-width: 720px\)/, "");
     for (const { name, re } of RULES) {
       for (const match of code.matchAll(re)) {
         problems.push(`${relative(root, file)}:${i + 1}  ${name} "${match[0]}"`);

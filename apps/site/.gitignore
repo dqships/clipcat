@@ -1,0 +1,5 @@
+.next/
+next-env.d.ts
+public/robots.txt
+public/sitemap.xml
+public/llms.txt

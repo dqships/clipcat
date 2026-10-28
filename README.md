@@ -20,7 +20,7 @@ in [DESIGN.md](DESIGN.md); read it before touching any screen.
 | `native/parakeet` | `clipcat-parakeet`, a Swift helper that runs Parakeet TDT 0.6B v3 with FluidAudio (Apple Silicon) |
 | `native/recorder` | `clipcat-recorder`, a Swift helper that records the screen with ScreenCaptureKit (macOS 15) |
 | `scripts/` | `fetch-ffmpeg` (pinned static builds), `build-whisper` (whisper.cpp from a pinned commit), `build-parakeet` and `build-recorder` (the Swift helpers), `check-tokens` (no raw values in UI) |
-| `apps/site` | Marketing site (coming later), deployed on its own by Vercel |
+| `apps/site` | Marketing site (Next.js, no JavaScript on the pages), deployed on its own by Vercel |
 
 ## Develop
 
@@ -218,7 +218,7 @@ write the same files with `export_timeline`.
 Pushing a tag that matches `apps/desktop/package.json`'s version (`v0.2.0`)
 makes CI build, smoke test and publish a GitHub release with the Mac DMG and
 zip and the Windows installer. The newest installers are always at
-`https://github.com/dqships/video-editor/releases/latest/download/ClipCat-arm64.dmg`
+`https://github.com/dqships/clipcat/releases/latest/download/ClipCat-arm64.dmg`
 and `.../ClipCat-x64-Setup.exe`.
 
 Installed copies update from the same place (`clipcat.updateFeed` in

@@ -76,6 +76,16 @@ Weights: 400 regular, 500 medium, 600 semibold.
 | `--text-title` | 22 / 28 | Dialog and section titles |
 | `--text-display` | 32 / 36 | Page headings, marketing headlines |
 
+Two more sizes exist for the marketing site only, and grow with the window:
+
+| Token | Size / line height | Use |
+| --- | --- | --- |
+| `--text-poster` | 48 to 144 / 0.92 | The one poster line in the home page hero |
+| `--text-headline` | 30 to 52 / 1.04 | Section headlines on the site |
+
+Large type is set tighter with `--tracking-tight` (−0.035 em). Small uppercase
+labels get `--tracking-caps` (0.12 em).
+
 Timecodes always use `font-variant-numeric: tabular-nums`.
 
 ## Spacing
@@ -83,6 +93,20 @@ Timecodes always use `font-variant-numeric: tabular-nums`.
 `--space-1` 4, `--space-2` 8, `--space-3` 12, `--space-4` 16, `--space-5` 24,
 `--space-6` 32. Layout steps (marketing site and large app regions only):
 `--space-7` 48, `--space-8` 64, `--space-9` 96.
+
+One breakpoint: 720 px, below which the site switches to its phone layout. Media
+queries can't read custom properties, so it is written out as
+`@media (max-width: 720px)`.
+
+## The site's timeline
+
+The marketing site is laid out like the editor's timeline: each section is a
+track, with its name in a `--track-head` (88 px) column on the left and its
+content as clips on the lane. Lanes use `--color-surface`, clips
+`--color-surface-raised` with a hairline border, and cuts are splice tape
+(`--color-accent`). The home page opens on a full-bleed accent plate with the
+mark blown up and cropped off its edge. On a phone the track names shrink to
+their short label and clips stack.
 
 ## Shape and depth
 
