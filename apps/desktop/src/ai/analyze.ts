@@ -241,14 +241,14 @@ export class AnalysisRunner {
     await agent.run({ ...run, submit, activity: (label) => ctx.progress(null, label), signal: ctx.signal });
     if (ctx.signal.aborted) throw new Error("cancelled");
     const done = saved as { result: T } | null;
-    if (!done) throw new Error(`${agent.label} finished without an answer`);
+    if (!done) throw new Error(`${agent.label} finished without suggesting anything. Try again.`);
     return { result: done.result, attempts, agent: agent.label };
   }
 
   async run(projectId: string, ctx: JobContext, request?: string): Promise<void> {
     const project = await this.deps.store.get(projectId);
     const words = orderedWords(project);
-    if (words.length === 0) throw new Error("There is no transcript to read yet");
+    if (words.length === 0) throw new Error("The transcript isn't ready yet. Wait for transcription to finish, then try again.");
 
     const { result, attempts, agent } = await this.ask<{ proposals: Proposal[]; slides: Asset[]; title: string }>(
       ctx,
@@ -293,7 +293,7 @@ export class AnalysisRunner {
   async runCorrections(projectId: string, ctx: JobContext): Promise<void> {
     const project = await this.deps.store.get(projectId);
     const words = orderedWords(project);
-    if (words.length === 0) throw new Error("There is no transcript to check yet");
+    if (words.length === 0) throw new Error("The transcript isn't ready yet. Wait for transcription to finish, then try again.");
     const dictionary = await this.deps.dictionary();
 
     const { result, attempts, agent } = await this.ask<Map<string, string>>(
@@ -422,7 +422,7 @@ export class AnalysisRunner {
   async runShorts(projectId: string, ctx: JobContext, limits: { count: number; seconds: number }): Promise<void> {
     const project = await this.deps.store.get(projectId);
     const words = orderedWords(project);
-    if (words.length === 0) throw new Error("There is no transcript to read yet");
+    if (words.length === 0) throw new Error("The transcript isn't ready yet. Wait for transcription to finish, then try again.");
 
     const { result, attempts, agent } = await this.ask<ShortPlan[]>(
       ctx,
@@ -457,7 +457,7 @@ export class AnalysisRunner {
   async runWriteup(projectId: string, ctx: JobContext): Promise<void> {
     const project = await this.deps.store.get(projectId);
     const words = orderedWords(project);
-    if (words.length === 0) throw new Error("There is no transcript to read yet");
+    if (words.length === 0) throw new Error("The transcript isn't ready yet. Wait for transcription to finish, then try again.");
     const timeline = buildTimeline(project);
 
     const { result, attempts, agent } = await this.ask<Writeup>(

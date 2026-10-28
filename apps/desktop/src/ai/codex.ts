@@ -202,7 +202,7 @@ export function codexAgent(host: HostEnv, model: string | null = null): Agent {
     label: "Codex",
     run: async (run: AgentRun) => {
       const binary = await resolveCodex(host);
-      if (!binary) throw new Error("Codex is not installed");
+      if (!binary) throw new Error("Codex isn't installed. Install the Codex CLI, then reopen ClipCat.");
       // Codex reads the instructions at the top of the prompt; its answer comes back as JSON, not a tool call.
       const instructions = `${run.system}\n\n${run.task.jsonAnswer}`;
       const dir = await mkdtemp(join(tmpdir(), "clipcat-codex-"));
@@ -215,7 +215,7 @@ export function codexAgent(host: HostEnv, model: string | null = null): Agent {
           await rm(join(dir, "answer.json"), { force: true });
           await exec(binary, model, dir, prompt, images, host, run.signal);
           const raw = await readFile(join(dir, "answer.json"), "utf8").catch(() => "");
-          if (!raw.trim()) throw new Error("Codex finished without an answer");
+          if (!raw.trim()) throw new Error("Codex finished without suggesting anything. Try again.");
           let answer: unknown;
           try {
             answer = parseAnswer(raw);

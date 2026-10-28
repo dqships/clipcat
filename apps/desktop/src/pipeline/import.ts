@@ -67,7 +67,7 @@ export class ImportPipeline {
    * so a file ClipCat can't use is refused before anything is written.
    */
   async import(files: string[], projectId: string | null): Promise<Project> {
-    if (files.length === 0) throw new Error("No files to import");
+    if (files.length === 0) throw new Error("Choose at least one video to import.");
     const probed = await Promise.all(
       files.map(async (path) => {
         try {

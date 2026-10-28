@@ -93,7 +93,7 @@ const summary = { id: "p1", name: "talk", updatedAt: "", duration: 75, sources: 
 describe("App", () => {
   it("shows the empty library with one h1", () => {
     render(<App />);
-    expect(screen.getByRole("heading", { level: 2, name: "No videos yet" })).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 2, name: "No projects yet" })).toBeTruthy();
     expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
   });
 
@@ -739,7 +739,7 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Claude desktop app" }));
     expect(screen.getByRole("tabpanel").textContent).toContain("Settings > Developer");
     fireEvent.click(screen.getByRole("button", { name: "Back to library" }));
-    expect(await screen.findByRole("heading", { level: 2, name: "No videos yet" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { level: 2, name: "No projects yet" })).toBeTruthy();
   });
 
   it("copies an example prompt from the agent walkthrough", async () => {

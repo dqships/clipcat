@@ -81,7 +81,7 @@ export function claudeAgent(host: HostEnv, appVersion: string, model: string | n
     label: "Claude",
     run: async (run: AgentRun) => {
       const binary = resolveBinary("claude", host);
-      if (!binary) throw new Error("Claude Code is not installed");
+      if (!binary) throw new Error("Claude Code isn't installed. Install it, then reopen ClipCat.");
       let done = false;
       const { task } = run;
       const submit = tool(task.tool, task.description, task.shape, async (args) => {

@@ -132,7 +132,7 @@ describe("AnalysisRunner", () => {
     const { queue, events, runner, id } = await setup(agent);
     await runner.analyze(id, "");
     await queue.idle(id);
-    expect(events.find((e) => e.state === "failed")?.error).toBe("Fake finished without an answer");
+    expect(events.find((e) => e.state === "failed")?.error).toBe("Fake finished without suggesting anything. Try again.");
   });
 
   it("adds cuts for a request to the ones waiting, replacing only what they overlap", async () => {

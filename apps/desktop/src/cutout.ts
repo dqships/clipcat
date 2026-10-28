@@ -57,7 +57,7 @@ export function cutoutProblem(): Promise<string | null> {
 /** The subject of a PNG or JPEG, cut out. Throws when the cutout can't run. */
 export async function cutout(picture: Buffer): Promise<Cutout> {
   const problem = await cutoutProblem();
-  if (problem || !win) throw new Error(`The subject cutout can't run: ${problem ?? "its window closed"}`);
+  if (problem || !win) throw new Error(`Couldn't cut you out of the frame: ${problem ?? "its window closed"}`);
   const { png, coverage } = (await win.webContents.executeJavaScript(`window.clipcatCutout.cut(${JSON.stringify(picture.toString("base64"))})`)) as {
     png: string;
     coverage: number;

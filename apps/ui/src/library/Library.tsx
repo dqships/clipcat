@@ -109,10 +109,10 @@ export function Library({ jobsFor, onOpen, onSettings, onRecord }: Props) {
           <section className="empty" aria-labelledby="empty-title">
             <EmptyStrip />
             <h2 id="empty-title" className="empty__title">
-              No videos yet
+              No projects yet
             </h2>
             <p className="empty__body">
-              Drop in your raw takes, or record one here, and ClipCat cuts the retakes and silences, then captions what's left.
+              Add videos or record a take. ClipCat transcribes it on your computer, then your AI suggests cuts for you to review.
             </p>
             <div className="empty__actions">
               <button type="button" className="button button--primary" onClick={pick}>

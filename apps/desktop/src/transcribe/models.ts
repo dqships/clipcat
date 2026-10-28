@@ -49,7 +49,7 @@ export async function downloadModel(
   const target = modelPath(dir, id);
   const part = `${target}.part`;
   const response = await fetch(`${BASE_URL}/${MODELS[id].file}`, { signal });
-  if (!response.ok || !response.body) throw new Error(`Model download failed: HTTP ${response.status}`);
+  if (!response.ok || !response.body) throw new Error(`Couldn't download the speech model (HTTP ${response.status}). Check your internet connection and try again.`);
   const total = Number(response.headers.get("content-length") ?? 0);
   let received = 0;
   const body = Readable.fromWeb(response.body as never);
@@ -59,8 +59,8 @@ export async function downloadModel(
   });
   try {
     await pipeline(body, createWriteStream(part), { signal });
-    if (total && received !== total) throw new Error(`Model download was cut short (${received} of ${total} bytes)`);
-    if (!(await looksLikeGgml(part))) throw new Error("The downloaded model isn't a whisper.cpp model file");
+    if (total && received !== total) throw new Error(`The speech model download stopped partway (${received} of ${total} bytes). Try again.`);
+    if (!(await looksLikeGgml(part))) throw new Error("The downloaded speech model is damaged. Try again.");
     await rename(part, target);
     return target;
   } catch (e) {
