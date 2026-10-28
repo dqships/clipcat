@@ -1,13 +1,16 @@
 // The AI jobs: cut proposals for the whole video, cuts for one request ("cut
 // the part about pricing"), transcript corrections, shorts (each saved as its
-// own vertical project), and descriptions of the user's b-roll media. The
-// agent reads the numbered transcript (or looks at the media's frames) and
-// answers through its task's submit tool (or JSON).
+// own vertical project), descriptions of the user's b-roll media, and motion
+// slides' designs. The agent reads the numbered transcript (or looks at the
+// media's frames) and answers through its task's submit tool (or JSON).
 // Every answer is checked against the real words: a first answer with
 // problems goes back once with the list, after which whatever checked out is
-// saved. Cuts arrive as pending proposals for the user to decide.
+// saved. Cuts arrive as pending proposals for the user to decide. A slide's
+// design is rendered and the stills go back to the agent to check before it
+// is saved.
 
 import { randomUUID } from "node:crypto";
+import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import {
   AI_TYPES,
@@ -15,6 +18,8 @@ import {
   AgentCorrections,
   AgentDescriptions,
   AgentShorts,
+  AgentSlide,
+  type Asset,
   type Project,
   type Proposal,
   type ShortPlan,
@@ -22,7 +27,10 @@ import {
   sameSpot,
   replacePending,
   shortProject,
+  type SlideLook,
+  slideSize,
   spaceProposedPunches,
+  unusedSlides,
   validateCorrections,
   validateDescriptions,
   validateProposals,
@@ -37,19 +45,23 @@ import {
   CORRECTOR_PROMPT,
   DESCRIBER_PROMPT,
   DESCRIBE_TASK,
+  DESIGNER_PROMPT,
   EDITOR_PROMPT,
+  SLIDE_TASK,
   SHORTS_PROMPT,
   SHORTS_TASK,
   analysisPrompt,
   correctionsPrompt,
   describePrompt,
+  designPrompt,
   orderedWords,
   placeableAssets,
   shortsPrompt,
 } from "./prompt";
+import { slideProblems } from "../slides/page";
 
-/** What a submit tells the agent, and whether that ends the run. */
-export type SubmitReply = { text: string; done: boolean };
+/** What a submit tells the agent, whether that ends the run, and pictures to show with it (JPEG paths). */
+export type SubmitReply = { text: string; done: boolean; images?: string[] };
 
 export type AgentRun = {
   task: AgentTask;
@@ -76,6 +88,20 @@ export type AnalysisDeps = {
   /** The user's names and terms, for corrections. */
   dictionary: () => Promise<string[]>;
   changed: (project: Project) => void;
+  /** Renders slides for checking their design; without it, slides aren't designed. */
+  slides?: SlideStudio;
+  /** Deletes the files of a slide nothing shows any more. */
+  forget?: (projectId: string, assetId: string) => void;
+};
+
+/** Renders a draft slide's stills at `times` (seconds) into `files`; resolves with how long its animations run and the errors its page reported. */
+export type SlideStudio = {
+  stills: (
+    draft: { html: string; look: SlideLook },
+    frame: { width: number; height: number },
+    times: number[],
+    files: string[],
+  ) => Promise<{ duration: number; errors: string[] }>;
 };
 
 /** How many answers the agent gets: the first, and one retry with the problems listed. */
@@ -86,8 +112,15 @@ const shortId = () => randomUUID().slice(0, 8);
 /** Media described per run: three frames each keeps a run well inside what an agent takes in at once. */
 const DESCRIBE_BATCH = 20;
 
-/** What checking one answer found: the result to save, or problems to send back. */
-type Checked<T> = { result: T; problems: string[]; summary: string; saved: string };
+/** Answers a slide design gets: the first, the one after seeing its stills, and one more if that one had problems. */
+const DESIGN_ATTEMPTS = 3;
+
+/**
+ * What checking one answer found: the result to save, or problems to send
+ * back, with pictures of it. `review` asks the agent to look at the pictures
+ * and answer again before anything is saved.
+ */
+type Checked<T> = { result: T; problems: string[]; summary: string; saved: string; images?: string[]; review?: string };
 
 export class AnalysisRunner {
   constructor(private readonly deps: AnalysisDeps) {}
@@ -121,14 +154,35 @@ export class AnalysisRunner {
     this.deps.queue.add(projectId, "shorts", "Finding shorts", (ctx) => this.runShorts(projectId, ctx, { count, seconds })).catch(() => {});
   }
 
+  /** Queues designing a slide, unless it is already queued. */
+  design(projectId: string, asset: Pick<Asset, "id" | "name">): void {
+    const key = `${projectId}/${asset.id}`;
+    if (this.designing.has(key) || !this.deps.slides) return;
+    this.designing.add(key);
+    this.deps.queue
+      .add(projectId, "design", `Designing “${asset.name}”`, (ctx) => this.runDesign(projectId, asset.id, ctx))
+      .catch(() => {})
+      .finally(() => this.designing.delete(key));
+  }
+
+  /** Queues designing every slide in the project that has no design yet. */
+  async designMissing(projectId: string): Promise<void> {
+    const project = await this.deps.store.get(projectId);
+    for (const a of project.assets) if (a.slide && !a.slide.html) this.design(projectId, a);
+  }
+
+  private readonly designing = new Set<string>();
+
   /**
    * Runs `task` with the user's agent: each answer is checked, the first one
-   * with problems goes back with them, and the last checked result is returned.
+   * with problems goes back with them (or, when the check asks for it, with
+   * pictures to review), and the last checked result is returned.
    */
   private async ask<T>(
     ctx: JobContext,
     run: { task: AgentTask; system: string; prompt: string; images?: string[] },
-    check: (input: unknown) => Checked<T> | { invalid: string[] },
+    check: (input: unknown) => Checked<T> | { invalid: string[] } | Promise<Checked<T> | { invalid: string[] }>,
+    allowed = ATTEMPTS,
   ): Promise<{ result: T; attempts: number; agent: string }> {
     const agent = await this.deps.agent();
     ctx.progress(null, `Starting ${agent.label}`);
@@ -136,16 +190,17 @@ export class AnalysisRunner {
     let saved: { result: T } | null = null;
     const submit = async (input: unknown): Promise<SubmitReply> => {
       attempts++;
-      const last = attempts >= ATTEMPTS;
-      const checked = check(input);
+      const last = attempts >= allowed;
+      const checked = await check(input);
       if ("invalid" in checked) {
         return last
           ? { text: "The answer still doesn't match the schema, so nothing was saved. Stop here.", done: true }
           : { text: `The answer doesn't match the schema:\n${checked.invalid.join("\n")}\nFix it and answer again.`, done: false };
       }
       if (checked.problems.length > 0 && !last) {
-        return { text: `${checked.summary}\n${checked.problems.join("\n")}\nFix them and answer again with the whole list.`, done: false };
+        return { text: `${checked.summary}\n${checked.problems.join("\n")}\nFix them and answer again with the whole ${checked.review ? "answer" : "list"}.`, done: false, images: checked.images };
       }
+      if (checked.review && !last) return { text: checked.review, done: false, images: checked.images };
       saved = { result: checked.result };
       return { text: `${checked.saved} Stop here.`, done: true };
     };
@@ -161,7 +216,7 @@ export class AnalysisRunner {
     const words = orderedWords(project);
     if (words.length === 0) throw new Error("There is no transcript to read yet");
 
-    const { result, attempts, agent } = await this.ask<{ proposals: Proposal[]; title: string }>(
+    const { result, attempts, agent } = await this.ask<{ proposals: Proposal[]; slides: Asset[]; title: string }>(
       ctx,
       { task: ANALYSIS_TASK, system: EDITOR_PROMPT, prompt: analysisPrompt(project, request) },
       (input) => {
@@ -173,7 +228,7 @@ export class AnalysisRunner {
         const { proposals } = spaced;
         const errors = [...valid.errors, ...spaced.errors];
         return {
-          result: { proposals, title: parsed.data.suggestedTitle ?? "" },
+          result: { proposals, slides: valid.slides, title: parsed.data.suggestedTitle ?? "" },
           problems: errors,
           summary: `${errors.length} of ${parsed.data.proposals.length} proposals have problems:`,
           saved: `Saved ${proposals.length} ${proposals.length === 1 ? "proposal" : "proposals"}.`,
@@ -181,15 +236,24 @@ export class AnalysisRunner {
       },
     );
 
+    let gone: string[] = [];
     const updated = await this.deps.store.update(projectId, null, (p) => {
       // Words the user has since removed from the project can't be cut.
       const known = new Set(p.transcript.map((w) => w.id));
       const fresh = result.proposals.filter((x) => x.wordIds.every((id) => known.has(id)));
       p.proposals = request ? addRequested(p.proposals, fresh) : replacePending(p.proposals, fresh, (x) => AI_TYPES.includes(x.type));
+      // New slides join for the proposals that stayed; slides only a replaced proposal showed go.
+      const shown = new Set(p.proposals.map((x) => x.overlay?.assetId));
+      p.assets.push(...result.slides.filter((a) => shown.has(a.id)));
+      const unused = unusedSlides(p.assets, p.proposals);
+      p.assets = p.assets.filter((a) => !unused.has(a.id));
+      gone = [...unused];
       if (result.title && !request) p.suggestedTitle = result.title;
     });
+    for (const id of gone) this.deps.forget?.(projectId, id);
     await this.deps.store.log(projectId, { type: request ? "requested" : "analyzed", agent, proposals: result.proposals.length, attempts });
     this.deps.changed(updated);
+    await this.designMissing(projectId);
   }
 
   async runCorrections(projectId: string, ctx: JobContext): Promise<void> {
@@ -254,6 +318,73 @@ export class AnalysisRunner {
     if (updated.assets.some((a) => a.prep && !a.description && !result.has(a.id)) && assets.length === DESCRIBE_BATCH) this.describe(projectId);
   }
 
+  async runDesign(projectId: string, assetId: string, ctx: JobContext): Promise<void> {
+    const studio = this.deps.slides;
+    const project = await this.deps.store.get(projectId);
+    const asset = project.assets.find((a) => a.id === assetId);
+    if (!studio || !asset?.slide || asset.slide.html) return; // removed, or designed, while queued
+    const brief = asset.slide;
+    const frame = slideSize(project.aspectRatio);
+    const seconds = asset.media.duration;
+    const proposal = project.proposals.find((p) => p.overlay?.assetId === assetId);
+    const said = new Set(proposal?.wordIds ?? []);
+    const line = orderedWords(project)
+      .filter((w) => said.has(w.id))
+      .map((w) => w.text)
+      .join(" ");
+    const rel = slideStills(assetId);
+    const dir = this.deps.store.dir(projectId);
+    await mkdir(join(dir, "media", "assets", assetId), { recursive: true });
+    // Early in the entrance, halfway, and the last frame.
+    const times = [Math.min(0.4, seconds / 4), seconds / 2, Math.max(0, seconds - 1 / 30)];
+    let reviewed = false;
+
+    const { result, attempts, agent } = await this.ask<{ html: string } | null>(
+      ctx,
+      { task: SLIDE_TASK, system: DESIGNER_PROMPT, prompt: designPrompt(brief, frame, seconds, line) },
+      async (input) => {
+        const parsed = AgentSlide.safeParse(input);
+        if (!parsed.success) return { invalid: parsed.error.issues.map((i) => `${i.path.join(".") || "input"}: ${i.message}`) };
+        const { html } = parsed.data;
+        const problems = slideProblems(html);
+        ctx.progress(null, "Rendering the slide");
+        const files = rel.map((f) => join(dir, f));
+        let images: string[] | undefined;
+        try {
+          const rendered = await studio.stills({ html, look: brief.look }, frame, times, files);
+          images = files;
+          problems.push(...rendered.errors.map((e) => `The page reported an error: ${e}`));
+          if (rendered.duration === 0) problems.push("Nothing moves: bring the elements in with CSS animations.");
+          else if (rendered.duration > seconds - 0.2) {
+            problems.push(`The animations run for ${rendered.duration.toFixed(1)}s, but the slide only shows for ${seconds.toFixed(1)}s: have everything in place well before the end.`);
+          }
+        } catch (e) {
+          problems.push(`The slide didn't render: ${e instanceof Error ? e.message : String(e)}`);
+        }
+        const review = reviewed
+          ? undefined
+          : `Here is your slide at ${times.map((t) => `${t.toFixed(1)}s`).join(", ")}${brief.look === "overlay" ? " (over grey, where the video will be)" : ""}. Check that every word fits inside the frame, nothing overlaps or is cut off, it reads at a glance, and it says what the brief says. Then call submit_slide again with the final HTML: improved if anything is off, the same if it's right.`;
+        if (images) reviewed = true;
+        // A slide that doesn't render isn't saved, even as the last answer.
+        return { result: images ? { html } : null, problems, summary: "The slide has problems:", saved: images ? "Saved the slide." : "Nothing was saved.", images, review };
+      },
+      DESIGN_ATTEMPTS,
+    );
+
+    if (!result) throw new Error(`${agent}'s slide didn't render, so it wasn't saved`);
+    const updated = await this.deps.store.update(projectId, null, (p) => {
+      // A slide removed or briefed again while it was being designed gets another design (see below).
+      const a = p.assets.find((x) => x.id === assetId);
+      if (!a?.slide || a.slide.html || a.slide.brief !== brief.brief || a.slide.look !== brief.look) return;
+      a.slide.html = result.html;
+      a.media = { ...a.media, width: frame.width, height: frame.height };
+      a.prep = { preview: rel[1]!, frames: rel };
+    });
+    await this.deps.store.log(projectId, { type: "designed", agent, slide: assetId, attempts });
+    this.deps.changed(updated);
+    if (updated.assets.some((a) => a.id === assetId && a.slide && !a.slide.html)) this.design(projectId, asset);
+  }
+
   async runShorts(projectId: string, ctx: JobContext, limits: { count: number; seconds: number }): Promise<void> {
     const project = await this.deps.store.get(projectId);
     const words = orderedWords(project);
@@ -289,6 +420,9 @@ export class AnalysisRunner {
     this.deps.changed(updated);
   }
 }
+
+/** A slide's stills, relative to the project folder: what the agent checks, the media list's thumbnail and the frames. */
+export const slideStills = (assetId: string) => [1, 2, 3].map((n) => `media/assets/${assetId}/still-${n}.jpg`);
 
 /**
  * Proposals from a request join the ones waiting. A pending AI proposal they

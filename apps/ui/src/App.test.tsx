@@ -339,6 +339,43 @@ describe("App", () => {
     await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:edit", { id: "p1", revision: 5, op: { type: "remove-asset", assetId: "m1" } }));
   });
 
+  it("asks for a slide over selected words, and offers to design one that has no design yet", async () => {
+    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude" };
+    const card = {
+      id: "g1", name: "Three steps", path: "", kind: "slide", media: { duration: 2, width: 0, height: 0 }, prep: null, description: "Three steps",
+      slide: { brief: "Three steps", look: "ink", html: "" },
+    };
+    const proposal = {
+      id: "o2", type: "visual", sourceId: "s1", cuts: [], wordIds: ["s1-0"], keepWordIds: [], reason: "Lists them", confidence: 0.7, status: "pending", punch: null,
+      overlay: { range: [0.5, 0.9], assetId: "g1", placement: "full", shape: "rectangle", corner: "top-right", size: 0.35, offset: 0 },
+    };
+    const withSlide = { ...project, revision: 4, assets: [card], proposals: [...project.proposals, proposal] };
+    const { invoke } = fakeBridge({
+      "app:info": info(),
+      "library:list": [summary],
+      "project:get": project,
+      "ai:status": ready,
+      "project:edit": withSlide,
+      "project:design-slides": undefined,
+    });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "talk" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Hello" }));
+    fireEvent.click(screen.getByRole("button", { name: "Slide" }));
+    expect((screen.getByRole("button", { name: "Add slide" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText("What the slide says"), { target: { value: "Three steps" } });
+    fireEvent.change(screen.getByLabelText("Slide look"), { target: { value: "ink" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add slide" }));
+    await vi.waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("project:edit", { id: "p1", revision: 3, op: { type: "slide", wordIds: ["s1-0"], brief: "Three steps", look: "ink" } }),
+    );
+
+    expect(await screen.findByText("Slide, ink, being designed: Three steps")).toBeTruthy();
+    expect(((await screen.findByLabelText("What Three steps says")) as HTMLTextAreaElement).value).toBe("Three steps");
+    fireEvent.click(screen.getByRole("button", { name: "Design" }));
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:design-slides", { id: "p1" }));
+  });
+
   it("changes the speed and cancels a running export", async () => {
     const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude" };
     const { invoke, emit } = fakeBridge({

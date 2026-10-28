@@ -4,6 +4,7 @@ import { formatDuration } from "../format";
 import { ICON_STROKE } from "../icons";
 
 const TYPE_LABEL: Record<string, string> = { silence: "Pause", retake: "Retake", cleanup: "Clean-up", tighten: "Tighten", "punch-in": "Punch-in", visual: "B-roll" };
+const LOOK_LABEL: Record<string, string> = { paper: "paper", ink: "ink", overlay: "over the video" };
 const PLACEMENT_LABEL: Record<string, string> = { full: "full frame", pip: "picture in picture" };
 const STYLE_LABEL: Record<string, string> = { cut: "snap in", "zoom-in": "push in", "slow-zoom": "slow zoom" };
 
@@ -17,12 +18,18 @@ const length = (p: Proposal) => p.cuts.reduce((n, [a, b]) => n + (b - a), 0);
 
 const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
-/** "2 cuts, 1 punch-in and 3 b-roll to review" */
-function toReview(pending: Proposal[]): string {
+/** "2 cuts, 1 punch-in, 3 b-roll and 1 slide to review" */
+function toReview(pending: Proposal[], slides: Set<string>): string {
   const punches = pending.filter((p) => p.punch).length;
-  const broll = pending.filter((p) => p.overlay).length;
-  const cuts = pending.length - punches - broll;
-  const parts = [cuts > 0 && count(cuts, "cut", "cuts"), punches > 0 && count(punches, "punch-in", "punch-ins"), broll > 0 && `${broll} b-roll`].filter(Boolean);
+  const slideCount = pending.filter((p) => p.overlay && slides.has(p.overlay.assetId)).length;
+  const broll = pending.filter((p) => p.overlay).length - slideCount;
+  const cuts = pending.length - punches - broll - slideCount;
+  const parts = [
+    cuts > 0 && count(cuts, "cut", "cuts"),
+    punches > 0 && count(punches, "punch-in", "punch-ins"),
+    broll > 0 && `${broll} b-roll`,
+    slideCount > 0 && count(slideCount, "slide", "slides"),
+  ].filter(Boolean);
   return `${parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}` : parts[0]} to review`;
 }
 
@@ -36,6 +43,7 @@ export function Proposals({ project, onSeek, onEdit }: Props) {
   // Accepted punch-ins and b-roll are listed in their own panels.
   const accepted = project.proposals.filter((p) => p.status === "accepted" && !p.punch && !p.overlay);
   const media = new Map(project.assets.map((a) => [a.id, a.name]));
+  const slides = new Map(project.assets.filter((a) => a.slide).map((a) => [a.id, a]));
   const text = new Map(project.transcript.map((w) => [w.id, w.text]));
   if (pending.length === 0 && accepted.length === 0) return null;
   const seconds = pending.reduce((n, p) => n + length(p), 0);
@@ -48,7 +56,7 @@ export function Proposals({ project, onSeek, onEdit }: Props) {
       </h2>
       <p className="project__summary">
         {pending.length > 0
-          ? `${toReview(pending)}${seconds > 0 ? `, ${formatDuration(seconds)} in all.` : "."}`
+          ? `${toReview(pending, new Set(slides.keys()))}${seconds > 0 ? `, ${formatDuration(seconds)} in all.` : "."}`
           : "Nothing left to review."}
         {accepted.length > 0 && ` ${accepted.length} accepted.`}
       </p>
@@ -65,16 +73,19 @@ export function Proposals({ project, onSeek, onEdit }: Props) {
           <ol className="proposals">
             {pending.map((p) => {
               const words = p.wordIds.map((id) => text.get(id) ?? "").join(" ");
-              const label = TYPE_LABEL[p.type] ?? p.type;
+              const slide = p.overlay ? slides.get(p.overlay.assetId) : undefined;
+              const label = slide ? "Slide" : (TYPE_LABEL[p.type] ?? p.type);
               return (
                 <li key={p.id} className="proposal-row">
                   <button type="button" className="proposal" onClick={() => onSeek(p.sourceId, p.punch?.range[0] ?? p.overlay?.range[0] ?? p.cuts[0]?.[0] ?? 0)}>
                     <span className="proposal__type">
                       {p.punch
                         ? `${label}, ${STYLE_LABEL[p.punch.style]}`
-                        : p.overlay
-                          ? `${label}, ${media.get(p.overlay.assetId) ?? "media"}, ${PLACEMENT_LABEL[p.overlay.placement]}`
-                          : label}
+                        : slide?.slide
+                          ? `${label}, ${LOOK_LABEL[slide.slide.look]}${slide.slide.html ? "" : ", being designed"}: ${slide.name}`
+                          : p.overlay
+                            ? `${label}, ${media.get(p.overlay.assetId) ?? "media"}, ${PLACEMENT_LABEL[p.overlay.placement]}`
+                            : label}
                     </span>
                     <span className="proposal__reason">{p.reason || `${length(p).toFixed(1)} seconds of silence`}</span>
                     {words && <span className="proposal__words">“{words}”</span>}

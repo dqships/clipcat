@@ -43,9 +43,9 @@ export function timedOverlays(project: Pick<Project, "proposals" | "assets">, ti
   return out.filter((o) => o.end > o.start);
 }
 
-/** Seconds into the media at output time `t`: a video plays on from its offset and holds its last frame; a picture is a picture. */
+/** Seconds into the media at output time `t`: a video or slide plays on from its offset and holds its last frame; a picture is a picture. */
 export function overlayTime(o: Pick<TimedOverlay, "asset" | "offset" | "start">, t: number): number {
-  if (o.asset.kind !== "video") return 0;
+  if (o.asset.kind === "image") return 0;
   return Math.max(0, Math.min(o.offset + (t - o.start), o.asset.media.duration));
 }
 

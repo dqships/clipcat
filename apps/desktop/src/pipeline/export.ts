@@ -5,9 +5,10 @@
 // videos render a few minutes at a time (see media/export.ts), and a cancel
 // stops whichever ffmpeg is running.
 
-import { copyFile, mkdir, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { access, copyFile, mkdir, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join } from "node:path";
-import { type Project, buildTimeline, captionCues, outputWords, timedOverlays, timedPunches, toAss, toSrt } from "@clipcat/core";
+import { type Asset, type Project, buildTimeline, captionCues, outputWords, timedOverlays, timedPunches, toAss, toSrt } from "@clipcat/core";
 import type { JobContext, JobQueue } from "../jobs/queue";
 import type { Encoder } from "../media/encoders";
 import {
@@ -36,11 +37,27 @@ export type ExportDeps = {
   fontsDir: string;
   /** Output seconds per video chunk; tests make it small. */
   chunkSeconds?: number;
+  /** Renders a slide's video, with transparency, at `out` (absolute). */
+  renderSlide?: (projectId: string, asset: Asset, size: { width: number; height: number }, fps: number, out: string, ctx: JobContext) => Promise<void>;
 };
+
+/** Where a slide's video for this export shape is kept, relative to the project folder: a new design or shape renders a new one. */
+export function slideRender(asset: Pick<Asset, "id" | "slide" | "media">, size: { width: number; height: number }, fps: number): string {
+  const hash = createHash("sha256")
+    .update(JSON.stringify([asset.slide?.html, asset.slide?.look, asset.media.duration]))
+    .digest("hex")
+    .slice(0, 12);
+  return `media/assets/${asset.id}/render-${size.width}x${size.height}-${fps}-${hash}.mov`;
+}
 
 /** Shares of the progress bar: the sound pass and the join are quick next to the picture. */
 const AUDIO_SHARE = 0.05;
 const MUX_SHARE = 0.03;
+
+const exists = (path: string) => access(path).then(
+  () => true,
+  () => false,
+);
 
 /** "/v/talk.mp4" → "/v/talk.srt". */
 export const srtPath = (out: string) => join(dirname(out), `${basename(out, extname(out))}.srt`);
@@ -51,6 +68,37 @@ export class ExportRunner {
   /** Queues an export after whatever the project is already doing. */
   export(projectId: string, format: ExportFormat, out: string): void {
     this.deps.queue.add(projectId, "export", `Exporting ${format}`, (ctx) => this.run(projectId, format, out, ctx)).catch(() => {});
+  }
+
+  /** The video file of each slide the edit shows, rendering the ones not rendered for this shape yet. */
+  private async renderSlides(projectId: string, project: Project, size: { width: number; height: number }, fps: number, ctx: JobContext): Promise<Map<string, string>> {
+    const root = this.deps.store.dir(projectId);
+    const timeline = buildTimeline(project);
+    const shown = [...new Map(timedOverlays(project, timeline).filter((o) => o.asset.kind === "slide").map((o) => [o.asset.id, o.asset])).values()];
+    const files = new Map<string, string>();
+    for (const [i, asset] of shown.entries()) {
+      const rel = slideRender(asset, size, fps);
+      const file = join(root, rel);
+      if (!(await exists(file))) {
+        if (!this.deps.renderSlide) throw new Error("Slides can't be rendered here");
+        const label = `Rendering slide ${i + 1} of ${shown.length}`;
+        ctx.progress(null, label);
+        const dir = dirname(file);
+        await mkdir(dir, { recursive: true });
+        // An earlier design's or shape's video goes; rendering again is quick.
+        for (const old of await readdir(dir)) if (old.startsWith("render-")) await rm(join(dir, old), { force: true });
+        const partial = `${file}.partial.mov`;
+        try {
+          await this.deps.renderSlide(projectId, asset, size, fps, partial, { signal: ctx.signal, progress: (f) => ctx.progress(null, `${label} (${Math.round((f ?? 0) * 100)}%)`) });
+          await rename(partial, file);
+        } catch (e) {
+          await rm(partial, { force: true });
+          throw e;
+        }
+      }
+      files.set(asset.id, file);
+    }
+    return files;
   }
 
   async run(projectId: string, format: ExportFormat, out: string, ctx: JobContext): Promise<void> {
@@ -78,12 +126,15 @@ export class ExportRunner {
         captions = { ass: "captions.ass", fontsDir: "fonts" };
       }
 
+      // Slides are rendered once per design and shape, before anything else.
+      const slides = await this.renderSlides(projectId, project, size, fps, ctx);
+
       const inputs = new Map(
         project.sources.map((s) => [s.id, s.media.videoCodec || !s.prep ? s.path : join(store.dir(projectId), s.prep.proxy)]),
       );
       // B-roll video is read from the original; a picture from its prepared PNG, which ffmpeg reads whatever the original was.
       const overlayInputs = new Map(
-        project.assets.map((a) => [a.id, a.kind === "video" || !a.prep ? a.path : join(store.dir(projectId), a.prep.preview)]),
+        project.assets.map((a) => [a.id, slides.get(a.id) ?? (a.kind === "video" || !a.prep ? a.path : join(store.dir(projectId), a.prep.preview))]),
       );
       const overlays = timedOverlays(project, timeline);
       const shape = { project, punches: timedPunches(project, timeline), overlays, overlayInputs, format, fps, inputs, graphFile: "graph.txt" };

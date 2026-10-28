@@ -17,11 +17,13 @@ import {
   ProposalStatus,
   PunchStyle,
   type Range,
+  SlideLook,
   type Snapshot,
   type Word,
 } from "./project";
 import { defaultOverlay, overlayProposal } from "./overlays";
 import { PUNCH_SCALE, punchProposal, punchRange } from "./punchins";
+import { slideAsset, slideName } from "./slides";
 
 export const EditOp = z.discriminatedUnion("type", [
   /** Cut (included: false) or restore (included: true) these words. */
@@ -42,6 +44,8 @@ export const EditOp = z.discriminatedUnion("type", [
   z.object({ type: z.literal("punch-style"), id: z.string(), style: PunchStyle }),
   /** Show b-roll over these words (one recording's). An undo step, like a punch-in. */
   z.object({ type: z.literal("overlay"), wordIds: z.array(z.string()).min(1).max(10_000), assetId: z.string(), placement: OverlayPlacement }),
+  /** A motion slide over these words, for the AI editor to design from the brief. An undo step, like b-roll. */
+  z.object({ type: z.literal("slide"), wordIds: z.array(z.string()).min(1).max(10_000), brief: z.string().trim().min(1).max(1000), look: SlideLook }),
   /** Where and how b-roll shows. Not an undo step: the list shows it. */
   z.object({
     type: z.literal("overlay-style"),
@@ -51,7 +55,7 @@ export const EditOp = z.discriminatedUnion("type", [
     corner: PipCorner.optional(),
     size: z.number().min(0.2).max(0.6).optional(),
   }),
-  /** What a picture or video shows, for the AI editor. Not an undo step. */
+  /** What a picture or video shows, for the AI editor; for a slide, its brief, which has it designed again. Not an undo step. */
   z.object({ type: z.literal("describe"), assetId: z.string(), description: z.string().max(1000) }),
   /** Takes a picture or video out of the project, with the b-roll that used it. Not an undo step. */
   z.object({ type: z.literal("remove-asset"), assetId: z.string() }),
@@ -153,6 +157,11 @@ export function applyEdit(project: Project, op: EditOp, id: IdFactory): Project 
     const asset = p.assets.find((a) => a.id === op.assetId);
     if (!asset) throw new Error(`Unknown media: ${op.assetId}`);
     asset.description = op.description.trim();
+    if (asset.slide && asset.slide.brief !== asset.description && asset.description) {
+      asset.slide = { ...asset.slide, brief: asset.description, html: "" };
+      asset.name = slideName(asset.description);
+      asset.prep = null;
+    }
     return p;
   }
 
@@ -165,16 +174,21 @@ export function applyEdit(project: Project, op: EditOp, id: IdFactory): Project 
 
   // A new punch-in or b-roll joins as rejected before the undo step is taken, so undoing it takes it away again.
   let added: Proposal | null = null;
-  if (op.type === "punch" || op.type === "overlay") {
+  if (op.type === "punch" || op.type === "overlay" || op.type === "slide") {
     const ids = new Set(op.wordIds);
     const words = p.transcript.filter((w) => ids.has(w.id));
     if (words.length !== ids.size) throw new Error(`Unknown words: ${op.wordIds.filter((w) => !p.transcript.some((x) => x.id === w)).slice(0, 5).join(", ")}`);
     const sourceId = words[0]!.sourceId;
-    const what = op.type === "punch" ? "A punch-in" : "B-roll";
+    const what = op.type === "punch" ? "A punch-in" : op.type === "slide" ? "A slide" : "B-roll";
     if (words.some((w) => w.sourceId !== sourceId)) throw new Error(`${what} stays inside one recording`);
     const fields = { id: id(), sourceId, wordIds: words.sort((a, b) => a.start - b.start).map((w) => w.id), reason: "", confidence: 1, status: "rejected" as const };
     if (op.type === "punch") {
       added = punchProposal(fields, punchRange(words), op.style);
+    } else if (op.type === "slide") {
+      const range = punchRange(words);
+      const asset = slideAsset(id(), op.brief, op.look, range[1] - range[0]);
+      p.assets.push(asset);
+      added = overlayProposal(fields, defaultOverlay(range, asset.id, "full"));
     } else {
       if (!p.assets.some((a) => a.id === op.assetId)) throw new Error(`Unknown media: ${op.assetId}`);
       added = overlayProposal(fields, defaultOverlay(punchRange(words), op.assetId, op.placement));

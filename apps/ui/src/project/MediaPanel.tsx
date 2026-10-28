@@ -1,5 +1,5 @@
 import { type EditOp, type OverlayPlacement, type PipCorner, type PipShape, type Project, buildTimeline, timedOverlays } from "@clipcat/core";
-import { ImagePlus, X } from "lucide-react";
+import { ImagePlus, RefreshCw, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { bridge } from "../bridge";
 import { formatDuration, mediaUrl } from "../format";
@@ -25,14 +25,25 @@ const CORNERS: { value: PipCorner; label: string }[] = [
 
 /**
  * B-roll: the pictures and videos added to the project, with what each one
- * shows (the AI editor writes it, and it can be corrected), and the b-roll in
- * the edit, in play order, with where and how each shows. New b-roll comes
- * from selecting words in the transcript, or from the AI editor.
+ * shows (the AI editor writes it, and it can be corrected), the slides the AI
+ * editor designs, with what each says (a new brief has it designed again),
+ * and the b-roll in the edit, in play order, with where and how each shows.
+ * New b-roll comes from selecting words in the transcript, or from the AI
+ * editor.
  */
 export function MediaPanel({ project, onSeek, onEdit }: Props) {
   const [error, setError] = useState<string | null>(null);
   const timeline = useMemo(() => buildTimeline(project), [project]);
   const placed = useMemo(() => timedOverlays(project, timeline), [project, timeline]);
+
+  const designAgain = async () => {
+    setError(null);
+    try {
+      await bridge()?.invoke("project:design-slides", { id: project.id });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
 
   const add = async () => {
     setError(null);
@@ -72,20 +83,26 @@ export function MediaPanel({ project, onSeek, onEdit }: Props) {
           {project.assets.map((a) => (
             <li key={a.id} className="media__item">
               {a.prep ? (
-                <img className="media__thumb" src={mediaUrl(project.id, a.prep.frames[0]!)} alt="" />
+                <img className="media__thumb" src={mediaUrl(project.id, a.kind === "slide" ? a.prep.preview : a.prep.frames[0]!)} alt="" />
               ) : (
                 <span className="media__thumb media__thumb--pending" />
               )}
               <div className="media__about">
                 <span className="media__name">
                   {a.name}
-                  <span className="media__kind">{a.kind === "video" ? formatDuration(a.media.duration) : "Picture"}</span>
+                  <span className="media__kind">{a.kind === "video" ? formatDuration(a.media.duration) : a.kind === "slide" ? "Slide" : "Picture"}</span>
+                  {a.slide && !a.slide.html && (
+                    <button type="button" className="button" onClick={() => void designAgain()}>
+                      <RefreshCw className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
+                      Design
+                    </button>
+                  )}
                 </span>
                 <textarea
                   key={a.description}
                   className="field__control media__description"
-                  aria-label={`What ${a.name} shows`}
-                  placeholder={a.prep ? "What it shows, for the AI editor" : "Preparing…"}
+                  aria-label={a.slide ? `What ${a.name} says` : `What ${a.name} shows`}
+                  placeholder={a.slide ? (a.slide.html ? "What the slide says" : "Being designed…") : a.prep ? "What it shows, for the AI editor" : "Preparing…"}
                   defaultValue={a.description}
                   rows={2}
                   maxLength={1000}

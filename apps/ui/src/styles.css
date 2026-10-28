@@ -439,6 +439,17 @@ body {
   gap: var(--space-1);
 }
 
+.editor__slide {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.editor__brief {
+  min-width: calc(var(--space-9) * 2.5);
+}
+
 .editor__count {
   color: var(--color-text-muted);
   font-size: var(--text-caption);
@@ -927,6 +938,22 @@ body {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+/* A slide lays out at its own size, scaled to cover the box. */
+.broll__slide {
+  position: relative;
+  overflow: hidden;
+}
+
+.broll__frame {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border: 0;
+  transform-origin: 0 0;
+  background: transparent;
+  pointer-events: none;
 }
 
 .punches__item--wrap {

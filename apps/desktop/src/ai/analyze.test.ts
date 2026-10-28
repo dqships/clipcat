@@ -262,3 +262,112 @@ describe("AnalysisRunner media", () => {
     expect((await store.get(id)).proposals[0]).toMatchObject({ type: "visual", status: "pending", overlay: { assetId: "m1", placement: "pip" } });
   });
 });
+
+describe("AnalysisRunner slides", () => {
+  const slide = { type: "slide", from: 2, to: 7, brief: "Three steps", look: "paper", reason: "Lists them", confidence: 0.7 };
+
+  /** An editor that proposes `proposals`, and a designer that sends `designs` in turn. */
+  async function studio(proposals: unknown[], designs: string[], render?: (times: number[]) => { duration: number; errors: string[] }) {
+    const replies: { text: string; done: boolean; images?: string[] }[] = [];
+    const runs: AgentRun[] = [];
+    const forgotten: string[] = [];
+    const agent: Agent = {
+      label: "Fake",
+      run: async (run) => {
+        runs.push(run);
+        if (run.task.tool !== "submit_slide") {
+          await run.submit({ proposals });
+          return;
+        }
+        for (const html of designs) {
+          const reply = await run.submit({ html });
+          replies.push(reply);
+          if (reply.done) return;
+        }
+      },
+    };
+    const base = await setup(agent);
+    const rendered: { html: string; times: number[] }[] = [];
+    const runner = new AnalysisRunner({
+      store: base.store,
+      queue: base.queue,
+      agent: async () => agent,
+      dictionary: async () => [],
+      changed: () => {},
+      forget: (_, assetId) => forgotten.push(assetId),
+      slides: {
+        stills: async (draft, _frame, times, files) => {
+          rendered.push({ html: draft.html, times });
+          const result = render?.(times) ?? { duration: 1, errors: [] };
+          for (const f of files) await writeFile(f, "jpeg");
+          return result;
+        },
+      },
+    });
+    return { ...base, runner, replies, runs, rendered, forgotten };
+  }
+
+  it("adds the slides the editor proposes and designs each, showing the designer its stills before saving", async () => {
+    const { store, queue, runner, id, replies, runs, rendered } = await studio([slide], ["<h1>One</h1>", "<h1>Two</h1>"]);
+    await runner.analyze(id, "");
+    await queue.idle(id); // the analysis, which queues the designs
+    await queue.idle(id);
+
+    const p = await store.get(id);
+    const made = p.assets[0]!;
+    expect(p.proposals[0]).toMatchObject({ type: "visual", status: "pending", overlay: { assetId: made.id, placement: "full" } });
+    expect(runs[1]!.prompt).toContain("Brief:\nThree steps\nLook: paper\nFrame: 1920×1080 (wide)");
+    expect(runs[1]!.prompt).toContain('says over it: "I think I think we start"');
+    expect(replies[0]).toMatchObject({ done: false, images: [1, 2, 3].map((n) => join(store.dir(id), `media/assets/${made.id}/still-${n}.jpg`)) });
+    expect(replies[0]!.text).toContain("Here is your slide at 0.4s, 1.8s");
+    expect(replies[1]).toMatchObject({ done: true, text: "Saved the slide. Stop here." });
+    expect(rendered.map((r) => r.html)).toEqual(["<h1>One</h1>", "<h1>Two</h1>"]);
+    expect(made).toMatchObject({
+      kind: "slide",
+      media: { width: 1920, height: 1080 },
+      slide: { brief: "Three steps", html: "<h1>Two</h1>" },
+      prep: { preview: `media/assets/${made.id}/still-2.jpg` },
+    });
+  });
+
+  it("sends back what the page reported, and saves nothing that never renders", async () => {
+    const { store, queue, runner, id, replies, events } = await studio([slide], ["<h1>One</h1>", "<h1>Two</h1>", "<h1>Three</h1>"], () => {
+      throw new Error("boom");
+    });
+    await runner.analyze(id, "");
+    await queue.idle(id); // the analysis, which queues the designs
+    await queue.idle(id);
+
+    expect(replies[0]!.text).toContain("The slide didn't render: boom");
+    expect(replies.at(-1)).toMatchObject({ done: true, text: "Nothing was saved. Stop here." });
+    expect(events.find((e) => e.kind === "design" && e.state === "failed")?.error).toContain("didn't render");
+    expect((await store.get(id)).assets[0]!.slide!.html).toBe("");
+  });
+
+  it("asks for a fix when the page errors or runs too long", async () => {
+    const { queue, runner, id, replies } = await studio([slide], ["<h1>One</h1>", "<h1>Two</h1>"], () => ({ duration: 9, errors: ["x is not defined"] }));
+    await runner.analyze(id, "");
+    await queue.idle(id); // the analysis, which queues the designs
+    await queue.idle(id);
+
+    expect(replies[0]!.text).toContain("The page reported an error: x is not defined");
+    expect(replies[0]!.text).toContain("The animations run for 9.0s, but the slide only shows for 3.5s");
+    expect(replies[0]!.images).toHaveLength(3);
+  });
+
+  it("drops a slide whose proposal a rerun replaced", async () => {
+    const { store, queue, runner, id, forgotten } = await studio([slide], ["<h1>One</h1>", "<h1>One</h1>"]);
+    await runner.analyze(id, "");
+    await queue.idle(id); // the analysis, which queues the designs
+    await queue.idle(id);
+    const first = (await store.get(id)).assets[0]!.id;
+    await runner.analyze(id, "");
+    await queue.idle(id); // the analysis, which queues the designs
+    await queue.idle(id);
+
+    const p = await store.get(id);
+    expect(p.assets).toHaveLength(1);
+    expect(p.assets[0]!.id).not.toBe(first);
+    expect(forgotten).toEqual([first]);
+  });
+});

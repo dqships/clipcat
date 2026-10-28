@@ -106,8 +106,20 @@ export const Proposal = z.object({
   overlay: Overlay.nullable().default(null),
 });
 
+/** How a motion slide looks: on warm paper, on ink, or over the speaker with no background of its own. */
+export const SlideLook = z.enum(["paper", "ink", "overlay"]);
+
+/** A motion slide: what it should show, and the HTML the AI editor wrote for it (empty until designed). */
+export const Slide = z.object({
+  brief: z.string().max(1000),
+  look: SlideLook,
+  html: z.string().max(200_000),
+});
+
 /**
- * A picture or a video the user added for b-roll. It is read from where it
+ * A picture, a video or a motion slide, shown as b-roll. Pictures and videos
+ * are the user's own and read from where they are; a slide is HTML the AI
+ * editor writes. It is read from where it
  * is; what the preview and the AI editor look at is prepared beside the
  * project.
  */
@@ -115,21 +127,24 @@ export const Asset = z.object({
   id: z.string(),
   name: z.string(),
   path: z.string(),
-  kind: z.enum(["video", "image"]),
+  kind: z.enum(["video", "image", "slide"]),
   media: z.object({
-    /** 0 for a picture. */
+    /** 0 for a picture; a slide's own length. */
     duration: z.number().nonnegative(),
     width: z.number().int().nonnegative(),
     height: z.number().int().nonnegative(),
   }),
   /**
    * Relative to the project folder: what the preview shows (a light H.264
-   * copy of a video, a PNG of a picture, which the export also uses) and a
-   * few small frames for the AI editor to look at. Null until prepared.
+   * copy of a video, a PNG of a picture, which the export also uses; nothing
+   * for a slide, which the preview runs live) and a few small frames for the
+   * AI editor to look at. Null until prepared, or for a slide, designed.
    */
   prep: z.object({ preview: z.string(), frames: z.array(z.string()) }).nullable().default(null),
   /** What it shows, in a sentence or two: written by the AI editor or the user, read when placing b-roll. */
   description: z.string().max(1000).default(""),
+  /** Set on a slide. */
+  slide: Slide.nullable().default(null),
 });
 
 const captionFields = {
@@ -231,6 +246,8 @@ export type PipShape = z.infer<typeof PipShape>;
 export type PipCorner = z.infer<typeof PipCorner>;
 export type Overlay = z.infer<typeof Overlay>;
 export type Asset = z.infer<typeof Asset>;
+export type SlideLook = z.infer<typeof SlideLook>;
+export type Slide = z.infer<typeof Slide>;
 export type Captions = z.infer<typeof Captions>;
 export type Snapshot = z.infer<typeof Snapshot>;
 export type LastExport = z.infer<typeof LastExport>;

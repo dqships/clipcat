@@ -110,6 +110,19 @@ The export overlays the original clip (or the picture) for its stretch, with
 the window's corners masked, under the captions; the preview places it with
 the same layout.
 
+Motion slides are short animated cards (a section title, a list of steps, a
+number) that the AI editor suggests where seeing the words helps, or that you
+ask for by selecting words and pressing "Slide". Each has a brief (what it
+says) and a look: ink on warm paper, paper on ink, or a label over the
+video. The AI editor designs it in HTML and CSS with the app's palette, Jost
+and spring; ClipCat renders stills of the design in a hidden window and sends
+them back so the agent can check its work before the slide is saved. Every
+animation is paused and stepped by the MotionKit runtime
+(`window.motion.seek(t)`), so the preview runs the slide live at the
+playhead and the export renders it frame by frame into a video with
+transparency, once per design and shape. Editing the brief in the B-roll
+panel has it designed again.
+
 Editing happens in the transcript: click a word to jump there, shift-click to
 select a run, and press Delete to cut it (again to restore). Suggested cuts,
 from the pause finder and from Claude, are accepted or rejected under the

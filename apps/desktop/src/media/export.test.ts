@@ -1,4 +1,4 @@
-import { buildTimeline, defaultOverlay, initialSegments, overlayProposal, punchProposal, setRange, timedOverlays, timedPunches } from "@clipcat/core";
+import { buildTimeline, defaultOverlay, initialSegments, overlayProposal, punchProposal, setRange, slideAsset, timedOverlays, timedPunches } from "@clipcat/core";
 import { asset, source } from "@clipcat/core/fixtures";
 import { describe, expect, it } from "vitest";
 import { audioCommand, chunkCommand, chunkList, chunkOverlays, exportChunks, exportSize, frameTimeline, muxArgs, overlayFit, punchPieces } from "./export";
@@ -191,6 +191,13 @@ describe("b-roll", () => {
     expect(round.filter).toBe(
       "scale=378:378:force_original_aspect_ratio=increase:flags=lanczos,crop=378:378,setsar=1,format=yuva420p,geq=lum='p(X,Y)':a='255*clip(189-hypot(max(abs(X+0.5-189)-0,0),max(abs(Y+0.5-189)-0,0))+0.5,0,1)'",
     );
+  });
+
+  it("keeps a slide's own transparency, full-frame or in a window", () => {
+    const card = { ...overlays[0]!, asset: slideAsset("s1", "Hi", "overlay", 3) };
+    expect(overlayFit(card, { width: 1920, height: 1080 }).filter).toMatch(/,format=yuva420p$/);
+    expect(overlayFit({ ...card, placement: "pip", shape: "circle" }, { width: 1920, height: 1080 }).filter).toContain(":a='alpha(X,Y)*clip(");
+    expect(chunkOverlays({ start: 45, frames: 300 }, [card], 30)[0]!.at).toBe(0.5);
   });
 
   it("reads each one for its part of the chunk and lays it over the picture, under the captions", () => {

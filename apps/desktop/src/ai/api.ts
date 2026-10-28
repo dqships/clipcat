@@ -8,8 +8,8 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { ApiModelValue as ApiModel } from "@clipcat/ipc";
 import type { Agent, AgentRun } from "./analyze";
 
-/** Requests per run: the answer, a retry with the problems, and room for a nudge if it answers in prose. */
-const TURNS = 4;
+/** Requests per run: the answer, a retry with the problems (or a slide's stills, and then problems), and room for a nudge if it answers in prose. */
+const TURNS = 5;
 
 const NO_KEY = "Add a Claude API key in the AI panel, or pick another way to run the AI editor.";
 const BAD_KEY = "The Claude API refused the key. Check it in the AI panel.";
@@ -25,6 +25,15 @@ export function apiError(e: unknown): Error {
 
 /** The answer without nulls, so the shared schemas (which use optional fields) read it. */
 const dropNulls = (input: unknown): unknown => JSON.parse(JSON.stringify(input), (_k, v: unknown) => (v === null ? undefined : v));
+
+/** Pictures as image blocks. */
+const jpegs = (paths: string[] = []) =>
+  Promise.all(
+    paths.map(async (path): Promise<Anthropic.Beta.BetaImageBlockParam> => ({
+      type: "image",
+      source: { type: "base64", media_type: "image/jpeg", data: (await readFile(path)).toString("base64") },
+    })),
+  );
 
 /** Checks a key with one cheap call; throws a readable error if it doesn't work. */
 export async function verifyKey(key: string, model: ApiModel, client = new Anthropic({ apiKey: key, maxRetries: 1 })): Promise<void> {
@@ -49,12 +58,7 @@ export function apiAgent(options: { key: () => Promise<string | null>; model: ()
         input_schema: run.task.jsonSchema as Anthropic.Beta.BetaTool.InputSchema,
         strict: true,
       };
-      const pictures = await Promise.all(
-        (run.images ?? []).map(async (path): Promise<Anthropic.Beta.BetaImageBlockParam> => ({
-          type: "image",
-          source: { type: "base64", media_type: "image/jpeg", data: (await readFile(path)).toString("base64") },
-        })),
-      );
+      const pictures = await jpegs(run.images);
       const messages: Anthropic.Beta.BetaMessageParam[] = [
         { role: "user", content: pictures.length > 0 ? [...pictures, { type: "text", text: run.prompt }] : run.prompt },
       ];
@@ -103,7 +107,8 @@ export function apiAgent(options: { key: () => Promise<string | null>; model: ()
           }
           run.activity("Checking Claude's answer");
           const reply = await run.submit(dropNulls(call.input));
-          results.push({ type: "tool_result", tool_use_id: call.id, content: reply.text });
+          const stills = await jpegs(reply.images);
+          results.push({ type: "tool_result", tool_use_id: call.id, content: stills.length > 0 ? [{ type: "text", text: reply.text }, ...stills] : reply.text });
           done = reply.done;
         }
         if (done) return;

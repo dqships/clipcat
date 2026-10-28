@@ -7,7 +7,7 @@ import { mkdtemp, readFile, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { applyEdit, buildTimeline, defaultOverlay, overlayBox, overlayProposal, punchProposal, timedOverlays } from "@clipcat/core";
+import { applyEdit, buildTimeline, defaultOverlay, overlayBox, overlayProposal, punchProposal, slideAsset, timedOverlays } from "@clipcat/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { JobQueue, type JobEvent } from "../jobs/queue";
 import { runFfmpeg } from "../media/run";
@@ -254,5 +254,59 @@ describe.skipIf(!binDir)("prep with real ffmpeg", () => {
     expect(pictureColour(await pixel(mid, box.x + box.width / 2, box.y + box.height / 2))).toBe(true);
     expect(pictureColour(await pixel(mid, box.x + 2, box.y + 2))).toBe(false);
     expect(pictureColour(await pixel(pip!.start - 0.3, box.x + box.width / 2, box.y + box.height / 2))).toBe(false);
+  }, 180_000);
+
+  it("renders a slide's video once and lays it over the picture, letting the recording through where it is clear", async () => {
+    expect(projectId).not.toBe("");
+    const s = (await store.get(projectId)).sources[0]!.id;
+    await store.update(projectId, null, (q) => {
+      q.proposals = q.proposals.filter((x) => !x.overlay);
+      const card = { ...slideAsset("sl1", "Half a card", "overlay", 2), slide: { brief: "Half a card", look: "overlay" as const, html: "<p>x</p>" } };
+      q.assets.push({ ...card, prep: { preview: "media/assets/sl1/still-2.jpg", frames: [] } });
+      q.proposals.push(
+        overlayProposal({ id: "o3", sourceId: s, wordIds: [], reason: "", confidence: 1, status: "accepted" }, defaultOverlay([0.3, 1.3], "sl1", "full")),
+      );
+    });
+    // Stands in for the slide renderer: the left half opaque in the clip's colour, the right half clear.
+    const renders: string[] = [];
+    const renderSlide = async (_: string, asset: { media: { duration: number } }, size: { width: number; height: number }, fps: number, out: string) => {
+      renders.push(out);
+      await run(exe("ffmpeg"), [
+        "-hide_banner", "-y", "-f", "lavfi", "-i", `color=c=black:s=${size.width}x${size.height}:r=${fps}:d=${asset.media.duration}`,
+        "-vf", "format=rgba,geq=r=192:g=128:b=64:a='if(lt(X,W/2),255,0)'", "-c:v", "png", "-pix_fmt", "rgba", "-f", "mov", out,
+      ]);
+    };
+    const deps = {
+      store,
+      queue: new JobQueue(() => {}),
+      changed: () => {},
+      ffmpeg: (args: string[], { cwd, duration, ctx }: { cwd: string; duration: number; ctx: { signal: AbortSignal } }) =>
+        runFfmpeg(exe("ffmpeg"), args, { cwd, duration, signal: ctx.signal }),
+      encoder: sw,
+      fontsDir: join(__dirname, "..", "..", "resources", "fonts"),
+      renderSlide,
+    };
+    const out = join(root, "slide.mp4");
+    const ctx = { signal: new AbortController().signal, progress: () => {} };
+    await new ExportRunner(deps).run(projectId, "16:9", out, ctx);
+    await new ExportRunner(deps).run(projectId, "16:9", out, ctx);
+    expect(renders).toHaveLength(1);
+    expect(renders[0]).toMatch(/media[\\/]assets[\\/]sl1[\\/]render-1280x720-\d+-[0-9a-f]{12}\.mov\.partial\.mov$/);
+
+    const q = await store.get(projectId);
+    const [card] = timedOverlays(q, buildTimeline(q));
+    const mid = (card!.start + card!.end) / 2;
+    const pixel = async (t: number, x: number, y: number) => {
+      const { stdout } = await promisify(execFile)(
+        exe("ffmpeg"),
+        ["-v", "error", "-ss", t.toFixed(3), "-i", out, "-frames:v", "1", "-vf", `format=rgb24,crop=1:1:${x}:${y}`, "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
+        { encoding: "buffer" },
+      );
+      return [...(stdout as Buffer)];
+    };
+    const cardColour = (px: number[]) => px.every((v, i) => Math.abs(v - [0xc0, 0x80, 0x40][i]!) < 24);
+    expect(cardColour(await pixel(mid, 100, 360))).toBe(true);
+    expect(cardColour(await pixel(mid, 1180, 360))).toBe(false);
+    expect(cardColour(await pixel(card!.end + 0.3, 100, 360))).toBe(false);
   }, 180_000);
 });

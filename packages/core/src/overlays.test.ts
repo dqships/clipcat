@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { asset, source } from "./fixtures";
 import { defaultOverlay, overlayAt, overlayBox, overlayProposal, overlayTime, timedOverlays, validateDescriptions } from "./overlays";
+import { slideAsset, slideName, unusedSlides } from "./slides";
 import { buildTimeline } from "./timeline";
 
 const seg = (id: string, sourceStart: number, sourceEnd: number, included = true) => ({ id, sourceId: "a", sourceStart, sourceEnd, included });
@@ -62,5 +63,15 @@ describe("validateDescriptions", () => {
     );
     expect([...descriptions]).toEqual([["m1", "A drone shot of a city"]]);
     expect(errors).toEqual(["description 1: media 0 is described twice", "description 2: media must be a number from 0 to 1", "media 1: not described"]);
+  });
+});
+
+describe("slides", () => {
+  it("names a slide from its brief and finds the ones nothing shows", () => {
+    expect(slideName("  A very long first line that goes on and on past the limit of the list\nsecond")).toHaveLength(48);
+    expect(slideName("")).toBe("Slide");
+    const s = slideAsset("s1", "Hello", "paper", 3);
+    expect(unusedSlides([s, asset("m1")], [{ overlay: null }])).toEqual(new Set(["s1"]));
+    expect(unusedSlides([s], [{ overlay: { assetId: "s1" } }])).toEqual(new Set());
   });
 });

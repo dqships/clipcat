@@ -147,3 +147,46 @@ describe("validateProposals b-roll", () => {
     expect(errors.at(-1)).toContain("b-roll at word 5: it sits on words another proposal cuts");
   });
 });
+
+describe("validateProposals slides", () => {
+  it("makes a slide to design and full-frame b-roll that shows it", () => {
+    const { proposals, slides, errors } = validateProposals(
+      { proposals: [{ type: "slide", from: 1, to: 5, brief: "Dan, today", look: "ink", reason: "Names the speaker", confidence: 0.8 }] },
+      ws,
+      sources,
+      counter("p"),
+    );
+    expect(errors).toEqual([]);
+    expect(slides).toHaveLength(1);
+    expect(slides[0]).toMatchObject({ kind: "slide", slide: { brief: "Dan, today", look: "ink", html: "" } });
+    expect(slides[0]!.media.duration).toBeCloseTo(2.9);
+    expect(proposals[0]).toMatchObject({ type: "visual", overlay: { assetId: slides[0]!.id, placement: "full" } });
+  });
+
+  it("needs a brief, a look and a sensible length, competes with b-roll and gives way to a cut", () => {
+    const { proposals, slides, errors } = validateProposals(
+      {
+        proposals: [
+          { type: "slide", from: 0, to: 4, look: "paper", reason: "x", confidence: 0.5 },
+          { type: "slide", from: 2, to: 2, brief: "b", look: "paper", reason: "x", confidence: 0.5 },
+          { type: "cleanup", from: 0, to: 1, brief: "b", reason: "x", confidence: 0.5 },
+          { type: "visual", from: 0, to: 3, media: 0, placement: "full", reason: "x", confidence: 0.9 },
+          { type: "slide", from: 2, to: 6, brief: "b", look: "overlay", reason: "x", confidence: 0.6 },
+          { type: "slide", from: 4, to: 7, brief: "c", look: "overlay", reason: "x", confidence: 0.6 },
+          { type: "tighten", from: 7, to: 7, reason: "x", confidence: 0.4 },
+        ],
+      },
+      ws,
+      [source("a", 6)],
+      counter("p"),
+      [asset("m1")],
+    );
+    expect(errors[0]).toContain("must set brief and look");
+    expect(errors[1]).toContain("a slide lasts 2 to 10 seconds");
+    expect(errors[2]).toContain("only slides may set brief and look");
+    expect(errors.some((e) => e.includes("overlaps a more confident proposal"))).toBe(true);
+    expect(errors.at(-1)).toContain("sits on words another proposal cuts");
+    expect(slides).toEqual([]);
+    expect(proposals.map((p) => p.type)).toEqual(["visual", "tighten"]);
+  });
+});

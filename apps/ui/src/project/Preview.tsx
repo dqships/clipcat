@@ -12,6 +12,7 @@ import {
   overlayTime,
   punchFocus,
   punchZoom,
+  slideSize,
   sourceToOutput,
   timedOverlays,
   timedPunches,
@@ -19,6 +20,7 @@ import {
 import { type CSSProperties, type Ref, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { mediaUrl } from "../format";
 import { previewFrame } from "./CaptionOverlay";
+import { SlideFrame, seekSlide } from "./SlideFrame";
 
 /** A moment in one recording. */
 export type Playhead = { sourceId: string; time: number };
@@ -109,6 +111,9 @@ export function Preview({ project, onTime, ref }: Props) {
   const punches = useMemo(() => timedPunches(project, timeline), [project, timeline]);
   const overlays = useMemo(() => timedOverlays(project, timeline), [project, timeline]);
   const broll = useRef<HTMLVideoElement>(null);
+  const slide = useRef<HTMLIFrameElement>(null);
+  /** Where the slide showing should be, for a page that has only just loaded. */
+  const slideTime = useRef(0);
   const [shown, setShown] = useState<TimedOverlay | null>(null);
   const showing = useRef<TimedOverlay | null>(null);
   const live = useRef({ timeline, order, sourceId, onTime, sources, tall, punches, overlays });
@@ -153,6 +158,13 @@ export function Preview({ project, onTime, ref }: Props) {
       if (roll?.id !== showing.current?.id || roll?.asset.id !== showing.current?.asset.id) {
         showing.current = roll;
         setShown(roll);
+      }
+      if (roll && out !== null && roll.asset.kind === "slide") {
+        const want = overlayTime(roll, out);
+        if (want !== slideTime.current) {
+          slideTime.current = want;
+          seekSlide(slide.current, want);
+        }
       }
       const b = broll.current;
       if (roll && out !== null && b && roll.asset.kind === "video") {
@@ -209,6 +221,7 @@ export function Preview({ project, onTime, ref }: Props) {
     const roll = out === null ? null : overlayAt(overlays, out);
     showing.current = roll;
     setShown(roll);
+    if (roll && out !== null) slideTime.current = overlayTime(roll, out);
   }, [overlays, timeline, sourceId]);
 
   // The preview plays at the export's speed; loading another recording resets the rate, so it is set again then.
@@ -245,7 +258,16 @@ export function Preview({ project, onTime, ref }: Props) {
       />
       {shown && shownPrep && (
         <div className="broll" style={brollStyle(shown, previewFrame(project))} aria-hidden>
-          {shown.asset.kind === "video" ? (
+          {shown.asset.kind === "slide" ? (
+            <SlideFrame
+              ref={slide}
+              key={shown.asset.id}
+              projectId={project.id}
+              asset={shown.asset}
+              frame={shown.asset.media.width > 0 ? shown.asset.media : slideSize(project.aspectRatio)}
+              onLoad={(frame) => seekSlide(frame, slideTime.current)}
+            />
+          ) : shown.asset.kind === "video" ? (
             <video ref={broll} key={shown.id} className="broll__media" src={mediaUrl(project.id, shownPrep.preview)} muted playsInline preload="auto" />
           ) : (
             <img className="broll__media" src={mediaUrl(project.id, shownPrep.preview)} alt="" />

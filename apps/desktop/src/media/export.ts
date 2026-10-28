@@ -204,7 +204,7 @@ export function punchFilter(s: Source, piece: Piece, punch: TimedPunch, size: Si
 /** B-roll in one chunk: from frame `from` of the chunk for `frames` frames, starting `at` seconds into its media. */
 export type ChunkOverlay = { overlay: TimedOverlay; from: number; frames: number; at: number };
 
-/** The b-roll a chunk shows, cut to the chunk. A video that runs out holds its last frame. */
+/** The b-roll a chunk shows, cut to the chunk. A video (or a slide's) that runs out holds its last frame. */
 export function chunkOverlays(chunk: Pick<Chunk, "start" | "frames">, overlays: TimedOverlay[], fps: number): ChunkOverlay[] {
   const out: ChunkOverlay[] = [];
   for (const o of overlays) {
@@ -213,7 +213,7 @@ export function chunkOverlays(chunk: Pick<Chunk, "start" | "frames">, overlays: 
     const hi = Math.min(Math.round(o.end * fps), chunk.start + chunk.frames);
     if (hi <= lo) continue;
     // Seeking right to the end finds no frame to hold, so the last half second is as far as it goes.
-    const at = o.asset.kind === "video" ? Math.max(0, Math.min(o.offset + (lo - a) / fps, o.asset.media.duration - 0.5)) : 0;
+    const at = o.asset.kind !== "image" ? Math.max(0, Math.min(o.offset + (lo - a) / fps, o.asset.media.duration - 0.5)) : 0;
     out.push({ overlay: o, from: lo - chunk.start, frames: hi - lo, at });
   }
   return out;
@@ -227,10 +227,12 @@ export function chunkOverlays(chunk: Pick<Chunk, "start" | "frames">, overlays: 
 export function overlayFit(o: TimedOverlay, size: Size): { filter: string; x: number; y: number } {
   const box = overlayBox(o, size);
   const cover = `scale=${box.width}:${box.height}:force_original_aspect_ratio=increase:flags=lanczos,crop=${box.width}:${box.height},setsar=1`;
-  if (o.placement === "full") return { filter: `${cover},format=yuv420p`, x: 0, y: 0 };
+  // A slide brings its own transparency, which the window's mask cuts further.
+  const slide = o.asset.kind === "slide";
+  if (o.placement === "full") return { filter: `${cover},format=${slide ? "yuva420p" : "yuv420p"}`, x: 0, y: 0 };
   const [hw, hh, r] = [box.width / 2, box.height / 2, box.radius];
   const inside = `${r}-hypot(max(abs(X+0.5-${hw})-${hw - r},0),max(abs(Y+0.5-${hh})-${hh - r},0))+0.5`;
-  return { filter: `${cover},format=yuva420p,geq=lum='p(X,Y)':a='255*clip(${inside},0,1)'`, x: box.x, y: box.y };
+  return { filter: `${cover},format=yuva420p,geq=lum='p(X,Y)':a='${slide ? "alpha(X,Y)" : "255"}*clip(${inside},0,1)'`, x: box.x, y: box.y };
 }
 
 export type ChunkPlan = Shape & {
@@ -294,7 +296,7 @@ export function chunkCommand(plan: ChunkPlan): { graph: string; args: string[] }
       const file = plan.overlayInputs?.get(overlay.assetId);
       if (!file) throw new Error(`No file for b-roll ${overlay.asset.name}`);
       const seconds = sec(frames / fps + 1);
-      if (overlay.asset.kind === "video") args.push("-ss", sec(at), "-t", seconds, "-i", file);
+      if (overlay.asset.kind !== "image") args.push("-ss", sec(at), "-t", seconds, "-i", file);
       else args.push("-loop", "1", "-framerate", String(fps), "-t", seconds, "-i", file);
       const fit = overlayFit(overlay, size);
       // Numbered from its first frame in the chunk, so the overlay waits for it and lets the picture through after.
