@@ -51,11 +51,8 @@ const config = {
     // and microphone (the bundled helpers in Resources/bin get the same). APPLE_SIGN_IDENTITY picks the
     // certificate when the keychain holds more than one Developer ID.
     osxSign: process.env.SKIP_SIGN ? undefined : { ...(process.env.APPLE_SIGN_IDENTITY ? { identity: process.env.APPLE_SIGN_IDENTITY } : {}) },
-    // Only a signed app can be notarized, so an unsigned build (SKIP_SIGN, every pull request) skips it.
-    osxNotarize:
-      !process.env.SKIP_SIGN && process.env.APPLE_ID && process.env.APPLE_PASSWORD && process.env.APPLE_TEAM_ID
-        ? { appleId: process.env.APPLE_ID, appleIdPassword: process.env.APPLE_PASSWORD, teamId: process.env.APPLE_TEAM_ID }
-        : undefined,
+    // Notarizing happens in the postPackage hook below, not here: packager gives up stapling after
+    // about 7 seconds, and Apple's ticket server often throttles or drops the first tries.
     windowsSign: sign,
   },
   makers: [
@@ -109,6 +106,13 @@ const config = {
       mkdirSync(join(STAGE, "models"), { recursive: true });
       cpSync(model, join(STAGE, "models", "isnet-small.onnx"));
     },
+    // Only a signed app can be notarized, so an unsigned build (SKIP_SIGN, every pull request) skips it.
+    // This runs before the makers, so the DMG and zip carry the stapled app.
+    postPackage: async (/** @type {unknown} */ _config, /** @type {{ platform: string, outputPaths: string[] }} */ result) => {
+      const { SKIP_SIGN, APPLE_ID, APPLE_PASSWORD, APPLE_TEAM_ID } = process.env;
+      if (result.platform !== "darwin" || SKIP_SIGN || !APPLE_ID || !APPLE_PASSWORD || !APPLE_TEAM_ID) return;
+      for (const out of result.outputPaths) await notarize(join(out, "ClipCat.app"), { APPLE_ID, APPLE_PASSWORD, APPLE_TEAM_ID });
+    },
     // Both Mac builds publish to the same feed, so the Intel one's manifest is RELEASES-x64.json
     // (src/update.ts reads it there). The zip maker starts each manifest from the feed's
     // RELEASES.json, which is Apple Silicon's, so only this build's own zips are kept.
@@ -149,6 +153,48 @@ function dmgConfig() {
       ...hidden.map((name, i) => ({ type: "position", path: name, x: 110 * (i + 1), y: 700 })),
     ],
   };
+}
+
+/**
+ * Sends the app to Apple's notary service, then staples the ticket to it. Apple's ticket server can
+ * lag behind the notary service and answers THROTTLED with a retryAfter, so stapling keeps trying
+ * for about seven minutes before the build fails.
+ * @param {string} app
+ * @param {{ APPLE_ID: string, APPLE_PASSWORD: string, APPLE_TEAM_ID: string }} auth
+ */
+async function notarize(app, auth) {
+  const { execFileSync, spawnSync } = require("node:child_process");
+  const { mkdtempSync } = require("node:fs");
+  const { tmpdir } = require("node:os");
+  const dir = mkdtempSync(join(tmpdir(), "clipcat-notarize-"));
+  try {
+    const zip = join(dir, "ClipCat.zip");
+    execFileSync("ditto", ["-c", "-k", "--sequesterRsrc", "--keepParent", basename(app), zip], { cwd: dirname(app) });
+    const login = ["--apple-id", auth.APPLE_ID, "--password", auth.APPLE_PASSWORD, "--team-id", auth.APPLE_TEAM_ID];
+    const submit = spawnSync("xcrun", ["notarytool", "submit", zip, ...login, "--wait", "--output-format", "json"], { encoding: "utf8" });
+    /** @type {{ id?: string, status?: string }} */
+    let status = {};
+    try {
+      status = JSON.parse(submit.stdout);
+    } catch {}
+    if (submit.status !== 0 || status.status !== "Accepted") {
+      const log = status.id ? spawnSync("xcrun", ["notarytool", "log", status.id, ...login], { encoding: "utf8" }).stdout : "";
+      throw new Error(`Notarizing ${app} failed (${status.status ?? "no status"}):\n${submit.stdout}${submit.stderr}\n${log}`);
+    }
+    console.log(`Notarized ${app} (${status.id}).`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+
+  for (let attempt = 1; ; attempt++) {
+    const staple = spawnSync("xcrun", ["stapler", "staple", basename(app)], { cwd: dirname(app), encoding: "utf8" });
+    if (staple.status === 0) break;
+    if (attempt === 10) throw new Error(`Stapling ${app} failed after ${attempt} tries:\n${staple.stdout}${staple.stderr}`);
+    const wait = Math.min(15 * attempt, 60);
+    console.log(`Stapling ${app} failed (exit ${staple.status}), trying again in ${wait}s.`);
+    await new Promise((resolve) => setTimeout(resolve, wait * 1000));
+  }
+  execFileSync("xcrun", ["stapler", "validate", basename(app)], { cwd: dirname(app), stdio: "inherit" });
 }
 
 function windowsSign() {
