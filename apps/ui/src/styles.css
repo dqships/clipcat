@@ -1063,3 +1063,14 @@ body {
 .chapters__item {
   grid-template-columns: auto minmax(0, 1fr) auto;
 }
+
+/* The thumbnail draws at 1280×720 and shows at the panel's width. */
+.thumbnail__canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+}

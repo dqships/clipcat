@@ -35,8 +35,8 @@ const config = {
       !path.startsWith("/dist/") &&
       path !== "/ui" &&
       !path.startsWith("/ui/"),
-    // bin is staged by the prePackage hook; both end up in Resources (bin/, fonts/, sfx/).
-    extraResource: [join(STAGE, "bin"), join(__dirname, "resources", "fonts"), join(__dirname, "resources", "sfx")],
+    // bin and models are staged by the prePackage hook; all end up in Resources (bin/, models/, fonts/, sfx/).
+    extraResource: [join(STAGE, "bin"), join(STAGE, "models"), join(__dirname, "resources", "fonts"), join(__dirname, "resources", "sfx")],
     osxSign: process.env.SKIP_SIGN ? undefined : {},
     osxNotarize:
       process.env.APPLE_ID && process.env.APPLE_PASSWORD && process.env.APPLE_TEAM_ID
@@ -60,7 +60,8 @@ const config = {
   ],
   hooks: {
     // Copies this platform's ffmpeg, ffprobe, whisper-cli and (Apple Silicon) clipcat-parakeet
-    // from vendor/ into the stage folder, so packaging fails loudly instead of shipping without them.
+    // and the cutout model from vendor/ into the stage folder, so packaging fails loudly instead of
+    // shipping without them.
     prePackage: async (/** @type {unknown} */ _config, /** @type {string} */ platform, /** @type {string} */ arch) => {
       const from = join(__dirname, "..", "..", "vendor", "bin", `${platform}-${arch}`);
       const exe = platform === "win32" ? ".exe" : "";
@@ -74,6 +75,12 @@ const config = {
       rmSync(join(STAGE, "bin"), { recursive: true, force: true });
       mkdirSync(STAGE, { recursive: true });
       cpSync(from, join(STAGE, "bin"), { recursive: true });
+
+      const model = join(__dirname, "..", "..", "vendor", "models", "isnet-small.onnx");
+      if (!existsSync(model)) throw new Error("No cutout model in vendor/models. Run: npm run fetch:cutout");
+      rmSync(join(STAGE, "models"), { recursive: true, force: true });
+      mkdirSync(join(STAGE, "models"), { recursive: true });
+      cpSync(model, join(STAGE, "models", "isnet-small.onnx"));
     },
   },
 };

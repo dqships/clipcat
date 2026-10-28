@@ -10,6 +10,7 @@ import type { Encoder } from "../media/encoders";
 import { type FaceDetector, findFaces } from "../media/faces";
 import { musicPrepArgs, probeMusic } from "../media/music";
 import { prepArgs } from "../media/prep";
+import { thumbnailFrameArgs } from "../media/thumbnail";
 import { probe } from "../media/probe";
 import { runFfmpeg } from "../media/run";
 import { encodeWav, readWav } from "../media/wav";
@@ -19,6 +20,7 @@ import { runWhisper, termsPrompt, whisperArgs } from "../transcribe/whisper";
 import type { AssetDeps } from "./assets";
 import type { Heard, PipelineDeps } from "./import";
 import type { MusicDeps } from "./music";
+import type { ThumbnailDeps } from "./thumbnail";
 
 export type Tools = {
   ffmpeg: string;
@@ -144,5 +146,11 @@ export function realMusicDeps(tools: Pick<Tools, "ffmpeg" | "ffprobe">): Pick<Mu
   return {
     probe: (file) => probeMusic(tools.ffprobe, file),
     prep: (file, duration, out, ctx) => runFfmpeg(tools.ffmpeg, musicPrepArgs(file, out), { duration, onProgress: (f) => ctx.progress(f), signal: ctx.signal }),
+  };
+}
+
+export function realThumbnailDeps(tools: Pick<Tools, "ffmpeg">): Pick<ThumbnailDeps, "grab"> {
+  return {
+    grab: (file, time, out, ctx) => runFfmpeg(tools.ffmpeg, thumbnailFrameArgs(file, time, out), { duration: 0, signal: ctx.signal }),
   };
 }

@@ -1,5 +1,6 @@
 // ClipCat's main process: one window, the UI on app://clipcat, prepared media
-// on media://, sound effects on sound://, and the IPC handlers. All media
+// on media://, sound effects on sound://, the cutout model on model://, and
+// the IPC handlers. All media
 // work lives here, never in the renderer.
 
 import { BrowserWindow, app, dialog, nativeTheme, safeStorage, shell } from "electron";
@@ -22,13 +23,15 @@ import { IMAGE_EXTENSIONS, VIDEO_EXTENSIONS } from "./media/assets";
 import { MUSIC_EXTENSIONS } from "./media/music";
 import { encoderTestArgs, lazyEncoder, pickEncoder } from "./media/encoders";
 import { runFfmpeg } from "./media/run";
+import { closeCutout, cutout, cutoutProblem, setCutoutPage } from "./cutout";
 import { closeFaceDetector, faceDetector, faceDetectorProblem, setFacePage } from "./faceDetector";
 import { AssetPipeline } from "./pipeline/assets";
-import { realAssetDeps, realDeps, realMusicDeps } from "./pipeline/deps";
+import { realAssetDeps, realDeps, realMusicDeps, realThumbnailDeps } from "./pipeline/deps";
 import { ExportRunner } from "./pipeline/export";
 import { ImportPipeline } from "./pipeline/import";
 import { MusicPipeline } from "./pipeline/music";
-import { APP_ORIGIN, registerSchemes, serveMedia, serveSlides, serveSounds, serveUi } from "./protocol";
+import { ThumbnailPipeline } from "./pipeline/thumbnail";
+import { APP_ORIGIN, registerSchemes, serveMedia, serveModels, serveSlides, serveSounds, serveUi } from "./protocol";
 import { SLIDE_COLORS, SLIDE_CSP, SLIDE_FONTS, fontFaces, slidePage } from "./slides/page";
 import { renderStills, renderVideo } from "./slides/render";
 import { handleSquirrelEvent } from "./squirrel";
@@ -92,6 +95,8 @@ const hostEnv = hydrateEnv();
 
 const FONTS_DIR = app.isPackaged ? join(process.resourcesPath, "fonts") : join(REPO_ROOT, "apps", "desktop", "resources", "fonts");
 const SFX_DIR = app.isPackaged ? join(process.resourcesPath, "sfx") : join(REPO_ROOT, "apps", "desktop", "resources", "sfx");
+/** The cutout model; in development, where npm run fetch:cutout puts it. */
+const MODELS_DIR = app.isPackaged ? join(process.resourcesPath, "models") : join(REPO_ROOT, "vendor", "models");
 
 /** Slides being designed, served on slide://draft/<token> while their stills render. */
 const drafts = new Map<string, string>();
@@ -172,6 +177,7 @@ function startPipeline() {
     describe: (id) => analysis.describe(id),
   });
   const music = new MusicPipeline({ ...realMusicDeps({ ffmpeg: tool("ffmpeg"), ffprobe: tool("ffprobe") }), store, queue, changed });
+  const thumbnail = new ThumbnailPipeline({ ...realThumbnailDeps({ ffmpeg: tool("ffmpeg") }), cutout, store, queue, changed });
   const exporter = new ExportRunner({
     store,
     queue,
@@ -184,7 +190,7 @@ function startPipeline() {
     renderSlide: (projectId, asset, size, fps, out, ctx) =>
       renderVideo(tool("ffmpeg"), `slide://${projectId}/${asset.id}`, size, fps, asset.media.duration, out, { signal: ctx.signal, progress: (f) => ctx.progress(f) }),
   });
-  return { store, settings, keys, queue, pipeline, media, music, analysis, exporter };
+  return { store, settings, keys, queue, pipeline, media, music, thumbnail, analysis, exporter };
 }
 
 /** A file name from the video's title: no characters Windows or macOS refuse. */
@@ -229,6 +235,7 @@ function createWindow(): BrowserWindow {
   win.on("closed", () => {
     mainWindow = null;
     closeFaceDetector();
+    closeCutout();
   });
 
   win.once("ready-to-show", () => {
@@ -242,7 +249,7 @@ if (!squirrelLaunch) {
   if (!app.requestSingleInstanceLock()) app.quit();
 
   app.whenReady().then(() => {
-    const { store, settings, keys, queue, pipeline, media, music, analysis, exporter } = startPipeline();
+    const { store, settings, keys, queue, pipeline, media, music, thumbnail, analysis, exporter } = startPipeline();
     const aiStatus = async () => {
       const host = await hostEnv;
       const [claude, codex, current, key] = await Promise.all([probeClaude(host), probeCodex(host), settings.get(), keys.get()]);
@@ -250,6 +257,8 @@ if (!squirrelLaunch) {
     };
     serveUi(UI_ROOT);
     setFacePage(DEV_URL ? new URL("faces.html", DEV_URL).toString() : `${APP_ORIGIN}/faces.html`);
+    setCutoutPage(DEV_URL ? new URL("cutout.html", DEV_URL).toString() : `${APP_ORIGIN}/cutout.html`);
+    serveModels(MODELS_DIR);
     serveMedia((id) => store.dir(id));
     serveSounds(SFX_DIR);
     serveSlides(async (host, id) => {
@@ -265,8 +274,8 @@ if (!squirrelLaunch) {
           const info = await appInfo();
           const file = process.env.CLIPCAT_SMOKE_IMPORT;
           const ai = await aiStatus();
-          const faceDetector = await faceDetectorProblem();
-          finishSmoke({ screen, info, ai, faceDetector, ...(file ? { import: await smokeImport(pipeline, exporter, store, queue, file) } : {}) });
+          const [faceDetector, cutout] = await Promise.all([faceDetectorProblem(), cutoutProblem()]);
+          finishSmoke({ screen, info, ai, faceDetector, cutout, ...(file ? { import: await smokeImport(pipeline, exporter, store, queue, file) } : {}) });
         },
         "library:list": () => store.list(),
         "files:pick": async (_, event) => {
@@ -355,6 +364,21 @@ if (!squirrelLaunch) {
           if (result.canceled || !result.filePath) return { path: null };
           const path = extname(result.filePath).toLowerCase() === ".md" ? result.filePath : `${result.filePath}.md`;
           await writeFile(path, articleFile(article));
+          return { path };
+        },
+        "project:thumbnail-frame": ({ id, sourceId, time }) => thumbnail.pick(id, sourceId, time),
+        "project:save-thumbnail": async ({ id, png }, event) => {
+          const project = await store.get(id);
+          const win = BrowserWindow.fromWebContents(event.sender);
+          const options: Electron.SaveDialogOptions = {
+            title: "Save the thumbnail",
+            defaultPath: join(app.getPath("pictures"), `${fileName(project.suggestedTitle || project.name)}.png`),
+            filters: [{ name: "PNG image", extensions: ["png"] }],
+          };
+          const result = win ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options);
+          if (result.canceled || !result.filePath) return { path: null };
+          const path = extname(result.filePath).toLowerCase() === ".png" ? result.filePath : `${result.filePath}.png`;
+          await writeFile(path, Buffer.from(png, "base64"));
           return { path };
         },
         "project:shorts": async ({ id, count, seconds }) => analysis.shorts(id, count, seconds),

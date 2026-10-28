@@ -459,6 +459,32 @@ describe("App", () => {
     await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:edit", expect.objectContaining({ op: { type: "remove-chapter", wordId: "s1-1" } })));
   });
 
+  it("makes a thumbnail from the frame at the playhead, then changes its text and colours", async () => {
+    const thumbnail = { sourceId: "s1", time: 0, frame: "media/thumbnail/frame-a.jpg", subject: "media/thumbnail/subject-a.png", text: "", textColor: "paper", background: "frame", textSide: "left", behind: true };
+    const { invoke } = fakeBridge({
+      "app:info": info(),
+      "library:list": [summary],
+      "project:get": { ...project, thumbnail },
+      "ai:status": { claude: { status: "missing", version: null, detail: null }, codex: { status: "missing", version: null, detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude" },
+      "project:thumbnail-frame": undefined,
+      "project:edit": { ...project, thumbnail },
+    });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "talk" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Use the frame at 0:00" }));
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:thumbnail-frame", { id: "p1", sourceId: "s1", time: 0 }));
+    expect(screen.getByText(/The text sits behind you/)).toBeTruthy();
+
+    const text = screen.getByLabelText("Text") as HTMLInputElement;
+    fireEvent.change(text, { target: { value: "Say it once" } });
+    fireEvent.blur(text);
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:edit", expect.objectContaining({ op: { type: "thumbnail", text: "Say it once" } })));
+    fireEvent.change(screen.getByLabelText("Behind the text"), { target: { value: "blur" } });
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:edit", expect.objectContaining({ op: { type: "thumbnail", background: "blur" } })));
+    // The pictures haven't loaded, so there's nothing to save yet.
+    expect((screen.getByRole("button", { name: "Save thumbnail as PNG…" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it("changes the speed and cancels a running export", async () => {
     const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude" };
     const { invoke, emit } = fakeBridge({

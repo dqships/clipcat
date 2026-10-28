@@ -189,6 +189,7 @@ export function shortProject(parent: Project, plan: ShortPlan, opts: { id: strin
     // Music is picked for a whole video; a short gets its own.
     music: null,
     writeup: null,
+    thumbnail: null,
     transcript: parent.transcript.filter((w) => used.has(w.sourceId)).map((w) => ({ ...w })),
     segments,
     proposals: parent.proposals

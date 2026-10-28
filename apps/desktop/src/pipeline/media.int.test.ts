@@ -13,10 +13,11 @@ import { JobQueue, type JobEvent } from "../jobs/queue";
 import { runFfmpeg } from "../media/run";
 import { ProjectStore } from "../store/projects";
 import { AssetPipeline } from "./assets";
-import { realAssetDeps, realDeps, realMusicDeps } from "./deps";
+import { realAssetDeps, realDeps, realMusicDeps, realThumbnailDeps } from "./deps";
 import { ExportRunner, srtPath } from "./export";
 import { ImportPipeline } from "./import";
 import { MusicPipeline } from "./music";
+import { ThumbnailPipeline } from "./thumbnail";
 
 const binDir = process.env.CLIPCAT_TEST_FFMPEG;
 const exe = (name: string) => join(binDir ?? "", process.platform === "win32" ? `${name}.exe` : name);
@@ -368,4 +369,29 @@ describe.skipIf(!binDir)("prep with real ffmpeg", () => {
     expect((await peak(out, boom!.time, boom!.time + 0.4, "lowpass=f=120")) - (await peak(plain, boom!.time, boom!.time + 0.4, "lowpass=f=120"))).toBeGreaterThan(12);
     expect((await peak(out, 2.6, 3.0, "highpass=f=1500")) - (await peak(plain, 2.6, 3.0, "highpass=f=1500"))).toBeGreaterThan(12);
   }, 180_000);
+
+  it("grabs the thumbnail's frame from the original recording, full size", async () => {
+    expect(projectId).not.toBe("");
+    const s = (await store.get(projectId)).sources[0]!.id;
+    const queue = new JobQueue(() => {});
+    const pictures: Buffer[] = [];
+    const thumbnail = new ThumbnailPipeline({
+      ...realThumbnailDeps({ ffmpeg: exe("ffmpeg") }),
+      // The cutout runs in the app's hidden window; here it passes the frame through.
+      cutout: async (picture) => {
+        pictures.push(picture);
+        return { png: picture, coverage: 0.4 };
+      },
+      store,
+      queue,
+      changed: () => {},
+    });
+    await thumbnail.pick(projectId, s, 2);
+    await queue.idle(projectId);
+    const t = (await store.get(projectId)).thumbnail!;
+    expect(t.subject).not.toBeNull();
+    const { stdout } = await run(exe("ffprobe"), ["-v", "error", "-show_entries", "stream=width,height,codec_name", "-of", "json", join(store.dir(projectId), t.frame)]);
+    expect(JSON.parse(stdout).streams[0]).toEqual({ codec_name: "mjpeg", width: 1280, height: 720 });
+    expect(pictures[0]![0]).toBe(0xff);
+  }, 60_000);
 });

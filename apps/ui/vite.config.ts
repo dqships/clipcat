@@ -10,8 +10,8 @@ export default defineConfig({
     outDir: "dist",
     emptyOutDir: true,
     target: "chrome140",
-    // The face detector's page is its own entry, loaded in a hidden window.
-    rollupOptions: { input: { main: "index.html", faces: "faces.html" } },
+    // The face detector's and the cutout's pages are entries of their own, each loaded in a hidden window.
+    rollupOptions: { input: { main: "index.html", faces: "faces.html", cutout: "cutout.html" } },
     // The model and the WebAssembly runtime stay files, never inlined.
     assetsInlineLimit: 0,
   },

@@ -184,3 +184,15 @@ describe("applyEdit slides", () => {
     expect(same.assets.at(-1)!.slide!.html).toBe("<h1>Three steps</h1>");
   });
 });
+
+describe("thumbnail edits", () => {
+  it("change the text and colours once there is a frame, and are not undo steps", () => {
+    const p = project();
+    expect(() => applyEdit(p, { type: "thumbnail", text: "Hi" }, counter("t"))).toThrow("Pick a frame");
+    p.thumbnail = { sourceId: p.sources[0]!.id, time: 3, frame: "media/thumbnail/frame-1.jpg", subject: null, text: "", textColor: "paper", background: "frame", textSide: "left", behind: true };
+    const next = applyEdit(p, { type: "thumbnail", text: "Cut the fluff", background: "blur", textSide: "right" }, counter("t"));
+    expect(next.thumbnail).toMatchObject({ text: "Cut the fluff", background: "blur", textSide: "right", textColor: "paper" });
+    expect(next.history.past).toHaveLength(0);
+    expect(EditOp.safeParse({ type: "thumbnail", textColor: "red" }).success).toBe(false);
+  });
+});

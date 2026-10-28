@@ -19,6 +19,7 @@ import { SoundPanel } from "./SoundPanel";
 import { Waveform } from "./Waveform";
 import { Transcript } from "./Transcript";
 import { useEditor } from "./useEditor";
+import { ThumbnailPanel } from "./ThumbnailPanel";
 import { WriteupPanel } from "./WriteupPanel";
 
 type Props = { projectId: string; jobs: ProjectJobs; onBack: () => void; onOpen: (id: string) => void };
@@ -116,6 +117,7 @@ export function ProjectView({ projectId, jobs, onBack, onOpen }: Props) {
           {project && <AiPanel project={project} jobs={jobs} />}
           {project && <ShortsPanel project={project} jobs={jobs} onOpen={onOpen} />}
           {project && <WriteupPanel project={project} jobs={jobs} onSeek={seek} onEdit={edit} />}
+          {project && <ThumbnailPanel project={project} playhead={playhead} jobs={jobs} onEdit={edit} />}
           {project && <FramingPanel project={project} playhead={playhead} onEdit={edit} />}
           {project && <CaptionsPanel project={project} onEdit={edit} />}
           {project && <ExportPanel project={project} jobs={jobs} onEdit={edit} />}
