@@ -115,6 +115,12 @@ body {
   color: var(--color-text-muted);
 }
 
+.settings__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
 .agents {
   display: grid;
   margin: 0;
@@ -989,6 +995,26 @@ body {
 
 .status--danger {
   color: var(--color-danger);
+}
+
+.status__action {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-left: auto;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  font: inherit;
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+}
+
+.status__action:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
 }
 
 .status__sep {

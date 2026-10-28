@@ -9,6 +9,8 @@
 const { MakerDMG } = require("@electron-forge/maker-dmg");
 const { MakerSquirrel } = require("@electron-forge/maker-squirrel");
 const { MakerZIP } = require("@electron-forge/maker-zip");
+const { FusesPlugin } = require("@electron-forge/plugin-fuses");
+const { FuseV1Options, FuseVersion } = require("@electron/fuses");
 const { cpSync, existsSync, mkdirSync, rmSync } = require("node:fs");
 const { join } = require("node:path");
 
@@ -16,6 +18,9 @@ const ICON = join(__dirname, "..", "..", "brand", "icon", "icon");
 const STAGE = join(__dirname, ".stage");
 
 const sign = windowsSign();
+
+/** Where released builds update from (see src/update.ts); the Mac zip's RELEASES.json points into it. */
+const UPDATE_FEED = process.env.CLIPCAT_UPDATE_FEED || require("./package.json").clipcat?.updateFeed || undefined;
 
 /** @type {import("@electron-forge/shared-types").ForgeConfig} */
 const config = {
@@ -42,7 +47,10 @@ const config = {
       NSCameraUsageDescription: "ClipCat records takes from your camera when you choose Camera in Record.",
       NSMicrophoneUsageDescription: "ClipCat records your voice with every take, and transcribes it.",
     },
-    osxSign: process.env.SKIP_SIGN ? undefined : {},
+    // Hardened runtime with @electron/osx-sign's default entitlements, which already allow the camera
+    // and microphone (the bundled helpers in Resources/bin get the same). APPLE_SIGN_IDENTITY picks the
+    // certificate when the keychain holds more than one Developer ID.
+    osxSign: process.env.SKIP_SIGN ? undefined : { ...(process.env.APPLE_SIGN_IDENTITY ? { identity: process.env.APPLE_SIGN_IDENTITY } : {}) },
     osxNotarize:
       process.env.APPLE_ID && process.env.APPLE_PASSWORD && process.env.APPLE_TEAM_ID
         ? { appleId: process.env.APPLE_ID, appleIdPassword: process.env.APPLE_PASSWORD, teamId: process.env.APPLE_TEAM_ID }
@@ -50,7 +58,7 @@ const config = {
     windowsSign: sign,
   },
   makers: [
-    new MakerZIP({}, ["darwin"]),
+    new MakerZIP(UPDATE_FEED ? { macUpdateManifestBaseUrl: UPDATE_FEED } : {}, ["darwin"]),
     new MakerDMG({ name: `ClipCat-${process.arch}`, icon: `${ICON}.icns` }),
     new MakerSquirrel({
       name: "ClipCat",
@@ -61,6 +69,18 @@ const config = {
       setupIcon: `${ICON}.ico`,
       noMsi: true,
       windowsSign: sign,
+    }),
+  ],
+  plugins: [
+    new FusesPlugin({
+      version: FuseVersion.V1,
+      // Fuses are flipped in the binary, which breaks its ad-hoc signature; Apple Silicon refuses to run it unsigned.
+      resetAdHocDarwinSignature: process.platform === "darwin" && process.arch === "arm64",
+      // On: the MCP bridge (dist/mcp.cjs) is run by ClipCat's own executable as Node.
+      [FuseV1Options.RunAsNode]: true,
+      [FuseV1Options.EnableNodeOptionsEnvironmentVariable]: false,
+      [FuseV1Options.EnableNodeCliInspectArguments]: false,
+      [FuseV1Options.GrantFileProtocolExtraPrivileges]: false,
     }),
   ],
   hooks: {

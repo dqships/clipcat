@@ -94,6 +94,17 @@ export const McpAgent = z.object({
   unavailable: z.string().nullable(),
 });
 
+/** Where updating stands: off (a dev copy, or no feed), checking, downloading, ready to restart, or a newer version to download by hand. */
+export const UpdateStatus = z.object({
+  state: z.enum(["off", "idle", "checking", "downloading", "ready", "available", "error"]),
+  /** The newer version, once known. */
+  version: z.string().nullable(),
+  detail: z.string().nullable(),
+  /** The release page, for downloading by hand. */
+  page: z.string().nullable(),
+  checkedAt: z.string().nullable(),
+});
+
 /** A screen ClipCat can record, as the picker shows it. */
 export const RecordScreen = z.object({
   /** desktopCapturer's source id, for recording through Chromium. */
@@ -215,6 +226,17 @@ export const methods = {
   "record:end": { input: z.object({ token: Token, projectId: z.string().regex(/^[a-zA-Z0-9-]+$/).nullable() }), output: Project },
   /** Stops and throws the recording away. */
   "record:discard": { input: z.object({ token: Token }), output: z.void() },
+  "update:status": { input: z.void(), output: UpdateStatus },
+  /** Looks for a newer version now. */
+  "update:check": { input: z.void(), output: UpdateStatus },
+  /** Restarts into the downloaded update. */
+  "update:install": { input: z.void(), output: z.void() },
+  /** Opens the release page in the browser. */
+  "update:open": { input: z.void(), output: z.void() },
+  /** Saves a zip of logs, versions and project shapes (no transcripts or media) where the user picks; null when cancelled. */
+  "app:diagnostics": { input: z.void(), output: z.object({ path: z.string().nullable() }) },
+  /** Shows the log folder. */
+  "app:reveal-logs": { input: z.void(), output: z.void() },
   /** The coding agents ClipCat's MCP server can be added to, and which have it. */
   "mcp:status": { input: z.void(), output: z.array(McpAgent) },
   /** Adds ClipCat's MCP server to an agent's config (connect: true) or takes it out; resolves with every agent's state. */
@@ -225,6 +247,7 @@ export const methods = {
 export const events = {
   job: JobEvent,
   "project:changed": z.object({ id: z.string(), revision: z.number().int() }),
+  update: UpdateStatus,
 } as const;
 
 export type Events = typeof events;
@@ -261,6 +284,7 @@ export type AgentNameValue = z.output<typeof AgentName>;
 export type ApiModelValue = z.output<typeof ApiModel>;
 export type ApiStatusValue = z.output<typeof ApiStatus>;
 export type SettingsValue = z.output<typeof Settings>;
+export type UpdateStatusValue = z.output<typeof UpdateStatus>;
 export type RecordSetupValue = z.output<typeof RecordSetup>;
 export type RecordScreenValue = z.output<typeof RecordScreen>;
 export type RecordKindValue = z.output<typeof RecordKind>;

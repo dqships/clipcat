@@ -3,14 +3,14 @@
 // IPC handlers, the MCP socket outside agents drive it through, and the
 // recordings in progress. All media work lives here, never in the renderer.
 
-import { BrowserWindow, app, desktopCapturer, dialog, nativeTheme, safeStorage, session, shell, systemPreferences } from "electron";
+import { BrowserWindow, app, autoUpdater, crashReporter, desktopCapturer, dialog, nativeTheme, net, safeStorage, session, shell, systemPreferences } from "electron";
 import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
-import { writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { type Article, type EditOp, TIMELINE_FORMATS, type TimelineFormat, applyEdit } from "@clipcat/core";
 import tokens from "../../../design/tokens.json";
-import { homedir, release } from "node:os";
-import { extname, join, resolve } from "node:path";
+import { homedir, release, totalmem } from "node:os";
+import { dirname, extname, join, resolve } from "node:path";
 import type { AppInfoValue } from "@clipcat/ipc";
 import { AnalysisRunner } from "./ai/analyze";
 import { apiAgent, verifyKey } from "./ai/api";
@@ -42,7 +42,10 @@ import { ThumbnailPipeline } from "./pipeline/thumbnail";
 import { APP_ORIGIN, registerSchemes, serveMedia, serveModels, serveSlides, serveSounds, serveUi } from "./protocol";
 import { SLIDE_COLORS, SLIDE_CSP, SLIDE_FONTS, fontFaces, slidePage } from "./slides/page";
 import { renderStills, renderVideo } from "./slides/render";
+import { diagnosticsZip } from "./diagnostics/bundle";
+import { MainLog } from "./diagnostics/log";
 import { handleSquirrelEvent } from "./squirrel";
+import { Updater } from "./update";
 import { ProjectStore } from "./store/projects";
 import { KeyStore } from "./store/keys";
 import { SettingsStore } from "./store/settings";
@@ -50,6 +53,27 @@ import type { ModelId } from "./transcribe/models";
 import { startSmokeTimer, finishSmoke, isSmokeRun, recordSmokeJob, smokeImport, smokeMcp } from "./smoke";
 
 const squirrelLaunch = handleSquirrelEvent();
+
+// Warnings, errors and crashes go to a log file from the first moment, and crash
+// dumps stay on this computer; both end up in the diagnostics bundle.
+const mainLog = new MainLog(join(app.getPath("userData"), "logs", "main.log"));
+if (!squirrelLaunch) {
+  mainLog.capture();
+  crashReporter.start({ uploadToServer: false });
+  app.on("render-process-gone", (_event, contents, details) => mainLog.write("error", `renderer gone (${contents.getURL()}):`, details));
+  app.on("child-process-gone", (_event, details) => mainLog.write("error", "child process gone:", details));
+}
+
+/** The release feed this copy updates from (apps/desktop/package.json `clipcat.updateFeed`), or null for none. */
+function updateFeed(): string | null {
+  if (process.env.CLIPCAT_UPDATE_FEED) return process.env.CLIPCAT_UPDATE_FEED;
+  try {
+    const pkg = JSON.parse(readFileSync(join(app.getAppPath(), "package.json"), "utf8")) as { clipcat?: { updateFeed?: unknown } };
+    return typeof pkg.clipcat?.updateFeed === "string" ? pkg.clipcat.updateFeed : null;
+  } catch {
+    return null;
+  }
+}
 
 const DEV_URL = process.env.CLIPCAT_DEV_URL ?? null;
 const UI_ROOT = join(__dirname, "..", "ui");
@@ -136,6 +160,7 @@ function startPipeline() {
   const jobs = new JobLog();
   const queue = new JobQueue((event) => {
     if (isSmokeRun()) recordSmokeJob(event);
+    if (event.state === "failed") mainLog.write("warn", `job ${event.kind} failed for ${event.projectId}:`, event.error ?? "");
     jobs.record(event);
     broadcast("job", event);
   });
@@ -303,6 +328,25 @@ if (!squirrelLaunch) {
   app.whenReady().then(() => {
     const { store, settings, keys, queue, jobs, pipeline, media, music, thumbnail, analysis, exporter, edit, recordings } = startPipeline();
     app.on("will-quit", () => void recordings.discardAll());
+    const updater = new Updater({
+      feed: updateFeed(),
+      version: app.getVersion(),
+      platform: process.platform,
+      // Squirrel.Windows holds a lock on the first run after installing, so that one waits for the next launch.
+      enabled: app.isPackaged && !isSmokeRun() && !process.argv.includes("--squirrel-firstrun"),
+      autoUpdater,
+      fetchJson: async (url) => {
+        const response = await net.fetch(url, { cache: "no-store" });
+        if (!response.ok) throw new Error(`${response.status} from ${url}`);
+        return response.json();
+      },
+      onChange: (status) => {
+        if (status.state === "error") mainLog.write("warn", "update:", status.detail);
+        broadcast("update", status);
+      },
+      now: () => new Date(),
+    });
+    updater.start();
     // The UI's getDisplayMedia gets the screen picked in the recorder, with the computer's sound on Windows.
     let pickedScreen: { screenId: string; systemAudio: boolean } | null = null;
     session.defaultSession.setDisplayMediaRequestHandler((_request, callback) => {
@@ -554,6 +598,52 @@ if (!squirrelLaunch) {
         "record:discard": async ({ token }) => {
           mainWindow?.setContentProtection(false);
           await recordings.discard(token);
+        },
+        "update:status": () => updater.current,
+        "update:check": () => updater.check(),
+        "update:install": () => updater.install(),
+        "update:open": async () => {
+          if (updater.current.page) await shell.openExternal(updater.current.page);
+        },
+        "app:reveal-logs": async () => {
+          const dir = dirname(mainLog.path);
+          await mkdir(dir, { recursive: true });
+          await shell.openPath(dir);
+        },
+        "app:diagnostics": async (_, event) => {
+          const win = BrowserWindow.fromWebContents(event.sender);
+          const day = new Date().toISOString().slice(0, 10);
+          const options: Electron.SaveDialogOptions = {
+            title: "Save diagnostics",
+            defaultPath: join(app.getPath("desktop"), `ClipCat diagnostics ${day}.zip`),
+            filters: [{ name: "Zip", extensions: ["zip"] }],
+          };
+          const result = win ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options);
+          if (result.canceled || !result.filePath) return { path: null };
+          const path = extname(result.filePath).toLowerCase() === ".zip" ? result.filePath : `${result.filePath}.zip`;
+          // Each part is asked for on its own, so one that fails is noted instead of losing the bundle.
+          const part = <T>(run: () => Promise<T> | T) => Promise.resolve().then(run).catch((e: unknown) => ({ failed: e instanceof Error ? e.message : String(e) }));
+          const about = {
+            createdAt: new Date().toISOString(),
+            versions: { app: app.getVersion(), electron: process.versions.electron, chrome: process.versions.chrome, node: process.versions.node },
+            system: { platform: process.platform, arch: process.arch, release: release(), locale: app.getLocale(), memory: totalmem(), gpu: app.getGPUFeatureStatus() },
+            info: await part(appInfo),
+            ai: await part(aiStatus),
+            settings: await part(() => settings.get()),
+            agents: await part(() => mcpStatus(installEnv)),
+            mcp: await part(() => mcp),
+            update: updater.current,
+          };
+          const zip = await diagnosticsZip({
+            about,
+            logs: [mainLog.oldPath, mainLog.path].filter((f) => existsSync(f)),
+            jobs: jobs.list(null),
+            projectsDir: join(app.getPath("userData"), "projects"),
+            crashDir: app.getPath("crashDumps"),
+            home: homedir(),
+          });
+          await writeFile(path, zip);
+          return { path };
         },
         "mcp:status": () => mcpStatus(installEnv),
         "mcp:connect": async ({ agent, connect }) => {
