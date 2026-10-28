@@ -1,0 +1,13 @@
+{
+  "name": "@clipcat/site",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "ClipCat's marketing site: static HTML and Markdown, served by Vercel.",
+  "scripts": {
+    "build": "node build.mjs",
+    "serve": "node serve.mjs",
+    "og": "node scripts/og.mjs",
+    "test": "node --test \"test/*.test.mjs\""
+  }
+}

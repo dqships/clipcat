@@ -6,7 +6,8 @@
   "workspaces": [
     "packages/*",
     "apps/desktop",
-    "apps/ui"
+    "apps/ui",
+    "apps/site"
   ],
   "scripts": {
     "dev": "npm run dev --workspace=@clipcat/desktop",
