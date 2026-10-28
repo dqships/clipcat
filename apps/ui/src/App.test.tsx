@@ -230,6 +230,7 @@ describe("App", () => {
       "project:edit": { ...exported, revision: 4 },
       "project:export": { path: "/Movies/talk (vertical).mp4" },
       "project:reveal-export": undefined,
+      "project:export-timeline": { path: "/Documents/talk.fcpxml" },
     });
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "talk" }));
@@ -246,6 +247,10 @@ describe("App", () => {
     expect(screen.getByText("Last export: talk.mp4 (16:9)")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Show file" }));
     expect(invoke).toHaveBeenCalledWith("project:reveal-export", { id: "p1" });
+
+    fireEvent.click(screen.getByRole("button", { name: /Final Cut Pro/ }));
+    expect(invoke).toHaveBeenCalledWith("project:export-timeline", { id: "p1", format: "fcpxml" });
+    expect(await screen.findByText("Saved talk.fcpxml.")).toBeTruthy();
   });
 
   it("switches to the vertical shape, crops the preview around the face and takes a hand-set position", async () => {

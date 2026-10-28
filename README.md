@@ -184,9 +184,17 @@ cancel (the × beside the progress bar) stops at once. The H.264 encoder is the
 machine's own: VideoToolbox on a Mac; on Windows NVENC, Quick Sync, AMF or Media
 Foundation, whichever encodes a test clip first. libx264 takes over if it fails.
 Captions are built from the kept words, burned in with libass in Jost, and
-saved as an `.srt` beside the video.
-The caption font in `apps/desktop/resources/fonts` is Jost SemiBold (SIL OFL,
-`OFL.txt`), converted from the `@fontsource/jost` Latin subsets.
+saved as an `.srt` beside the video. The caption font in
+`apps/desktop/resources/fonts` is Jost SemiBold (SIL OFL, `OFL.txt`), converted
+from the `@fontsource/jost` Latin subsets.
+
+To finish a cut in another editor, the Export panel also saves the edit as a
+timeline of the original recordings: FCPXML 1.10 for Final Cut Pro (Resolve
+opens it too), Final Cut 7 XML for Premiere Pro, or a CMX 3600 EDL. Each kept
+stretch is snapped to whole frames at the recordings' rate (29.97 and 23.976
+counted in 1001ths), at normal speed, with chapters as markers; captions,
+punch-ins, b-roll and sound stay in ClipCat. Agents connected over MCP can
+write the same files with `export_timeline`.
 
 ## Licenses
 

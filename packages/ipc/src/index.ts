@@ -158,6 +158,12 @@ export const methods = {
    * the chosen path, or null when the save dialog was cancelled.
    */
   "project:export": { input: ProjectRef.extend({ format: z.enum(["16:9", "9:16"]) }), output: z.object({ path: z.string().nullable() }) },
+  /**
+   * Asks where to save, then writes the edit as a timeline another editor opens:
+   * FCPXML (Final Cut Pro, Resolve), Final Cut 7 XML (Premiere Pro) or an EDL.
+   * Resolves with the path, or null when cancelled.
+   */
+  "project:export-timeline": { input: ProjectRef.extend({ format: z.enum(["fcpxml", "premiere", "edl"]) }), output: z.object({ path: z.string().nullable() }) },
   /** Shows the project's last export in Finder or Explorer. */
   "project:reveal-export": { input: ProjectRef, output: z.void() },
   /** Cancels the project's queued and running jobs. */
