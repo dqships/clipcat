@@ -20,7 +20,7 @@ in [DESIGN.md](DESIGN.md); read it before touching any screen.
 | `native/parakeet` | `clipcat-parakeet`, a Swift helper that runs Parakeet TDT 0.6B v3 with FluidAudio (Apple Silicon) |
 | `native/recorder` | `clipcat-recorder`, a Swift helper that records the screen with ScreenCaptureKit (macOS 15) |
 | `scripts/` | `fetch-ffmpeg` (pinned static builds), `build-whisper` (whisper.cpp from a pinned commit), `build-parakeet` and `build-recorder` (the Swift helpers), `check-tokens` (no raw values in UI) |
-| `apps/site` | Marketing site (Next.js, no JavaScript on the pages), deployed on its own by Vercel |
+| `apps/site` | Marketing site at [clipcat.followusai.com](https://clipcat.followusai.com) (Next.js, no JavaScript on the pages), deployed on its own by Vercel |
 
 ## Develop
 
