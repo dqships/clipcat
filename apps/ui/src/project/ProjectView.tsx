@@ -115,29 +115,33 @@ export function ProjectView({ projectId, jobs, onBack, onOpen, onRecord }: Props
             {error}
           </p>
         )}
-        <section className="project__preview" aria-label="Preview">
-          {project ? (
-            <div className={project.aspectRatio === "9:16" ? "stage stage--tall" : "stage"}>
-              <Preview ref={preview} project={project} onTime={setPlayhead} />
-              <CaptionOverlay project={project} playhead={playhead} />
-            </div>
-          ) : (
-            <div className="project__video project__video--pending" />
-          )}
-          {project && <Waveform project={project} playhead={playhead} onSeek={seek} />}
-          <JobLine jobs={jobs} onCancel={() => void bridge()?.invoke("jobs:cancel", { id: projectId })} />
-          {project && <Proposals project={project} onSeek={seek} onEdit={edit} />}
-          {project && <PunchInsPanel project={project} onSeek={seek} onEdit={edit} />}
-          {project && <MediaPanel project={project} onSeek={seek} onEdit={edit} />}
-          {project && <SoundPanel project={project} onSeek={seek} onEdit={edit} />}
-          {project && <AiPanel project={project} jobs={jobs} />}
-          {project && <ShortsPanel project={project} jobs={jobs} onOpen={onOpen} />}
-          {project && <WriteupPanel project={project} jobs={jobs} onSeek={seek} onEdit={edit} />}
-          {project && <ThumbnailPanel project={project} playhead={playhead} jobs={jobs} onEdit={edit} />}
-          {project && <FramingPanel project={project} playhead={playhead} onEdit={edit} />}
-          {project && <CaptionsPanel project={project} onEdit={edit} />}
-          {project && <ExportPanel project={project} jobs={jobs} onEdit={edit} />}
-        </section>
+        <div className="project__editor">
+          <section className="project__preview" aria-label="Preview">
+            {project ? (
+              <div className={project.aspectRatio === "9:16" ? "stage stage--tall" : "stage"}>
+                <Preview ref={preview} project={project} onTime={setPlayhead} />
+                <CaptionOverlay project={project} playhead={playhead} />
+              </div>
+            ) : (
+              <div className="project__video project__video--pending" />
+            )}
+            {project && <Waveform project={project} playhead={playhead} onSeek={seek} />}
+            <JobLine jobs={jobs} onCancel={() => void bridge()?.invoke("jobs:cancel", { id: projectId })} />
+          </section>
+          <section className="project__controls" aria-label="Edit controls">
+            {project && <Proposals project={project} onSeek={seek} onEdit={edit} />}
+            {project && <PunchInsPanel project={project} onSeek={seek} onEdit={edit} />}
+            {project && <MediaPanel project={project} onSeek={seek} onEdit={edit} />}
+            {project && <SoundPanel project={project} onSeek={seek} onEdit={edit} />}
+            {project && <AiPanel project={project} jobs={jobs} />}
+            {project && <ShortsPanel project={project} jobs={jobs} onOpen={onOpen} />}
+            {project && <WriteupPanel project={project} jobs={jobs} onSeek={seek} onEdit={edit} />}
+            {project && <ThumbnailPanel project={project} playhead={playhead} jobs={jobs} onEdit={edit} />}
+            {project && <FramingPanel project={project} playhead={playhead} onEdit={edit} />}
+            {project && <CaptionsPanel project={project} onEdit={edit} />}
+            {project && <ExportPanel project={project} jobs={jobs} onEdit={edit} />}
+          </section>
+        </div>
         <section className="project__transcript" aria-labelledby="transcript-title">
           <h2 id="transcript-title" className="section-title">
             Transcript

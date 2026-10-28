@@ -600,20 +600,48 @@ body {
   }
 }
 
-/* Project: preview on the left, transcript on the right. */
+/* Project: preview and controls on the left, transcript on the right. The
+   preview stays put; the controls and the transcript each scroll on their own. */
 .project {
   display: grid;
   grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  grid-template-rows: minmax(0, 1fr);
   gap: var(--space-5);
   padding: var(--space-5);
   overflow: hidden;
+}
+
+.project:has(> .notice) {
+  grid-template-rows: auto minmax(0, 1fr);
 }
 
 .project > .notice {
   grid-column: 1 / -1;
 }
 
+.project__editor {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: var(--space-3);
+  min-height: 0;
+}
+
 .project__preview {
+  display: grid;
+  gap: var(--space-3);
+}
+
+/* Capped so the controls under it always keep room, whatever the window's shape. */
+.project__preview .stage {
+  width: min(100%, calc(var(--preview-height) * 16 / 9));
+  justify-self: center;
+}
+
+.project__preview .stage--tall {
+  width: min(100%, calc(var(--preview-height) * 9 / 16));
+}
+
+.project__controls {
   display: grid;
   align-content: start;
   gap: var(--space-3);
@@ -1031,11 +1059,6 @@ body {
 .stage {
   position: relative;
   container-type: inline-size;
-}
-
-.stage--tall {
-  width: min(100%, calc(70vh * 9 / 16));
-  justify-self: center;
 }
 
 .captions {

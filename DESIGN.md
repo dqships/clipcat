@@ -94,6 +94,10 @@ Timecodes always use `font-variant-numeric: tabular-nums`.
 `--space-6` 32. Layout steps (marketing site and large app regions only):
 `--space-7` 48, `--space-8` 64, `--space-9` 96.
 
+In the editor the preview never scrolls: it is capped at `--preview-height`
+(50 vh) so the controls under it and the transcript beside it keep room, and
+each of those scrolls on its own.
+
 One breakpoint: 720 px, below which the site switches to its phone layout. Media
 queries can't read custom properties, so it is written out as
 `@media (max-width: 720px)`.
