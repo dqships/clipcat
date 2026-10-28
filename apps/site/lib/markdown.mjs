@@ -35,7 +35,7 @@ export function jsonLd(page, origin) {
     description: SITE.tagline,
     applicationCategory: "MultimediaApplication",
     applicationSubCategory: "Video editor",
-    operatingSystem: "macOS 14 or newer (Apple Silicon), Windows 10 and 11 (64-bit)",
+    operatingSystem: "macOS 14 or newer (Apple Silicon or Intel), Windows 10 and 11 (64-bit)",
     downloadUrl: `${origin}/download`,
     offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
     publisher: { "@id": `${origin}/#organization` },
@@ -86,7 +86,12 @@ export function pageMarkdown(page, origin) {
 }
 
 function downloadsMd() {
-  return [`- [Download for Mac](${SITE.mac}) (Apple Silicon, macOS 14 or newer)`, `- [Download for Windows](${SITE.windows}) (64-bit Windows 10 or 11)`, `- [All releases](${SITE.releases})`].join("\n");
+  return [
+    `- [Download for Mac](${SITE.mac}) (Apple Silicon, macOS 14 or newer)`,
+    `- [Download for Intel Macs](${SITE.macIntel}) (macOS 14 or newer)`,
+    `- [Download for Windows](${SITE.windows}) (64-bit Windows 10 or 11)`,
+    `- [All releases](${SITE.releases})`,
+  ].join("\n");
 }
 
 /** llms.txt: what the site is and where each page's Markdown is. */
@@ -94,7 +99,7 @@ export function llmsTxt(origin) {
   return [
     `# ${SITE.name}`,
     "",
-    `> ${SITE.tagline} ClipCat is a free desktop editor for Apple Silicon Macs and Windows. It transcribes on your computer, then uses your own Claude Code, Codex or Claude API key to propose the first edit (cuts, punch-ins, b-roll, motion slides, sound and captions), shorts and a write-up.`,
+    `> ${SITE.tagline} ClipCat is a free desktop editor for Macs (Apple Silicon and Intel) and Windows. It transcribes on your computer, then uses your own Claude Code, Codex or Claude API key to propose the first edit (cuts, punch-ins, b-roll, motion slides, sound and captions), shorts and a write-up.`,
     "",
     "Every page is also available as Markdown: request it with `Accept: text/markdown`, or use the `.md` links below.",
     "",

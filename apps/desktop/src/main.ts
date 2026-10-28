@@ -107,7 +107,7 @@ const encoder = lazyEncoder(() =>
   ),
 );
 
-/** Parakeet is built for Apple Silicon only; CLIPCAT_TRANSCRIBER=whisper turns it off. */
+/** Parakeet is built for Apple Silicon only (it runs on the Neural Engine); Intel Macs and CLIPCAT_TRANSCRIBER=whisper use whisper.cpp. */
 const PARAKEET = process.platform === "darwin" && process.arch === "arm64" && process.env.CLIPCAT_TRANSCRIBER !== "whisper";
 
 async function appInfo(): Promise<AppInfoValue> {
@@ -334,6 +334,7 @@ if (!squirrelLaunch && !app.requestSingleInstanceLock()) {
       feed: updateFeed(),
       version: app.getVersion(),
       platform: process.platform,
+      arch: process.platform === "darwin" && app.runningUnderARM64Translation ? "arm64" : process.arch,
       // Squirrel.Windows holds a lock on the first run after installing, so that one waits for the next launch.
       enabled: app.isPackaged && !isSmokeRun() && !process.argv.includes("--squirrel-firstrun"),
       autoUpdater,

@@ -11,8 +11,8 @@ const { MakerSquirrel } = require("@electron-forge/maker-squirrel");
 const { MakerZIP } = require("@electron-forge/maker-zip");
 const { FusesPlugin } = require("@electron-forge/plugin-fuses");
 const { FuseV1Options, FuseVersion } = require("@electron/fuses");
-const { cpSync, existsSync, mkdirSync, rmSync } = require("node:fs");
-const { join } = require("node:path");
+const { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } = require("node:fs");
+const { basename, dirname, join } = require("node:path");
 
 const ICON = join(__dirname, "..", "..", "brand", "icon", "icon");
 const STAGE = join(__dirname, ".stage");
@@ -108,6 +108,26 @@ const config = {
       rmSync(join(STAGE, "models"), { recursive: true, force: true });
       mkdirSync(join(STAGE, "models"), { recursive: true });
       cpSync(model, join(STAGE, "models", "isnet-small.onnx"));
+    },
+    // Both Mac builds publish to the same feed, so the Intel one's manifest is RELEASES-x64.json
+    // (src/update.ts reads it there). The zip maker starts each manifest from the feed's
+    // RELEASES.json, which is Apple Silicon's, so only this build's own zips are kept.
+    postMake: async (/** @type {unknown} */ _config, /** @type {{ platform: string, arch: string, artifacts: string[] }[]} */ results) => {
+      for (const result of results) {
+        if (result.platform !== "darwin" || result.arch === "arm64") continue;
+        result.artifacts = result.artifacts.map((file) => {
+          if (basename(file) !== "RELEASES.json") return file;
+          const manifest = JSON.parse(readFileSync(file, "utf8"));
+          manifest.releases = (manifest.releases ?? []).filter((/** @type {{ updateTo?: { url?: string } }} */ r) =>
+            r.updateTo?.url?.includes(`-darwin-${result.arch}-`),
+          );
+          const renamed = join(dirname(file), `RELEASES-${result.arch}.json`);
+          writeFileSync(renamed, JSON.stringify(manifest));
+          rmSync(file);
+          return renamed;
+        });
+      }
+      return results;
     },
   },
 };

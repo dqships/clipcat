@@ -11,6 +11,7 @@ export const SITE = {
   issues: `${REPO}/issues`,
   releases: `${REPO}/releases`,
   mac: `${DOWNLOAD}/ClipCat-arm64.dmg`,
+  macIntel: `${DOWNLOAD}/ClipCat-x64.dmg`,
   windows: `${DOWNLOAD}/ClipCat-x64-Setup.exe`,
   tagline: "Raw takes in, finished video out: a free AI video editor for talking-head videos.",
 };
@@ -118,7 +119,7 @@ export const PAGES = [
       {
         kind: "end",
         h2: "Your next video, mostly edited",
-        body: ["ClipCat is free. It runs on Apple Silicon Macs with macOS 14 or newer and on 64-bit Windows 10 and 11."],
+        body: ["ClipCat is free. It runs on Macs with macOS 14 or newer, Apple Silicon or Intel, and on 64-bit Windows 10 and 11."],
         download: true,
       },
     ],
@@ -198,7 +199,7 @@ export const PAGES = [
     nav: "Download",
     title: "Download ClipCat for Mac and Windows, free",
     description:
-      "Download ClipCat, the free talking-head video editor, for Apple Silicon Macs on macOS 14 or newer and for 64-bit Windows 10 and 11. Updates install themselves.",
+      "Download ClipCat, the free talking-head video editor, for Macs on macOS 14 or newer, Apple Silicon or Intel, and 64-bit Windows 10 and 11.",
     h1: "Download ClipCat",
     lede: "ClipCat is free and needs no account. Pick your computer.",
     updated: UPDATED,
@@ -206,7 +207,7 @@ export const PAGES = [
       {
         h2: "Installers",
         body: [
-          "The Mac app runs on Apple Silicon (M1 or newer) with macOS 14 Sonoma or newer. On macOS 15 it records screens with ScreenCaptureKit, and on macOS 14 through Chromium's screen capture. The Windows app runs on 64-bit Windows 10 and 11.",
+          "The Mac app runs on macOS 14 Sonoma or newer. Download for Mac gets the Apple Silicon (M1 or newer) build; Macs with an Intel processor have their own, which hears speech with whisper.cpp instead of Parakeet. To check yours, open the Apple menu, then About This Mac: it says Chip for Apple Silicon and Processor for Intel. On macOS 15 it records screens with ScreenCaptureKit, and on macOS 14 through Chromium's screen capture. The Windows app runs on 64-bit Windows 10 and 11.",
         ],
         download: true,
       },
