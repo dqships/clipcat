@@ -92,6 +92,24 @@ export const McpAgent = z.object({
   config: z.string(),
   /** Why it can't be connected from this build, or null when it can. */
   unavailable: z.string().nullable(),
+  /** What Connect writes into that file, as the file spells it, for the confirm step. */
+  entry: z.string(),
+  /** Whether the agent has an MCP session open with ClipCat now, and when one last started. */
+  session: z.object({
+    live: z.boolean(),
+    /** ISO time of the last session that started, or null when the agent has never reached this copy. */
+    lastAt: z.string().nullable(),
+    /** The client's own name and version from that session's handshake, e.g. "claude-code 2.1.312". */
+    client: z.string().nullable(),
+  }),
+});
+
+/** One step of checking an agent's connection: is the entry saved, does it reach ClipCat, does the agent itself see it. Whether the agent has used it is `McpAgent.session`. */
+export const McpCheckStep = z.object({
+  id: z.enum(["saved", "reaches", "agent"]),
+  /** ok: proved; failed: proved broken; waiting: needs the person (restart the agent); skipped: can't be checked from here. */
+  state: z.enum(["ok", "failed", "waiting", "skipped"]),
+  text: z.string(),
 });
 
 /** Where updating stands: off (a dev copy, or no feed), checking, downloading, ready to restart, or a newer version to download by hand. */
@@ -241,6 +259,8 @@ export const methods = {
   "mcp:status": { input: z.void(), output: z.array(McpAgent) },
   /** Adds ClipCat's MCP server to an agent's config (connect: true) or takes it out; resolves with every agent's state. */
   "mcp:connect": { input: z.object({ agent: McpAgentId, connect: z.boolean() }), output: z.array(McpAgent) },
+  /** Checks one agent's connection for real: reads its config back, runs that entry through to ClipCat, and asks the agent's CLI. */
+  "mcp:check": { input: z.object({ agent: McpAgentId }), output: z.array(McpCheckStep) },
 } as const;
 
 /** Pushed from main to the UI. */
@@ -248,6 +268,8 @@ export const events = {
   job: JobEvent,
   "project:changed": z.object({ id: z.string(), revision: z.number().int() }),
   update: UpdateStatus,
+  /** An agent opened or closed an MCP session: every agent's state. */
+  "mcp:agents": z.array(McpAgent),
 } as const;
 
 export type Events = typeof events;
@@ -290,3 +312,4 @@ export type RecordScreenValue = z.output<typeof RecordScreen>;
 export type RecordKindValue = z.output<typeof RecordKind>;
 export type McpAgentIdValue = z.output<typeof McpAgentId>;
 export type McpAgentValue = z.output<typeof McpAgent>;
+export type McpCheckStepValue = z.output<typeof McpCheckStep>;

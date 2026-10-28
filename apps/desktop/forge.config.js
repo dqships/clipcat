@@ -60,7 +60,7 @@ const config = {
   },
   makers: [
     new MakerZIP(UPDATE_FEED ? { macUpdateManifestBaseUrl: UPDATE_FEED } : {}, ["darwin"]),
-    new MakerDMG({ name: `ClipCat-${process.arch}`, icon: `${ICON}.icns` }),
+    new MakerDMG(dmgConfig()),
     new MakerSquirrel({
       name: "ClipCat",
       authors: "ClipCat",
@@ -131,6 +131,25 @@ const config = {
     },
   },
 };
+
+/**
+ * The Mac installer window: electron-installer-dmg's stock background (white, black arrow) with
+ * ClipCat and Applications at its stock spots. The volume's own files are hidden, but Finder still
+ * shows them when hidden files are on, so they sit below the 658 x 498 window, out of view.
+ * scripts/check-dmg.mjs checks the built image against this.
+ */
+function dmgConfig() {
+  const hidden = [".background", ".VolumeIcon.icns", ".DS_Store", ".fseventsd", ".Trashes"];
+  return {
+    name: `ClipCat-${process.arch}`,
+    icon: `${ICON}.icns`,
+    contents: (/** @type {{ appPath: string }} */ opts) => [
+      { type: "file", path: opts.appPath, x: 192, y: 344 },
+      { type: "link", path: "/Applications", x: 448, y: 344 },
+      ...hidden.map((name, i) => ({ type: "position", path: name, x: 110 * (i + 1), y: 700 })),
+    ],
+  };
+}
 
 function windowsSign() {
   if (process.platform !== "win32" || process.env.SKIP_SIGN) return undefined;

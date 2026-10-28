@@ -73,6 +73,7 @@ export function pageMarkdown(page, origin) {
     if (s.note) out.push(md(s.note), "");
     if (s.steps) out.push(...s.steps.map((st, i) => `${i + 1}. **${st.title}**: ${md(st.text)}`), "");
     if (s.cards) out.push(...s.cards.map((c) => `- **${c.title}**: ${md(c.text)}`), "");
+    if (s.prompts) out.push(...s.prompts.map((p) => `- "${p}"`), "");
     if (s.list) out.push(...s.list.map((i) => `- ${md(i)}`), "");
     if (s.h3) out.push(`### ${s.h3}`, "", md(s.detail), "");
     if (s.session) out.push("```", ...s.session, "```", "");

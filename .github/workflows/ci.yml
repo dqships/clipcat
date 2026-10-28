@@ -138,6 +138,11 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      - name: The DMG window shows only ClipCat and Applications
+        if: startsWith(matrix.target, 'darwin')
+        run: |
+          arch="${{ matrix.target }}"
+          node scripts/check-dmg.mjs "apps/desktop/out/make/ClipCat-${arch#darwin-}.dmg"
       - name: The bundled tools are built for this Mac's processor
         if: startsWith(matrix.target, 'darwin')
         run: |

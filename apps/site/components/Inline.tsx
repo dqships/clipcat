@@ -1,9 +1,9 @@
 import { Fragment, type ReactNode } from "react";
 
-/** Page copy may hold `[text](url)` links and `**bold**`; everything else is text. */
+/** Page copy may hold `[text](url)` links, `**bold**` and `` `code` ``; everything else is text. */
 export function Inline({ text }: { text: string }) {
   const out: ReactNode[] = [];
-  const re = /\[([^\]]+)\]\(([^)\s]+)\)|\*\*([^*]+)\*\*/g;
+  const re = /\[([^\]]+)\]\(([^)\s]+)\)|\*\*([^*]+)\*\*|`([^`]+)`/g;
   let last = 0;
   for (const m of text.matchAll(re)) {
     if (m.index > last) out.push(text.slice(last, m.index));
@@ -14,8 +14,10 @@ export function Inline({ text }: { text: string }) {
           {m[1]}
         </a>,
       );
-    } else {
+    } else if (m[3]) {
       out.push(<strong key={m.index}>{m[3]}</strong>);
+    } else {
+      out.push(<code key={m.index}>{m[4]}</code>);
     }
     last = m.index + m[0].length;
   }

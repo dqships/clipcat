@@ -1,10 +1,11 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 
 afterEach(() => {
   cleanup();
   delete window.clipcat;
+  localStorage.clear();
 });
 
 const tool = (path: string, version: string | null = "ffmpeg version 6.1.1") => ({ available: version !== null, version, path });
@@ -149,6 +150,42 @@ describe("App", () => {
     expect(screen.getByText("1 cut to review, 0:02 in all.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Back to library" }));
     expect(await screen.findByRole("heading", { level: 1, name: "Library" })).toBeTruthy();
+  });
+
+  it("docks the transcript and the controls anywhere, splits a shared dock and remembers it", async () => {
+    fakeBridge({ "app:info": info(), "library:list": [summary], "project:get": project, "ai:status": { claude: { status: "ready", version: null, detail: null }, codex: { status: "not-installed", version: null, detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude" } });
+    const view = render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "talk" }));
+    await screen.findByRole("button", { name: "again." });
+    const dockOf = (title: string) => screen.getByRole("region", { name: title }).parentElement?.className;
+    expect(dockOf("Transcript")).toBe("dock dock--right");
+    expect(dockOf("Controls")).toBe("dock dock--bottom");
+    expect(screen.getByRole("button", { name: "Transcript on the right" }).getAttribute("aria-pressed")).toBe("true");
+
+    // Both on the left: one dock, transcript on top, a hairline to split it.
+    fireEvent.click(screen.getByRole("button", { name: "Transcript on the left" }));
+    fireEvent.click(screen.getByRole("button", { name: "Controls on the left" }));
+    expect(dockOf("Transcript")).toBe("dock dock--left");
+    expect(dockOf("Controls")).toBe("dock dock--left");
+    const split = screen.getByRole("separator", { name: "Resize the left split" });
+    expect(split.getAttribute("aria-orientation")).toBe("horizontal");
+    fireEvent.keyDown(split, { key: "ArrowDown" });
+    expect(split.getAttribute("aria-valuenow")).toBe("52");
+    expect(screen.queryByRole("separator", { name: "Resize the right panel" })).toBeNull();
+    const width = screen.getByRole("separator", { name: "Resize the left panel" });
+    fireEvent.keyDown(width, { key: "End" });
+    expect(width.getAttribute("aria-valuenow")).toBe("65");
+
+    // The preview is still the one it was, and the layout comes back next time.
+    expect(screen.getByRole("region", { name: "Preview" })).toBeTruthy();
+    view.unmount();
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "talk" }));
+    await screen.findByRole("button", { name: "again." });
+    expect(dockOf("Transcript")).toBe("dock dock--left");
+    expect(dockOf("Controls")).toBe("dock dock--left");
+    expect(screen.getByRole("separator", { name: "Resize the left split" }).getAttribute("aria-valuenow")).toBe("52");
+    expect(screen.getByRole("separator", { name: "Resize the left panel" }).getAttribute("aria-valuenow")).toBe("65");
   });
 
   it("asks Claude for cuts with the brief and lists what came back", async () => {
@@ -625,25 +662,85 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "Delete project" }));
     await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:remove", { id: "p1" }));
   });
-  it("connects a coding agent from settings", async () => {
-    const agent = (id: string, label: string, over: object = {}) => ({ id, label, detected: true, connected: false, config: `/home/me/${id}`, unavailable: null, ...over });
+  it("connects a coding agent from settings only after showing what it writes, then checks it for real", async () => {
+    const never = { live: false, lastAt: null, client: null };
+    const agent = (id: string, label: string, over: object = {}) => ({
+      id,
+      label,
+      detected: true,
+      connected: false,
+      config: `/Users/me/${id}.json`,
+      unavailable: null,
+      entry: `{ "mcpServers": { "clipcat": { "command": "/Applications/ClipCat.app" } } }`,
+      session: never,
+      ...over,
+    });
     const before = [agent("claude-code", "Claude Code"), agent("codex", "Codex", { detected: false }), agent("claude-desktop", "Claude desktop app")];
-    const { invoke } = fakeBridge({
+    const after = before.map((a) => (a.id === "claude-code" ? { ...a, connected: true } : a));
+    let added = false;
+    const { invoke, emit } = fakeBridge({
       "app:info": info(),
       "library:list": [],
-      "mcp:status": before,
-      "mcp:connect": () => before.map((a) => (a.id === "claude-code" ? { ...a, connected: true } : a)),
+      "mcp:status": () => (added ? after : before),
+      "mcp:connect": () => {
+        added = true;
+        return after;
+      },
+      "mcp:check": [
+        { id: "saved", state: "ok", text: "Saved in ~/.claude.json." },
+        { id: "reaches", state: "ok", text: "ClipCat 0.1.0 answered with 15 tools." },
+        { id: "agent", state: "failed", text: 'Claude Code says "Failed to connect": ENOENT' },
+      ],
     });
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
     expect(await screen.findByRole("heading", { level: 1, name: "Settings" })).toBeTruthy();
-    expect(await screen.findByText(/Codex/)).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Connect Codex" })).toBeTruthy();
     expect(screen.getByText("Not found on this computer. You can still connect it for later.")).toBeTruthy();
+
+    // Connect asks first, showing the file and the entry; cancelling writes nothing.
     fireEvent.click(screen.getByRole("button", { name: "Connect Claude Code" }));
+    expect(screen.getByText("Add ClipCat to Claude Code?")).toBeTruthy();
+    expect(screen.getAllByText("~/claude-code.json").length).toBeGreaterThan(0);
+    expect(screen.getByText(/"clipcat"/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(invoke).not.toHaveBeenCalledWith("mcp:connect", expect.anything());
+
+    fireEvent.click(screen.getByRole("button", { name: "Connect Claude Code" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add to Claude Code" }));
     expect(await screen.findByRole("button", { name: "Disconnect Claude Code" })).toBeTruthy();
     expect(invoke).toHaveBeenCalledWith("mcp:connect", { agent: "claude-code", connect: true });
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("mcp:check", { agent: "claude-code" }));
+    expect(await screen.findByText("ClipCat 0.1.0 answered with 15 tools.")).toBeTruthy();
+    expect(screen.getByText(/Failed to connect/)).toBeTruthy();
+    expect(screen.getByText("Added, but it hasn't connected yet.")).toBeTruthy();
+    expect(screen.getByText(/Waiting for Claude Code/)).toBeTruthy();
+
+    // A real session arriving on the socket is what turns it on.
+    emit("mcp:agents", after.map((a) => (a.id === "claude-code" ? { ...a, session: { live: true, lastAt: new Date().toISOString(), client: "claude-code 2.1.312" } } : a)));
+    expect(await screen.findByText("Connected now (claude-code 2.1.312).")).toBeTruthy();
+    expect(screen.getByText("Claude Code is connected now (claude-code 2.1.312).")).toBeTruthy();
+
+    // The walkthrough opens on the agent just connected, and switches per agent.
+    expect(screen.getByRole("tab", { name: "Claude Code, connected" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByRole("tabpanel").textContent).toContain("Type /mcp.");
+    fireEvent.click(screen.getByRole("tab", { name: "Claude desktop app" }));
+    expect(screen.getByRole("tabpanel").textContent).toContain("Settings > Developer");
     fireEvent.click(screen.getByRole("button", { name: "Back to library" }));
     expect(await screen.findByRole("heading", { level: 2, name: "No videos yet" })).toBeTruthy();
+  });
+
+  it("copies an example prompt from the agent walkthrough", async () => {
+    const writeText = vi.fn(async () => {});
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    fakeBridge({ "app:info": info(), "library:list": [], "mcp:status": [] });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
+    const prompts = within(await screen.findByRole("list", { name: "Example prompts" })).getAllByRole("listitem");
+    fireEvent.click(within(prompts[0]!).getByRole("button", { name: "Copy prompt" }));
+    expect(writeText).toHaveBeenCalledWith(prompts[0]!.textContent);
+    expect(await within(prompts[0]!).findByRole("button", { name: "Copied" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: /full guide/ }).getAttribute("href")).toMatch(/^https:\/\/.+\/agents$/);
   });
 
   it("offers a downloaded update, checks for one from settings and saves diagnostics", async () => {
