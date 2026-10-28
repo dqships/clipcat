@@ -1,12 +1,13 @@
-import type { EditOp, Project, Proposal } from "@clipcat/core";
+import { type EditOp, type Project, type Proposal, SOUND_EFFECTS } from "@clipcat/core";
 import { Check, X } from "lucide-react";
 import { formatDuration } from "../format";
 import { ICON_STROKE } from "../icons";
 
-const TYPE_LABEL: Record<string, string> = { silence: "Pause", retake: "Retake", cleanup: "Clean-up", tighten: "Tighten", "punch-in": "Punch-in", visual: "B-roll" };
+const TYPE_LABEL: Record<string, string> = { silence: "Pause", retake: "Retake", cleanup: "Clean-up", tighten: "Tighten", "punch-in": "Punch-in", visual: "B-roll", sound: "Sound" };
 const LOOK_LABEL: Record<string, string> = { paper: "paper", ink: "ink", overlay: "over the video" };
 const PLACEMENT_LABEL: Record<string, string> = { full: "full frame", pip: "picture in picture" };
 const STYLE_LABEL: Record<string, string> = { cut: "snap in", "zoom-in": "push in", "slow-zoom": "slow zoom" };
+const EFFECT_NAME = new Map(SOUND_EFFECTS.map((e) => [e.id, e.name.toLowerCase()]));
 
 type Props = {
   project: Project;
@@ -18,30 +19,33 @@ const length = (p: Proposal) => p.cuts.reduce((n, [a, b]) => n + (b - a), 0);
 
 const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
-/** "2 cuts, 1 punch-in, 3 b-roll and 1 slide to review" */
+/** "2 cuts, 1 punch-in, 3 b-roll, 1 slide and 2 sounds to review" */
 function toReview(pending: Proposal[], slides: Set<string>): string {
   const punches = pending.filter((p) => p.punch).length;
   const slideCount = pending.filter((p) => p.overlay && slides.has(p.overlay.assetId)).length;
   const broll = pending.filter((p) => p.overlay).length - slideCount;
-  const cuts = pending.length - punches - broll - slideCount;
+  const sounds = pending.filter((p) => p.sound).length;
+  const cuts = pending.length - punches - broll - slideCount - sounds;
   const parts = [
     cuts > 0 && count(cuts, "cut", "cuts"),
     punches > 0 && count(punches, "punch-in", "punch-ins"),
     broll > 0 && `${broll} b-roll`,
     slideCount > 0 && count(slideCount, "slide", "slides"),
+    sounds > 0 && count(sounds, "sound", "sounds"),
   ].filter(Boolean);
   return `${parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}` : parts[0]} to review`;
 }
 
 /**
- * The edits waiting on a decision: pauses, AI cuts, punch-ins and b-roll.
- * Accepting a cut cuts its ranges, a punch-in zooms there and b-roll shows
- * there; rejecting leaves the video as it is. All can be undone.
+ * The edits waiting on a decision: pauses, AI cuts, punch-ins, b-roll and
+ * sound effects. Accepting a cut cuts its ranges, a punch-in zooms there,
+ * b-roll shows there and an effect plays there; rejecting leaves the video as
+ * it is. All can be undone.
  */
 export function Proposals({ project, onSeek, onEdit }: Props) {
   const pending = project.proposals.filter((p) => p.status === "pending");
-  // Accepted punch-ins and b-roll are listed in their own panels.
-  const accepted = project.proposals.filter((p) => p.status === "accepted" && !p.punch && !p.overlay);
+  // Accepted punch-ins, b-roll and sounds are listed in their own panels.
+  const accepted = project.proposals.filter((p) => p.status === "accepted" && !p.punch && !p.overlay && !p.sound);
   const media = new Map(project.assets.map((a) => [a.id, a.name]));
   const slides = new Map(project.assets.filter((a) => a.slide).map((a) => [a.id, a]));
   const text = new Map(project.transcript.map((w) => [w.id, w.text]));
@@ -77,7 +81,7 @@ export function Proposals({ project, onSeek, onEdit }: Props) {
               const label = slide ? "Slide" : (TYPE_LABEL[p.type] ?? p.type);
               return (
                 <li key={p.id} className="proposal-row">
-                  <button type="button" className="proposal" onClick={() => onSeek(p.sourceId, p.punch?.range[0] ?? p.overlay?.range[0] ?? p.cuts[0]?.[0] ?? 0)}>
+                  <button type="button" className="proposal" onClick={() => onSeek(p.sourceId, p.punch?.range[0] ?? p.overlay?.range[0] ?? p.sound?.at ?? p.cuts[0]?.[0] ?? 0)}>
                     <span className="proposal__type">
                       {p.punch
                         ? `${label}, ${STYLE_LABEL[p.punch.style]}`
@@ -85,7 +89,9 @@ export function Proposals({ project, onSeek, onEdit }: Props) {
                           ? `${label}, ${LOOK_LABEL[slide.slide.look]}${slide.slide.html ? "" : ", being designed"}: ${slide.name}`
                           : p.overlay
                             ? `${label}, ${media.get(p.overlay.assetId) ?? "media"}, ${PLACEMENT_LABEL[p.overlay.placement]}`
-                            : label}
+                            : p.sound
+                              ? `${label}, ${EFFECT_NAME.get(p.sound.effect) ?? p.sound.effect}`
+                              : label}
                     </span>
                     <span className="proposal__reason">{p.reason || `${length(p).toFixed(1)} seconds of silence`}</span>
                     {words && <span className="proposal__words">“{words}”</span>}

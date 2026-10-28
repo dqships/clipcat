@@ -240,6 +240,42 @@ describe("audioCommand", () => {
     expect(args).toEqual(expect.arrayContaining(["-map", "[outa]", "-vn", "audio.m4a"]));
     expect(audioCommand({ ...setup().shape, timeline: setup().timeline, out: "a.m4a" }).graph).not.toContain("atempo");
   });
+
+  it("lays effects and ducked music under the speech, landing each effect's hit on its moment", () => {
+    const { timeline, shape } = setup();
+    const cue = (id: string, effect: string, time: number, volume = 0.7) => ({ id, sourceId: "a", at: time, effect, volume, time });
+    const { graph, args } = audioCommand({
+      ...shape,
+      timeline,
+      out: "audio.m4a",
+      sounds: {
+        cues: [cue("p1", "whoosh", 0.2), cue("p2", "pop", 2, 1), cue("p3", "whoosh", 4)],
+        files: new Map([["whoosh", "/sfx/whoosh.wav"], ["pop", "/sfx/pop.wav"]]),
+        hits: new Map([["whoosh", 0.4], ["pop", 0]]),
+      },
+      music: { file: "/music.mp3", volume: 0.15, duck: true },
+    });
+    expect(args.join(" ")).toContain("-i /sfx/whoosh.wav -i /sfx/pop.wav -stream_loop -1 -i /music.mp3");
+    expect(graph).toContain("concat=n=3:v=0:a=1[speech]");
+    expect(graph).toContain("[2:a:0]aformat=sample_rates=48000:channel_layouts=stereo,asplit=2[e0c0][e0c1]");
+    // The first whoosh would start before the video does, so it starts late into its file.
+    expect(graph).toContain("[e0c0]atrim=start=0.200000,asetpts=PTS-STARTPTS,volume=0.700,adelay=0:all=1[x0_0]");
+    expect(graph).toContain("[e0c1]volume=0.700,adelay=3600:all=1[x0_1]");
+    expect(graph).toContain("[e1c0]volume=1.000,adelay=2000:all=1[x1_0]");
+    expect(graph).toMatch(/\[4:a:0\]aformat=[^;]*atrim=0:[\d.]+,asetpts=PTS-STARTPTS,afade=t=in:d=1,afade=t=out:st=[\d.]+:d=[\d.]+,volume=0\.150\[mus\]/);
+    expect(graph).toContain("[speech]asplit=2[sp][key]");
+    expect(graph).toContain("[mus][key]sidechaincompress=threshold=0.02:ratio=6:attack=30:release=400[bed]");
+    expect(graph).toContain("[sp][x0_0][x0_1][x1_0][bed]amix=inputs=5:duration=first:dropout_transition=0:normalize=0,alimiter=limit=0.95:level=false[outa]");
+  });
+
+  it("mixes music without ducking straight in, and leaves speech alone when there is nothing to lay under it", () => {
+    const { timeline, shape } = setup();
+    const plain = audioCommand({ ...shape, timeline, out: "a.m4a" }).graph;
+    expect(audioCommand({ ...shape, timeline, out: "a.m4a", sounds: { cues: [], files: new Map(), hits: new Map() }, music: null }).graph).toBe(plain);
+    const { graph } = audioCommand({ ...shape, timeline, out: "a.m4a", music: { file: "/m.wav", volume: 0.3, duck: false } });
+    expect(graph).not.toContain("sidechaincompress");
+    expect(graph).toContain("[speech][mus]amix=inputs=2:");
+  });
 });
 
 describe("muxArgs", () => {

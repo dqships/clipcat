@@ -57,7 +57,7 @@ export const Segment = z.object({
   included: z.boolean(),
 });
 
-export const ProposalType = z.enum(["silence", "retake", "cleanup", "tighten", "visual", "punch-in"]);
+export const ProposalType = z.enum(["silence", "retake", "cleanup", "tighten", "visual", "punch-in", "sound"]);
 export const ProposalStatus = z.enum(["pending", "accepted", "rejected"]);
 
 /** How a punch-in zooms: snaps in, pushes in quickly, or creeps in over its length. */
@@ -89,6 +89,27 @@ export const Overlay = z.object({
   offset: z.number().nonnegative().default(0),
 });
 
+/** A sound effect from ClipCat's library, landing at a moment in a recording, at a volume. */
+export const SoundCue = z.object({
+  at: z.number().nonnegative(),
+  effect: z.string().regex(/^[a-z0-9-]+$/),
+  volume: z.number().min(0).max(1).default(0.7),
+});
+
+/**
+ * Music under the whole video: the user's file, a copy prepared for the
+ * preview (relative to the project folder; null until made), how loud it
+ * plays, and whether it dips while someone speaks.
+ */
+export const Music = z.object({
+  path: z.string(),
+  name: z.string(),
+  duration: z.number().positive(),
+  volume: z.number().min(0).max(1).default(0.15),
+  duck: z.boolean().default(true),
+  prep: z.string().nullable().default(null),
+});
+
 export const Proposal = z.object({
   id: z.string(),
   type: ProposalType,
@@ -104,6 +125,8 @@ export const Proposal = z.object({
   punch: Punch.nullable().default(null),
   /** Set on b-roll ("visual"), which cuts nothing either; accepted, it shows. */
   overlay: Overlay.nullable().default(null),
+  /** Set on a sound effect, which cuts nothing; accepted, it plays. */
+  sound: SoundCue.nullable().default(null),
 });
 
 /** How a motion slide looks: on warm paper, on ink, or over the speaker with no background of its own. */
@@ -219,6 +242,8 @@ export const Project = z.object({
   sources: z.array(Source),
   /** Pictures and videos for b-roll. */
   assets: z.array(Asset).default([]),
+  /** Music under the video, or none. */
+  music: Music.nullable().default(null),
   transcript: z.array(Word),
   segments: z.array(Segment),
   proposals: z.array(Proposal),
@@ -246,6 +271,8 @@ export type PipShape = z.infer<typeof PipShape>;
 export type PipCorner = z.infer<typeof PipCorner>;
 export type Overlay = z.infer<typeof Overlay>;
 export type Asset = z.infer<typeof Asset>;
+export type SoundCue = z.infer<typeof SoundCue>;
+export type Music = z.infer<typeof Music>;
 export type SlideLook = z.infer<typeof SlideLook>;
 export type Slide = z.infer<typeof Slide>;
 export type Captions = z.infer<typeof Captions>;

@@ -40,8 +40,9 @@ describe("media for b-roll", () => {
 
   it("lists the prepared media after the transcript, numbered for the agent", () => {
     const prompt = analysisPrompt({ ...project, assets: [logo, drone] });
-    expect(prompt.endsWith("## Media for b-roll\n[0] drone.mp4 (video, 12.0s): Aerial shot of a city at dusk")).toBe(true);
+    expect(prompt).toContain("## Media for b-roll\n[0] drone.mp4 (video, 12.0s): Aerial shot of a city at dusk\n\n## Sound effects\n[whoosh] A smooth sweep");
     expect(analysisPrompt(project)).not.toContain("Media for b-roll");
+    expect(analysisPrompt(project)).toContain("[ding] A clear bell.");
   });
 
   it("tells the describer how many frames are each item's", () => {

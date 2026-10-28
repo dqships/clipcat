@@ -112,7 +112,7 @@ export function punchProposal(
   range: Range,
   style: PunchStyle,
 ): Proposal {
-  return { ...fields, type: "punch-in", cuts: [], keepWordIds: [], punch: { range, style, scale: PUNCH_SCALE[style] }, overlay: null };
+  return { ...fields, type: "punch-in", cuts: [], keepWordIds: [], punch: { range, style, scale: PUNCH_SCALE[style] }, overlay: null, sound: null };
 }
 
 /**

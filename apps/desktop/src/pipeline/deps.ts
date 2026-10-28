@@ -8,6 +8,7 @@ import { availableParallelism } from "node:os";
 import { assetFrameArgs, assetPreviewArgs, probeAsset } from "../media/assets";
 import type { Encoder } from "../media/encoders";
 import { type FaceDetector, findFaces } from "../media/faces";
+import { musicPrepArgs, probeMusic } from "../media/music";
 import { prepArgs } from "../media/prep";
 import { probe } from "../media/probe";
 import { runFfmpeg } from "../media/run";
@@ -17,6 +18,7 @@ import { PARAKEET_LANGUAGES, PARAKEET_MODEL, runParakeet } from "../transcribe/p
 import { runWhisper, termsPrompt, whisperArgs } from "../transcribe/whisper";
 import type { AssetDeps } from "./assets";
 import type { Heard, PipelineDeps } from "./import";
+import type { MusicDeps } from "./music";
 
 export type Tools = {
   ffmpeg: string;
@@ -135,5 +137,12 @@ export function realAssetDeps(tools: Pick<Tools, "ffmpeg" | "ffprobe" | "encoder
         await pass("libx264");
       }
     },
+  };
+}
+
+export function realMusicDeps(tools: Pick<Tools, "ffmpeg" | "ffprobe">): Pick<MusicDeps, "probe" | "prep"> {
+  return {
+    probe: (file) => probeMusic(tools.ffprobe, file),
+    prep: (file, duration, out, ctx) => runFfmpeg(tools.ffmpeg, musicPrepArgs(file, out), { duration, onProgress: (f) => ctx.progress(f), signal: ctx.signal }),
   };
 }

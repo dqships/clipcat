@@ -15,6 +15,7 @@ import { type Playhead, Preview, type PreviewHandle } from "./Preview";
 import { Proposals } from "./Proposals";
 import { PunchInsPanel } from "./PunchInsPanel";
 import { ShortsPanel } from "./ShortsPanel";
+import { SoundPanel } from "./SoundPanel";
 import { Waveform } from "./Waveform";
 import { Transcript } from "./Transcript";
 import { useEditor } from "./useEditor";
@@ -110,6 +111,7 @@ export function ProjectView({ projectId, jobs, onBack, onOpen }: Props) {
           {project && <Proposals project={project} onSeek={seek} onEdit={edit} />}
           {project && <PunchInsPanel project={project} onSeek={seek} onEdit={edit} />}
           {project && <MediaPanel project={project} onSeek={seek} onEdit={edit} />}
+          {project && <SoundPanel project={project} onSeek={seek} onEdit={edit} />}
           {project && <AiPanel project={project} jobs={jobs} />}
           {project && <ShortsPanel project={project} jobs={jobs} onOpen={onOpen} />}
           {project && <FramingPanel project={project} playhead={playhead} onEdit={edit} />}

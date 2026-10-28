@@ -1012,3 +1012,49 @@ body {
 .media__description {
   resize: vertical;
 }
+
+/* Sound: the music row and the library to listen through. */
+.sound__heading {
+  margin: 0;
+  font-size: var(--text-callout);
+  line-height: var(--leading-callout);
+  font-weight: var(--font-weight-semibold);
+}
+
+.sound__music {
+  display: flex;
+  flex: 1 1 auto;
+  gap: var(--space-2);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sound__library > summary {
+  cursor: pointer;
+  color: var(--color-text-muted);
+}
+
+.sound__effects {
+  display: grid;
+  gap: var(--space-1);
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sound__effect {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.sound__name {
+  font-weight: var(--font-weight-semibold);
+}
+
+.sound__meaning {
+  color: var(--color-text-muted);
+}

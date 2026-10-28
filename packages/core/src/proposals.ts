@@ -9,9 +9,10 @@ import { OVERLAY, defaultOverlay, overlayProposal } from "./overlays";
 import { type Asset, OverlayPlacement, type Proposal, PunchStyle, type Range, SlideLook, type Source, type Word } from "./project";
 import { PUNCH, punchProposal, punchRange } from "./punchins";
 import { SLIDE, slideAsset } from "./slides";
+import { SOUND, soundProposal } from "./sounds";
 
 export const AgentProposal = z.object({
-  type: z.enum(["retake", "cleanup", "tighten", "punch-in", "visual", "slide"]),
+  type: z.enum(["retake", "cleanup", "tighten", "punch-in", "visual", "slide", "sound"]),
   from: z.number().int(),
   to: z.number().int(),
   keepFrom: z.number().int().nullable().optional(),
@@ -23,6 +24,8 @@ export const AgentProposal = z.object({
   /** For a motion slide: what it shows (the words on it, in order), and its look. */
   brief: z.string().max(1000).nullable().optional(),
   look: SlideLook.nullable().optional(),
+  /** For a sound effect: its id in the library the agent was given. */
+  sound: z.string().nullable().optional(),
   reason: z.string().min(1).max(400),
   confidence: z.number().min(0).max(1),
 });
@@ -43,9 +46,11 @@ export type Validated = { proposals: Proposal[]; slides: Asset[]; errors: string
  * in order) and converts it into source-time cuts, or for a punch-in or
  * b-roll the range it covers. A slide is b-roll the AI editor designs, so it
  * comes with a new slide asset. Overlapping proposals keep the more confident
- * one; a punch-in only competes with other punch-ins and b-roll (slides
- * included) with other b-roll, and neither can sit on words a proposed cut removes. `assets` is the
- * media list the agent was given, numbered from 0.
+ * one; a punch-in only competes with other punch-ins, b-roll (slides
+ * included) with other b-roll, and a sound effect with effects too close to
+ * it, and none of them can sit on words a proposed cut removes. `assets` is
+ * the media list the agent was given, numbered from 0, and `effects` the ids
+ * of the sound effects it was offered.
  */
 export function validateProposals(
   analysis: AgentAnalysis,
@@ -53,6 +58,7 @@ export function validateProposals(
   sources: Pick<Source, "id" | "media">[],
   id: () => string,
   assets: Pick<Asset, "id">[] = [],
+  effects: readonly string[] = [],
 ): Validated {
   const errors: string[] = [];
   const durations = new Map(sources.map((s) => [s.id, s.media.duration]));
@@ -119,6 +125,19 @@ export function validateProposals(
       errors.push(`${where}: only slides may set brief and look`);
       return;
     }
+    if (p.type === "sound") {
+      if (!p.sound || !effects.includes(p.sound)) {
+        errors.push(`${where}: a sound must set sound to an id from the sound effects list${effects.length > 0 ? ` (${effects.join(", ")})` : ", and there are none"}`);
+        return;
+      }
+      if (p.to !== p.from) {
+        errors.push(`${where}: a sound lands on one word: set to the same as from`);
+        return;
+      }
+    } else if (p.sound) {
+      errors.push(`${where}: only sounds may set sound`);
+      return;
+    }
     if (p.type === "retake") {
       if (p.keepFrom == null || p.keepTo == null) {
         errors.push(`${where}: a retake must set both keepFrom and keepTo`);
@@ -139,10 +158,26 @@ export function validateProposals(
   // Most confident first; anything overlapping an already kept proposal of its kind is dropped.
   candidates.sort((x, y) => y.p.confidence - x.p.confidence || x.index - y.index);
   const taken = { cut: [] as [number, number][], punch: [] as [number, number][], visual: [] as [number, number][] };
+  const sounds: Word[] = [];
   const proposals: Proposal[] = [];
   const slides: Asset[] = [];
   const cutIndices = new Set<number>();
   for (const { p, index } of candidates) {
+    if (p.type === "sound") {
+      const word = words[p.from]!;
+      if (sounds.some((w) => w.sourceId === word.sourceId && Math.abs(w.start - word.start) < SOUND.gap)) {
+        errors.push(`proposal ${index} (sound ${p.from}..${p.to}): within ${SOUND.gap} seconds of a more confident sound, dropped`);
+        continue;
+      }
+      sounds.push(word);
+      proposals.push(
+        soundProposal(
+          { id: id(), sourceId: word.sourceId, wordIds: [word.id], reason: p.reason, confidence: p.confidence, status: "pending" },
+          { at: word.start, effect: p.sound!, volume: 0.7 },
+        ),
+      );
+      continue;
+    }
     const kind = p.type === "punch-in" ? taken.punch : p.type === "visual" || p.type === "slide" ? taken.visual : taken.cut;
     if (kind.some(([a, b]) => p.from <= b && a <= p.to)) {
       errors.push(`proposal ${index} (${p.type} ${p.from}..${p.to}): overlaps a more confident proposal, dropped`);
@@ -216,6 +251,7 @@ export function validateProposals(
       status: "pending",
       punch: null,
       overlay: null,
+      sound: null,
     });
   }
 
@@ -223,9 +259,9 @@ export function validateProposals(
   const cutIds = new Set([...cutIndices].map((i) => words[i]!.id));
   for (let k = proposals.length - 1; k >= 0; k--) {
     const x = proposals[k]!;
-    if ((x.punch || x.overlay) && x.wordIds.some((w) => cutIds.has(w))) {
+    if ((x.punch || x.overlay || x.sound) && x.wordIds.some((w) => cutIds.has(w))) {
       const index = words.findIndex((w) => w.id === x.wordIds[0]);
-      errors.push(`${x.punch ? "punch-in" : "b-roll"} at word ${index}: it sits on words another proposal cuts, dropped`);
+      errors.push(`${x.punch ? "punch-in" : x.sound ? "sound" : "b-roll"} at word ${index}: it sits on words another proposal cuts, dropped`);
       proposals.splice(k, 1);
       const dropped = slides.findIndex((a) => a.id === x.overlay?.assetId);
       if (dropped >= 0) slides.splice(dropped, 1);
@@ -237,7 +273,7 @@ export function validateProposals(
 }
 
 /** The proposal types the AI editor makes; silence comes from the meter. */
-export const AI_TYPES: readonly Proposal["type"][] = ["retake", "cleanup", "tighten", "punch-in", "visual"];
+export const AI_TYPES: readonly Proposal["type"][] = ["retake", "cleanup", "tighten", "punch-in", "visual", "sound"];
 
 export function cutsOverlap(a: Range[], b: Range[]): boolean {
   return a.some(([a0, a1]) => b.some(([b0, b1]) => a0 < b1 && b0 < a1));
@@ -246,9 +282,10 @@ export function cutsOverlap(a: Range[], b: Range[]): boolean {
 /** The range a punch-in or b-roll covers; null for a cut. */
 const covers = (p: Proposal): Range | null => p.punch?.range ?? p.overlay?.range ?? null;
 
-/** Whether two proposals are about the same stretch: both cuts, both punch-ins or both b-roll, over overlapping time. */
+/** Whether two proposals are about the same stretch: both cuts, both punch-ins or both b-roll over overlapping time, or two sounds close together. */
 export function sameSpot(a: Proposal, b: Proposal): boolean {
-  if (a.sourceId !== b.sourceId || !a.punch !== !b.punch || !a.overlay !== !b.overlay) return false;
+  if (a.sourceId !== b.sourceId || !a.punch !== !b.punch || !a.overlay !== !b.overlay || !a.sound !== !b.sound) return false;
+  if (a.sound && b.sound) return Math.abs(a.sound.at - b.sound.at) < SOUND.gap;
   const [ra, rb] = [covers(a), covers(b)];
   return ra && rb ? cutsOverlap([ra], [rb]) : cutsOverlap(a.cuts, b.cuts);
 }

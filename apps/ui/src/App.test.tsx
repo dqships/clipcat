@@ -376,6 +376,48 @@ describe("App", () => {
     await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:design-slides", { id: "p1" }));
   });
 
+  it("lands a sound effect on a word, labels a suggested one, and adds and tunes music", async () => {
+    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude" };
+    const sound = (id: string, status: string, effect: string) => ({
+      id, type: "sound", sourceId: "s1", cuts: [], wordIds: ["s1-1"], keepWordIds: [], reason: "New topic", confidence: 0.8, status, punch: null, overlay: null,
+      sound: { at: 3, effect, volume: 0.7 },
+    });
+    const withSounds = { ...project, revision: 4, proposals: [...project.proposals, sound("f1", "accepted", "ding"), sound("f2", "pending", "whoosh")] };
+    const withMusic = { ...withSounds, revision: 5, music: { path: "/m/song.mp3", name: "song.mp3", duration: 120, volume: 0.15, duck: true, prep: null } };
+    // Main announces the music once it is on, and the editor loads it again.
+    let current: object = project;
+    const { invoke, emit } = fakeBridge({
+      "app:info": info(),
+      "library:list": [summary],
+      "project:get": () => current,
+      "ai:status": ready,
+      "project:edit": withSounds,
+      "music:pick": "/m/song.mp3",
+      "project:set-music": () => {
+        current = withMusic;
+        return withMusic;
+      },
+    });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "talk" }));
+    expect(await screen.findByRole("button", { name: "Play Whoosh" })).toBeTruthy();
+    fireEvent.click(await screen.findByRole("button", { name: "again." }));
+    fireEvent.change(screen.getByLabelText("Add a sound effect on the selection's first word"), { target: { value: "ding" } });
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:edit", { id: "p1", revision: 3, op: { type: "sound", wordId: "s1-1", effect: "ding" } }));
+
+    expect(await screen.findByText("Sound, whoosh")).toBeTruthy();
+    const volume = await screen.findByLabelText("Volume of the Ding at 0:03");
+    fireEvent.change(volume, { target: { value: "1" } });
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:edit", { id: "p1", revision: 4, op: { type: "sound-volume", id: "f1", volume: 1 } }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Add music" }));
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:set-music", { id: "p1", file: "/m/song.mp3" }));
+    emit("project:changed", { id: "p1", revision: 5 });
+    expect(await screen.findByText("Preparing…")).toBeTruthy();
+    fireEvent.click(screen.getByLabelText("Dip under speech"));
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:edit", expect.objectContaining({ op: { type: "music", duck: false } })));
+  });
+
   it("changes the speed and cancels a running export", async () => {
     const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude" };
     const { invoke, emit } = fakeBridge({

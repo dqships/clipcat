@@ -150,7 +150,12 @@ export function shortSegments(plan: ShortPlan, duration: (sourceId: string) => n
 }
 
 /** The source ranges a proposal is about: what it cuts, or where it zooms or shows b-roll. */
-const proposalRanges = (p: Project["proposals"][number]): Range[] => [...p.cuts, ...(p.punch ? [p.punch.range] : []), ...(p.overlay ? [p.overlay.range] : [])];
+const proposalRanges = (p: Project["proposals"][number]): Range[] => [
+  ...p.cuts,
+  ...(p.punch ? [p.punch.range] : []),
+  ...(p.overlay ? [p.overlay.range] : []),
+  ...(p.sound ? [[p.sound.at, p.sound.at] as Range] : []),
+];
 
 /**
  * The short as a project of its own, vertical, with the recordings it uses
@@ -181,6 +186,8 @@ export function shortProject(parent: Project, plan: ShortPlan, opts: { id: strin
     suggestedTitle: plan.title,
     sources,
     assets: parent.assets.map((a) => structuredClone(a)),
+    // Music is picked for a whole video; a short gets its own.
+    music: null,
     transcript: parent.transcript.filter((w) => used.has(w.sourceId)).map((w) => ({ ...w })),
     segments,
     proposals: parent.proposals

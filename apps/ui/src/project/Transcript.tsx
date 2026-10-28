@@ -1,5 +1,5 @@
-import { type EditOp, type Project, type SlideLook, type Word, isWordKept } from "@clipcat/core";
-import { Image, Presentation, Scissors, Undo2, ZoomIn } from "lucide-react";
+import { type EditOp, type Project, SOUND_EFFECTS, type SlideLook, type Word, isWordKept } from "@clipcat/core";
+import { AudioLines, Image, Presentation, Scissors, Undo2, ZoomIn } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ICON_STROKE } from "../icons";
 import type { Playhead } from "./Preview";
@@ -27,8 +27,8 @@ export function orderedWords(project: Project): Word[] {
  * The transcript as the edit: struck words are cut, and cutting words cuts
  * the video. Click a word to jump there, shift-click to select a run, then
  * Delete to cut it (or to restore it, when it is all cut already), punch in on
- * it so the picture zooms there, show b-roll over it, or have the AI editor
- * design a slide for it.
+ * it so the picture zooms there, show b-roll over it, have the AI editor
+ * design a slide for it, or land a sound effect on its first word.
  */
 export function Transcript({ project, playhead, onSeek, onEdit }: Props) {
   const words = useMemo(() => orderedWords(project), [project]);
@@ -166,6 +166,26 @@ export function Transcript({ project, playhead, onSeek, onEdit }: Props) {
                       Add slide
                     </button>
                   </form>
+                )}
+                {!slide && (
+                  <label className="editor__broll">
+                    <AudioLines className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
+                    <select
+                      className="field__control"
+                      aria-label="Add a sound effect on the selection's first word"
+                      value=""
+                      onChange={(e) => {
+                        if (e.target.value && selected[0]) onEdit({ type: "sound", wordId: selected[0].id, effect: e.target.value });
+                      }}
+                    >
+                      <option value="">Sound…</option>
+                      {SOUND_EFFECTS.map((effect) => (
+                        <option key={effect.id} value={effect.id}>
+                          {effect.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                 )}
               </>
             )}
