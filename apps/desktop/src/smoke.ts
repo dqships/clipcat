@@ -7,7 +7,8 @@
 // window, as a real export does) and a sound effect from the shipped
 // library; a failed step is a 1, and so is an empty transcript when
 // CLIPCAT_SMOKE_EXPECT_WORDS=1. The report says whether the face detector
-// runs and how many frames had a face. CI runs this against the
+// runs and how many frames had a face, and whether an outside agent can
+// reach the MCP server through the packaged bridge. CI runs this against the
 // packaged app on macOS and Windows.
 
 import { app } from "electron";
@@ -16,6 +17,9 @@ import { readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { defaultOverlay, overlayProposal, slideAsset, soundProposal } from "@clipcat/core";
 import type { AiStatusValue, AppInfoValue, JobEventValue } from "@clipcat/ipc";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import type { McpServerSpec } from "./mcp/config";
 import type { JobQueue } from "./jobs/queue";
 import type { ExportRunner } from "./pipeline/export";
 import type { ImportPipeline } from "./pipeline/import";
@@ -139,8 +143,31 @@ export async function smokeImport(
 }
 
 /**
+ * Runs the bridge the way an agent's config does and lists projects through
+ * it: null when that works, else what went wrong.
+ */
+export async function smokeMcp(spec: McpServerSpec): Promise<string | null> {
+  const { CLIPCAT_LAUNCH: _launch, ...env } = spec.env;
+  const transport = new StdioClientTransport({ command: spec.command, args: spec.args, env: { ...(process.env as Record<string, string>), ...env }, stderr: "pipe" });
+  let stderr = "";
+  transport.stderr?.on("data", (d: Buffer) => (stderr += d.toString()));
+  const client = new Client({ name: "clipcat-smoke", version: "1" });
+  try {
+    await client.connect(transport, { timeout: 20_000 });
+    const { tools } = await client.listTools(undefined, { timeout: 20_000 });
+    if (!tools.some((t) => t.name === "cut_words")) return `tools: ${tools.map((t) => t.name).join(", ")}`;
+    const result = await client.callTool({ name: "list_projects", arguments: {} }, undefined, { timeout: 20_000 });
+    return result.isError ? `list_projects: ${JSON.stringify(result.content)}` : null;
+  } catch (e) {
+    return `${e instanceof Error ? e.message : String(e)}${stderr ? `: ${stderr.trim()}` : ""}`;
+  } finally {
+    await client.close().catch(() => {});
+  }
+}
+
+/**
  * `ai` is reported, not required: CI has no signed-in Claude Code. Neither is
- * `faceDetector` or `cutout` (why there's none, or null), which CI checks per system.
+ * `faceDetector`, `cutout` or `mcp` (why there's none, or null), which CI checks per system.
  */
 export function finishSmoke(result: {
   screen: string;
@@ -148,6 +175,7 @@ export function finishSmoke(result: {
   ai: AiStatusValue;
   faceDetector: string | null;
   cutout: string | null;
+  mcp: string | null;
   import?: SmokeImport;
 }): void {
   const tools = [result.info.ffmpeg, result.info.whisper, result.info.parakeet ?? { available: true }];

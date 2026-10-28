@@ -79,6 +79,21 @@ export const JobEvent = z.object({
   error: z.string().optional(),
 });
 
+/** The coding agents ClipCat can register its MCP server with. */
+export const McpAgentId = z.enum(["claude-code", "claude-desktop", "codex"]);
+
+/** One agent, as the settings screen shows it: is it on this computer, and does its config have ClipCat in it. */
+export const McpAgent = z.object({
+  id: McpAgentId,
+  label: z.string(),
+  detected: z.boolean(),
+  connected: z.boolean(),
+  /** The config file ClipCat writes to. */
+  config: z.string(),
+  /** Why it can't be connected from this build, or null when it can. */
+  unavailable: z.string().nullable(),
+});
+
 const ProjectRef = z.object({ id: z.string().regex(/^[a-zA-Z0-9-]+$/) });
 /** Absolute paths, as the file picker or a drop gives them. */
 const Files = z.array(z.string().min(1).max(4096)).min(1).max(200);
@@ -147,6 +162,10 @@ export const methods = {
   "project:reveal-export": { input: ProjectRef, output: z.void() },
   /** Cancels the project's queued and running jobs. */
   "jobs:cancel": { input: ProjectRef, output: z.void() },
+  /** The coding agents ClipCat's MCP server can be added to, and which have it. */
+  "mcp:status": { input: z.void(), output: z.array(McpAgent) },
+  /** Adds ClipCat's MCP server to an agent's config (connect: true) or takes it out; resolves with every agent's state. */
+  "mcp:connect": { input: z.object({ agent: McpAgentId, connect: z.boolean() }), output: z.array(McpAgent) },
 } as const;
 
 /** Pushed from main to the UI. */
@@ -189,3 +208,5 @@ export type AgentNameValue = z.output<typeof AgentName>;
 export type ApiModelValue = z.output<typeof ApiModel>;
 export type ApiStatusValue = z.output<typeof ApiStatus>;
 export type SettingsValue = z.output<typeof Settings>;
+export type McpAgentIdValue = z.output<typeof McpAgentId>;
+export type McpAgentValue = z.output<typeof McpAgent>;

@@ -91,6 +91,68 @@ body {
   box-shadow: inset var(--focus-ring);
 }
 
+/* Settings: one column of sections, read top to bottom. */
+.settings {
+  display: grid;
+  align-content: start;
+  gap: var(--space-6);
+  padding: var(--space-6);
+  overflow: auto;
+}
+
+.settings__section {
+  display: grid;
+  gap: var(--space-3);
+  max-width: calc(var(--space-9) * 7);
+}
+
+.settings__body,
+.settings__hint {
+  margin: 0;
+}
+
+.settings__hint {
+  color: var(--color-text-muted);
+}
+
+.agents {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--color-border);
+}
+
+.agents__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.agents__text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: var(--space-1);
+}
+
+.agents__name {
+  font-size: var(--text-callout);
+  line-height: var(--leading-callout);
+  font-weight: var(--font-weight-semibold);
+}
+
+.agents__path {
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: var(--text-caption);
+  line-height: var(--leading-caption);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Buttons: one control height everywhere, the focus ring from the tokens. */
 .button {
   display: inline-flex;

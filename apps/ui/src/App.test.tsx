@@ -620,4 +620,24 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "Delete project" }));
     await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:remove", { id: "p1" }));
   });
+  it("connects a coding agent from settings", async () => {
+    const agent = (id: string, label: string, over: object = {}) => ({ id, label, detected: true, connected: false, config: `/home/me/${id}`, unavailable: null, ...over });
+    const before = [agent("claude-code", "Claude Code"), agent("codex", "Codex", { detected: false }), agent("claude-desktop", "Claude desktop app")];
+    const { invoke } = fakeBridge({
+      "app:info": info(),
+      "library:list": [],
+      "mcp:status": before,
+      "mcp:connect": () => before.map((a) => (a.id === "claude-code" ? { ...a, connected: true } : a)),
+    });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
+    expect(await screen.findByRole("heading", { level: 1, name: "Settings" })).toBeTruthy();
+    expect(await screen.findByText(/Codex/)).toBeTruthy();
+    expect(screen.getByText("Not found on this computer. You can still connect it for later.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Connect Claude Code" }));
+    expect(await screen.findByRole("button", { name: "Disconnect Claude Code" })).toBeTruthy();
+    expect(invoke).toHaveBeenCalledWith("mcp:connect", { agent: "claude-code", connect: true });
+    fireEvent.click(screen.getByRole("button", { name: "Back to library" }));
+    expect(await screen.findByRole("heading", { level: 2, name: "No videos yet" })).toBeTruthy();
+  });
 });

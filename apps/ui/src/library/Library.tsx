@@ -1,5 +1,5 @@
 import type { ProjectSummaryValue } from "@clipcat/ipc";
-import { Plus } from "lucide-react";
+import { Plus, Settings } from "lucide-react";
 import { type DragEvent, useCallback, useEffect, useState } from "react";
 import lockupInk from "../../../../brand/logo/clipcat-lockup-ink.svg";
 import lockupWhite from "../../../../brand/logo/clipcat-lockup-white.svg";
@@ -12,10 +12,11 @@ import { ProjectCard } from "./ProjectCard";
 type Props = {
   jobsFor: (projectId: string) => ProjectJobs;
   onOpen: (projectId: string) => void;
+  onSettings: () => void;
 };
 
 /** The first screen: your projects, newest first. Drop files anywhere to start one. */
-export function Library({ jobsFor, onOpen }: Props) {
+export function Library({ jobsFor, onOpen, onSettings }: Props) {
   const [projects, setProjects] = useState<ProjectSummaryValue[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -68,12 +69,17 @@ export function Library({ jobsFor, onOpen }: Props) {
           <source srcSet={lockupWhite} media="(prefers-color-scheme: dark)" />
           <img className="titlebar__logo" src={lockupInk} alt="ClipCat" />
         </picture>
-        {hasProjects && (
-          <button type="button" className="button button--primary titlebar__action" onClick={pick}>
-            <Plus className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
-            Add videos
+        <div className="titlebar__action">
+          {hasProjects && (
+            <button type="button" className="button button--primary" onClick={pick}>
+              <Plus className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
+              Add videos
+            </button>
+          )}
+          <button type="button" className="button button--icon" aria-label="Settings" title="Settings" onClick={onSettings}>
+            <Settings className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
           </button>
-        )}
+        </div>
       </header>
       <main
         className={dragging ? "library library--dragging" : "library"}

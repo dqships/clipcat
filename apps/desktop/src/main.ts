@@ -1,14 +1,15 @@
 // ClipCat's main process: one window, the UI on app://clipcat, prepared media
-// on media://, sound effects on sound://, the cutout model on model://, and
-// the IPC handlers. All media
+// on media://, sound effects on sound://, the cutout model on model://, the
+// IPC handlers, and the MCP socket outside agents drive it through. All media
 // work lives here, never in the renderer.
 
 import { BrowserWindow, app, dialog, nativeTheme, safeStorage, shell } from "electron";
 import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
-import { type Article, applyEdit } from "@clipcat/core";
+import { type Article, type EditOp, applyEdit } from "@clipcat/core";
 import tokens from "../../../design/tokens.json";
+import { homedir } from "node:os";
 import { extname, join, resolve } from "node:path";
 import type { AppInfoValue } from "@clipcat/ipc";
 import { AnalysisRunner } from "./ai/analyze";
@@ -18,7 +19,11 @@ import { codexAgent, probeCodex } from "./ai/codex";
 import { hydrateEnv } from "./ai/env";
 import { type Binary, binaryPath, probeVersion } from "./tools";
 import { broadcast, registerIpc } from "./ipc";
+import { JobLog } from "./jobs/log";
 import { JobQueue } from "./jobs/queue";
+import { type InstallEnv, connectAgent, healRegistrations, mcpStatus, serverSpec } from "./mcp/install";
+import { createMcpServer } from "./mcp/server";
+import { listen, socketPath } from "./mcp/socket";
 import { IMAGE_EXTENSIONS, VIDEO_EXTENSIONS } from "./media/assets";
 import { MUSIC_EXTENSIONS } from "./media/music";
 import { encoderTestArgs, lazyEncoder, pickEncoder } from "./media/encoders";
@@ -39,7 +44,7 @@ import { ProjectStore } from "./store/projects";
 import { KeyStore } from "./store/keys";
 import { SettingsStore } from "./store/settings";
 import type { ModelId } from "./transcribe/models";
-import { startSmokeTimer, finishSmoke, isSmokeRun, recordSmokeJob, smokeImport } from "./smoke";
+import { startSmokeTimer, finishSmoke, isSmokeRun, recordSmokeJob, smokeImport, smokeMcp } from "./smoke";
 
 const squirrelLaunch = handleSquirrelEvent();
 
@@ -115,8 +120,10 @@ function startPipeline() {
     encrypt: (plain) => safeStorage.encryptString(plain),
     decrypt: (data) => safeStorage.decryptString(data),
   });
+  const jobs = new JobLog();
   const queue = new JobQueue((event) => {
     if (isSmokeRun()) recordSmokeJob(event);
+    jobs.record(event);
     broadcast("job", event);
   });
   const changed = (p: { id: string; revision: number }) => broadcast("project:changed", { id: p.id, revision: p.revision });
@@ -190,7 +197,26 @@ function startPipeline() {
     renderSlide: (projectId, asset, size, fps, out, ctx) =>
       renderVideo(tool("ffmpeg"), `slide://${projectId}/${asset.id}`, size, fps, asset.media.duration, out, { signal: ctx.signal, progress: (f) => ctx.progress(f) }),
   });
-  return { store, settings, keys, queue, pipeline, media, music, thumbnail, analysis, exporter };
+  /** One edit, from the transcript editor or an outside agent: applied and saved if `revision` is still current, then announced. */
+  const edit = async (id: string, revision: number, op: EditOp) => {
+    const next = await store.update(id, revision, (p) => applyEdit(p, op, () => `g${randomUUID().slice(0, 8)}`));
+    broadcast("project:changed", { id, revision: next.revision });
+    if (op.type === "remove-asset") void media.forget(id, op.assetId);
+    if (op.type === "remove-music") void music.forget(id);
+    if (op.type === "slide" || op.type === "describe") void analysis.designMissing(id);
+    return next;
+  };
+  return { store, settings, keys, queue, jobs, pipeline, media, music, thumbnail, analysis, exporter, edit };
+}
+
+/** Where outside agents reach the app, and what their configs run to get there. */
+function mcpEnv(socket: string): InstallEnv {
+  return {
+    home: homedir(),
+    appData: app.getPath("appData"),
+    spec: serverSpec(process.execPath, app.getAppPath(), socket, app.isPackaged),
+    transient: process.platform === "darwin" && process.execPath.includes("/AppTranslocation/"),
+  };
 }
 
 /** A file name from the video's title: no characters Windows or macOS refuse. */
@@ -249,7 +275,31 @@ if (!squirrelLaunch) {
   if (!app.requestSingleInstanceLock()) app.quit();
 
   app.whenReady().then(() => {
-    const { store, settings, keys, queue, pipeline, media, music, thumbnail, analysis, exporter } = startPipeline();
+    const { store, settings, keys, queue, jobs, pipeline, media, music, thumbnail, analysis, exporter, edit } = startPipeline();
+    const socket = socketPath(app.getPath("userData"), process.platform);
+    const installEnv = mcpEnv(socket);
+    const mcp = listen(socket, () =>
+      createMcpServer({
+        version: app.getVersion(),
+        list: () => store.list(),
+        get: (id) => store.get(id),
+        edit,
+        analyze: (id, brief) => analysis.analyze(id, brief),
+        request: async (id, request) => analysis.request(id, request),
+        writeup: async (id) => analysis.writeup(id),
+        shorts: async (id, count, seconds) => analysis.shorts(id, count, seconds),
+        exportVideo: async (id, format, path) => {
+          await store.get(id);
+          exporter.export(id, format, path);
+        },
+        importFiles: (files, projectId) => pipeline.import(files, projectId),
+        jobs: (projectId) => jobs.list(projectId),
+      }),
+    ).then(
+      () => null,
+      (e: unknown) => `The MCP socket didn't open: ${e instanceof Error ? e.message : String(e)}`,
+    );
+    if (!isSmokeRun()) void healRegistrations(installEnv);
     const aiStatus = async () => {
       const host = await hostEnv;
       const [claude, codex, current, key] = await Promise.all([probeClaude(host), probeCodex(host), settings.get(), keys.get()]);
@@ -274,8 +324,12 @@ if (!squirrelLaunch) {
           const info = await appInfo();
           const file = process.env.CLIPCAT_SMOKE_IMPORT;
           const ai = await aiStatus();
-          const [faceDetector, cutout] = await Promise.all([faceDetectorProblem(), cutoutProblem()]);
-          finishSmoke({ screen, info, ai, faceDetector, cutout, ...(file ? { import: await smokeImport(pipeline, exporter, store, queue, file) } : {}) });
+          const [faceDetector, cutout, mcpProblem] = await Promise.all([
+            faceDetectorProblem(),
+            cutoutProblem(),
+            mcp.then((problem) => problem ?? smokeMcp(installEnv.spec)),
+          ]);
+          finishSmoke({ screen, info, ai, faceDetector, cutout, mcp: mcpProblem, ...(file ? { import: await smokeImport(pipeline, exporter, store, queue, file) } : {}) });
         },
         "library:list": () => store.list(),
         "files:pick": async (_, event) => {
@@ -382,14 +436,7 @@ if (!squirrelLaunch) {
           return { path };
         },
         "project:shorts": async ({ id, count, seconds }) => analysis.shorts(id, count, seconds),
-        "project:edit": async ({ id, revision, op }) => {
-          const next = await store.update(id, revision, (p) => applyEdit(p, op, () => `g${randomUUID().slice(0, 8)}`));
-          broadcast("project:changed", { id, revision: next.revision });
-          if (op.type === "remove-asset") void media.forget(id, op.assetId);
-          if (op.type === "remove-music") void music.forget(id);
-          if (op.type === "slide" || op.type === "describe") void analysis.designMissing(id);
-          return next;
-        },
+        "project:edit": ({ id, revision, op }) => edit(id, revision, op),
         "project:export": async ({ id, format }, event) => {
           const project = await store.get(id);
           const win = BrowserWindow.fromWebContents(event.sender);
@@ -410,6 +457,11 @@ if (!squirrelLaunch) {
           if (last) shell.showItemInFolder(last.path);
         },
         "jobs:cancel": ({ id }) => queue.cancel(id),
+        "mcp:status": () => mcpStatus(installEnv),
+        "mcp:connect": async ({ agent, connect }) => {
+          await connectAgent(installEnv, agent, connect);
+          return mcpStatus(installEnv);
+        },
       },
       DEV_URL,
     );
