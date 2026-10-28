@@ -2,7 +2,7 @@ import type { UpdateStatusValue } from "@clipcat/ipc";
 import { describe, expect, it, vi } from "vitest";
 import { type AutoUpdater, Updater, feedFor, newer, releasePage } from "./update";
 
-const FEED = "https://github.com/dqships/video-editor/releases/latest/download";
+const FEED = "https://github.com/dqships/clipcat/releases/latest/download";
 
 /** An autoUpdater whose events the test fires by hand. */
 function fakeUpdater() {
@@ -49,7 +49,7 @@ describe("versions and feeds", () => {
   it("points Squirrel.Mac at RELEASES.json and Squirrel.Windows at the folder", () => {
     expect(feedFor(FEED, "darwin")).toEqual({ url: `${FEED}/RELEASES.json`, serverType: "json" });
     expect(feedFor(`${FEED}/`, "win32")).toEqual({ url: FEED });
-    expect(releasePage(FEED)).toBe("https://github.com/dqships/video-editor/releases/latest");
+    expect(releasePage(FEED)).toBe("https://github.com/dqships/clipcat/releases/latest");
   });
 });
 
@@ -89,7 +89,7 @@ describe("Updater", () => {
     u.start();
     await vi.waitFor(() => expect(updater.checkForUpdates).toHaveBeenCalledOnce());
     fire("error", new Error("Could not get code signature for running application"));
-    expect(u.current).toMatchObject({ state: "available", version: "0.2.0", page: "https://github.com/dqships/video-editor/releases/latest" });
+    expect(u.current).toMatchObject({ state: "available", version: "0.2.0", page: "https://github.com/dqships/clipcat/releases/latest" });
     expect(await u.check()).toMatchObject({ state: "available" });
     expect(updater.checkForUpdates).toHaveBeenCalledOnce();
     u.install();

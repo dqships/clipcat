@@ -22,7 +22,7 @@
   --text-title: 22px;    --leading-title: 28px;
   --text-display: 32px;  --leading-display: 36px;
   /* Marketing site only: the hero poster line and section headlines, fluid with the window. */
-  --text-poster: clamp(56px, 11vw, 184px);   --leading-poster: 0.9;
+  --text-poster: clamp(48px, 8.5vw, 144px);  --leading-poster: 0.92;
   --text-headline: clamp(30px, 4vw, 52px);   --leading-headline: 1.04;
   --tracking-tight: -0.035em;
   --tracking-caps: 0.12em;

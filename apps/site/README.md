@@ -1,25 +1,25 @@
 # ClipCat's site
 
-The marketing site: plain HTML and Markdown built from `content.mjs`, with no
-JavaScript on the pages and no dependencies. Vercel serves `dist/`, and
-`middleware.js` answers `Accept: text/markdown` with each page's Markdown at the
-same URL.
+The marketing site: a Next.js app (Pages Router) whose pages are plain,
+prerendered HTML with no JavaScript. Vercel serves it, and `proxy.ts` answers
+`Accept: text/markdown`, and every `.md` address, with the page's Markdown.
 
 | File | What it is |
 | --- | --- |
-| `content.mjs` | Every page, as data. Edit the words here. |
-| `render.mjs` | The HTML and Markdown for a page, plus `robots.txt`, `sitemap.xml` and `llms.txt`. |
-| `build.mjs` | Writes `dist/`. |
-| `negotiate.mjs`, `middleware.js` | Markdown content negotiation, and a Markdown 404 for unknown pages. |
-| `vercel.json` | Build settings, clean URLs and the security headers. |
-| `styles/site.css` | The site's styles, using `static/tokens.css` (a copy of `design/tokens.css`; a test keeps them equal). |
-| `scripts/og.mjs` | Renders `static/og.png`, the share card, from the home page. |
+| `lib/content.mjs` | Every page, as data. Edit the words here. |
+| `lib/markdown.mjs` | Each page's Markdown, the structured data, `robots.txt`, `sitemap.xml` and `llms.txt`. |
+| `lib/negotiate.mjs`, `proxy.ts` | Markdown content negotiation, `.md` addresses, and a Markdown 404 for unknown pages. |
+| `lib/site.mjs`, `next.config.mjs` | The production address and the security headers. |
+| `pages/`, `components/` | The pages. The home page is laid out like ClipCat's timeline (DESIGN.md, "The site's timeline"). |
+| `styles/site.css` | The site's styles, using `styles/tokens.css` (a copy of `design/tokens.css`; a test keeps them equal). |
+| `scripts/text-files.mjs` | Writes `robots.txt`, `sitemap.xml` and `llms.txt` into `public/` before each build. |
+| `scripts/og.mjs` | Renders `public/og.png`, the share card, from the home page's hero. |
 
 ```sh
-node build.mjs            # build dist/
-node serve.mjs            # serve it like Vercel on http://127.0.0.1:4322
-npm test                  # the launch checklist, as tests
-node scripts/og.mjs       # re-render the share card (needs Playwright)
+npm run dev            # http://localhost:3000
+npm test               # copy lengths, Markdown, negotiation, headers, tokens
+npm run test:server    # builds, then checks every served page against the launch checklist
+npm run build && npm run og   # re-render the share card (needs Playwright)
 ```
 
 The production address comes from `SITE_URL`, or the address Vercel gives the

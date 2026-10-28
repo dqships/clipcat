@@ -9,6 +9,7 @@ export default {
       // Pages answer with HTML or Markdown at the same URL (see proxy.ts), so caches key on Accept.
       { source: "/:path*", headers: [...SECURITY_HEADERS, { key: "Vary", value: "Accept" }] },
       { source: "/fonts/:file*", headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }] },
+      { source: "/llms.txt", headers: [{ key: "Content-Type", value: "text/plain; charset=utf-8" }] },
     ];
   },
   async redirects() {

@@ -8,14 +8,14 @@ export function siteOrigin(env = process.env) {
   return "https://clipcat.vercel.app";
 }
 
-// Next.js puts its page data in inline scripts, so scripts need 'unsafe-inline'.
-// The pages run no third-party code and take no input.
+// The pages run no JavaScript at all. Inline styles are allowed for the
+// timeline's clip lengths on the home page.
 const CSP = [
   "default-src 'self'",
   "img-src 'self' data:",
   "style-src 'self' 'unsafe-inline'",
   "font-src 'self'",
-  "script-src 'self' 'unsafe-inline'",
+  "script-src 'self'",
   "connect-src 'self'",
   "base-uri 'self'",
   "form-action 'self'",

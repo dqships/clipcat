@@ -1,6 +1,6 @@
 // Fails when app styles or components use a raw value instead of a design
 // token (DESIGN.md: "Never hardcode a color, font size or spacing value").
-// Scans apps/ui/src and the site's stylesheets. Allowed raw values: 0, 1px hairlines, percentages, and
+// Scans apps/ui/src and the site's styles, components and pages. Allowed raw values: 0, 1px hairlines, percentages, and
 // unitless numbers inside calc(). Add a token to DESIGN.md and
 // design/tokens.css instead of adding an exception here.
 
@@ -9,7 +9,7 @@ import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const scanned = [join(root, "apps", "ui", "src"), join(root, "apps", "site", "styles")];
+const scanned = [join(root, "apps", "ui", "src"), ...["styles", "components", "pages"].map((d) => join(root, "apps", "site", d))];
 
 const RULES = [
   { name: "hex color", re: /#[0-9a-fA-F]{3,8}\b/g },

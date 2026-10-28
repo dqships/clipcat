@@ -69,17 +69,17 @@ for (const page of [...PAGES, NOT_FOUND]) {
     assert.match(res.headers.get("content-security-policy"), /default-src 'self'/);
     const html = await res.text();
     assert.match(html, /^<!DOCTYPE html><html lang="en"/);
-    assert.match(html, /<meta charSet="utf-8"\/>/);
-    assert.match(html, /<meta name="viewport" content="width=device-width, initial-scale=1"\/>/);
-    assert.equal(decode(attr(html, /<title>([^<]*)<\/title>/)), page.title);
+    assert.match(html, /<meta charSet="utf-8"/);
+    assert.match(html, /<meta name="viewport" content="width=device-width, initial-scale=1"/);
+    assert.equal(decode(attr(html, /<title[^>]*>([^<]*)<\/title>/)), page.title);
     assert.equal(decode(attr(html, /<meta name="description" content="([^"]*)"/)), page.description);
-    assert.match(html, /<meta name="is-agentic-site-type" content="app"\/>/);
+    assert.match(html, /<meta name="is-agentic-site-type" content="app"/);
     assert.match(html, /<link rel="icon" href="\/favicon.ico"/);
     for (const key of ["og:title", "og:description", "og:image", "og:url", "og:type"]) assert.match(html, new RegExp(`property="${key}" content="[^"]+"`));
     for (const key of ["twitter:title", "twitter:description", "twitter:image"]) assert.match(html, new RegExp(`name="${key}" content="[^"]+"`));
     assert.match(html, /name="twitter:card" content="summary_large_image"/);
     assert.doesNotMatch(html, /noindex/);
-    const ld = JSON.parse(attr(html, /<script type="application\/ld\+json">(.*?)<\/script>/));
+    const ld = JSON.parse(attr(html, /<script type="application\/ld\+json"[^>]*>(.*?)<\/script>/));
     const types = ld["@graph"].map((n) => n["@type"]);
     assert.ok(types.includes("Organization") && types.includes("SoftwareApplication"));
     if (page !== NOT_FOUND) {
@@ -98,6 +98,7 @@ for (const page of [...PAGES, NOT_FOUND]) {
     assert.ok(text(html).length / html.length >= 0.05, `content is ${Math.round((100 * text(html).length) / html.length)}% of the markup`);
     for (const img of html.match(/<img [^>]*>/g) ?? []) assert.match(img, / alt="[^"]+"/);
     assert.doesNotMatch(html, /tabindex="[1-9]/);
+    assert.doesNotMatch(html, /<script(?! type="application\/ld\+json")/, "no JavaScript on the pages");
     for (const [, href] of html.matchAll(/<a [^>]*href="(\/[^"#]*)"/g)) {
       const res = await get(href);
       assert.equal(res.status, 200, `${href} resolves`);

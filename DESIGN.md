@@ -80,7 +80,7 @@ Two more sizes exist for the marketing site only, and grow with the window:
 
 | Token | Size / line height | Use |
 | --- | --- | --- |
-| `--text-poster` | 56 to 184 / 0.9 | The one poster line in the home page hero |
+| `--text-poster` | 48 to 144 / 0.92 | The one poster line in the home page hero |
 | `--text-headline` | 30 to 52 / 1.04 | Section headlines on the site |
 
 Large type is set tighter with `--tracking-tight` (−0.035 em). Small uppercase

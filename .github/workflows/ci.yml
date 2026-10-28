@@ -26,6 +26,8 @@ jobs:
       - run: npm test
       - run: npm run lint:tokens
       - run: npm run build --workspace=@clipcat/ui
+      # Builds the site and checks the served pages against the launch checklist.
+      - run: npm run test:server --workspace=@clipcat/site
 
   package:
     name: Package and smoke test (${{ matrix.target }})

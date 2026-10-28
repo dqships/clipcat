@@ -7,7 +7,7 @@ import { NOT_FOUND, PAGES, SITE } from "./content.mjs";
 
 /** Pages in the header; the footer lists them all. */
 export const HEADER = ["/features", "/download", "/pricing", "/about"];
-export const OG = { path: "/og.png", width: 1200, height: 630, alt: "ClipCat: edit talking-head videos by editing the transcript." };
+export const OG = { path: "/og.png", width: 1200, height: 630, alt: "ClipCat: raw takes in, finished video out." };
 
 /** The same text for Markdown, with the site's own links made absolute. */
 function inlineMd(text, origin) {
@@ -68,10 +68,14 @@ export function pageMarkdown(page, origin) {
   if (page.hero) out.push(downloadsMd(), "");
   for (const s of page.sections) {
     if (s.h2) out.push(`## ${s.h2}`, "");
+    if (s.caption) out.push(md(s.caption), "");
     for (const p of s.body ?? []) out.push(md(p), "");
+    if (s.note) out.push(md(s.note), "");
     if (s.steps) out.push(...s.steps.map((st, i) => `${i + 1}. **${st.title}**: ${md(st.text)}`), "");
     if (s.cards) out.push(...s.cards.map((c) => `- **${c.title}**: ${md(c.text)}`), "");
     if (s.list) out.push(...s.list.map((i) => `- ${md(i)}`), "");
+    if (s.h3) out.push(`### ${s.h3}`, "", md(s.detail), "");
+    if (s.session) out.push("```", ...s.session, "```", "");
     if (s.download && !page.hero) out.push(downloadsMd(), "");
     if (s.pageList) out.push(...PAGES.map((p) => `- [${p.nav}](${origin}${mdPath(p.path)}): ${p.description}`), "");
     if (s.more) out.push(md(s.more), "");
@@ -90,7 +94,7 @@ export function llmsTxt(origin) {
   return [
     `# ${SITE.name}`,
     "",
-    `> ${SITE.tagline} ClipCat is a free desktop video editor for Apple Silicon Macs and Windows. It transcribes on your computer and uses your own Claude Code, Codex or Claude API key to suggest cuts.`,
+    `> ${SITE.tagline} ClipCat is a free desktop editor for Apple Silicon Macs and Windows. It transcribes on your computer, then uses your own Claude Code, Codex or Claude API key to propose the first edit (cuts, punch-ins, b-roll, motion slides, sound and captions), shorts and a write-up.`,
     "",
     "Every page is also available as Markdown: request it with `Accept: text/markdown`, or use the `.md` links below.",
     "",
