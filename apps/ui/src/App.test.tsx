@@ -418,6 +418,47 @@ describe("App", () => {
     await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:edit", expect.objectContaining({ op: { type: "music", duck: false } })));
   });
 
+  it("writes up the video, edits its chapters and copies them for YouTube", async () => {
+    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude" };
+    const writeup = {
+      chapters: [{ wordId: "s1-0", title: "Hello" }, { wordId: "s1-1", title: "Again" }],
+      description: "Two words.",
+      article: { title: "Saying hello", markdown: "Hello again." },
+    };
+    const written = { ...project, revision: 4, writeup };
+    const writeText = vi.fn(async () => {});
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    const { invoke } = fakeBridge({
+      "app:info": info(),
+      "library:list": [summary],
+      "project:get": written,
+      "ai:status": ready,
+      "project:edit": written,
+      "project:writeup": undefined,
+      "project:save-article": { path: "/d/Saying hello.md" },
+    });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "talk" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Write again" }));
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:writeup", { id: "p1" }));
+
+    // The pause from 1 s to 2.5 s isn't cut, so "again." is at 0:03; the first chapter always starts the video.
+    const title = screen.getByLabelText("Title of the chapter at 0:03");
+    expect((screen.getByLabelText("Title of the chapter at 0:00") as HTMLInputElement).value).toBe("Hello");
+    fireEvent.change(title, { target: { value: "Once more" } });
+    fireEvent.blur(title);
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:edit", { id: "p1", revision: 4, op: { type: "chapter", wordId: "s1-1", title: "Once more" } }));
+    expect(screen.getByText("YouTube shows chapters once there are at least 3.")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy description and chapters" }));
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith("Two words."));
+    fireEvent.click(screen.getByRole("button", { name: "Save article as Markdown…" }));
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:save-article", { id: "p1" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove the chapter at 0:03" }));
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:edit", expect.objectContaining({ op: { type: "remove-chapter", wordId: "s1-1" } })));
+  });
+
   it("changes the speed and cancels a running export", async () => {
     const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude" };
     const { invoke, emit } = fakeBridge({

@@ -18,6 +18,7 @@ import {
   AgentCorrections,
   AgentDescriptions,
   AgentShorts,
+  AgentWriteup,
   AgentSlide,
   type Asset,
   type Project,
@@ -36,6 +37,9 @@ import {
   validateDescriptions,
   validateProposals,
   validateShorts,
+  validateWriteup,
+  buildTimeline,
+  type Writeup,
 } from "@clipcat/core";
 import type { JobContext, JobQueue } from "../jobs/queue";
 import type { ProjectStore } from "../store/projects";
@@ -51,6 +55,8 @@ import {
   SLIDE_TASK,
   SHORTS_PROMPT,
   SHORTS_TASK,
+  WRITEUP_PROMPT,
+  WRITEUP_TASK,
   analysisPrompt,
   correctionsPrompt,
   describePrompt,
@@ -58,6 +64,7 @@ import {
   orderedWords,
   placeableAssets,
   shortsPrompt,
+  writeupPrompt,
 } from "./prompt";
 import { slideProblems } from "../slides/page";
 
@@ -121,7 +128,17 @@ const DESIGN_ATTEMPTS = 3;
  * back, with pictures of it. `review` asks the agent to look at the pictures
  * and answer again before anything is saved.
  */
-type Checked<T> = { result: T; problems: string[]; summary: string; saved: string; images?: string[]; review?: string };
+type Checked<T> = {
+  result: T;
+  problems: string[];
+  summary: string;
+  saved: string;
+  images?: string[];
+  /** Sent back instead of saving a first answer with no problems, so the agent checks its work. */
+  review?: string;
+  /** What to resend when there are problems: the whole list (the default) or the whole answer. */
+  whole?: "list" | "answer";
+};
 
 export class AnalysisRunner {
   constructor(private readonly deps: AnalysisDeps) {}
@@ -153,6 +170,11 @@ export class AnalysisRunner {
   /** Queues a pass that picks up to `count` shorts of about `seconds` each and makes a project of each. */
   shorts(projectId: string, count: number, seconds: number): void {
     this.deps.queue.add(projectId, "shorts", "Finding shorts", (ctx) => this.runShorts(projectId, ctx, { count, seconds })).catch(() => {});
+  }
+
+  /** Queues a pass that writes the chapters, the description and the article. */
+  writeup(projectId: string): void {
+    this.deps.queue.add(projectId, "writeup", "Writing chapters and an article", (ctx) => this.runWriteup(projectId, ctx)).catch(() => {});
   }
 
   /** Queues designing a slide, unless it is already queued. */
@@ -199,7 +221,7 @@ export class AnalysisRunner {
           : { text: `The answer doesn't match the schema:\n${checked.invalid.join("\n")}\nFix it and answer again.`, done: false };
       }
       if (checked.problems.length > 0 && !last) {
-        return { text: `${checked.summary}\n${checked.problems.join("\n")}\nFix them and answer again with the whole ${checked.review ? "answer" : "list"}.`, done: false, images: checked.images };
+        return { text: `${checked.summary}\n${checked.problems.join("\n")}\nFix them and answer again with the whole ${checked.whole ?? (checked.review ? "answer" : "list")}.`, done: false, images: checked.images };
       }
       if (checked.review && !last) return { text: checked.review, done: false, images: checked.images };
       saved = { result: checked.result };
@@ -418,6 +440,35 @@ export class AnalysisRunner {
       p.shorts = [...p.shorts, ...made];
     });
     await this.deps.store.log(projectId, { type: "shorts", agent, shorts: made.map((m) => m.id), attempts });
+    this.deps.changed(updated);
+  }
+
+  async runWriteup(projectId: string, ctx: JobContext): Promise<void> {
+    const project = await this.deps.store.get(projectId);
+    const words = orderedWords(project);
+    if (words.length === 0) throw new Error("There is no transcript to read yet");
+    const timeline = buildTimeline(project);
+
+    const { result, attempts, agent } = await this.ask<Writeup>(
+      ctx,
+      { task: WRITEUP_TASK, system: WRITEUP_PROMPT, prompt: writeupPrompt(project, timeline.duration) },
+      (input) => {
+        const parsed = AgentWriteup.safeParse(input);
+        if (!parsed.success) return { invalid: parsed.error.issues.map((i) => `${i.path.join(".") || "input"}: ${i.message}`) };
+        const { writeup, errors } = validateWriteup(parsed.data, words, project, timeline);
+        return {
+          result: writeup,
+          problems: errors,
+          summary: `The write-up has ${errors.length} ${errors.length === 1 ? "problem" : "problems"}:`,
+          saved: `Saved ${writeup.chapters.length} ${writeup.chapters.length === 1 ? "chapter" : "chapters"}, the description and the article.`,
+          whole: "answer",
+        };
+      },
+    );
+    const updated = await this.deps.store.update(projectId, null, (p) => {
+      p.writeup = result;
+    });
+    await this.deps.store.log(projectId, { type: "writeup", agent, chapters: result.chapters.length, attempts });
     this.deps.changed(updated);
   }
 }

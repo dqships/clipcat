@@ -113,6 +113,10 @@ export const methods = {
   "project:analyze": { input: ProjectRef.extend({ brief: z.string().max(4000) }), output: z.void() },
   /** Queues cuts for one request ("cut the part about pricing"), added to the ones waiting. */
   "project:request": { input: ProjectRef.extend({ request: z.string().trim().min(1).max(1000) }), output: z.void() },
+  /** Queues an AI pass that writes the chapters, the description and an article from the edited video. */
+  "project:writeup": { input: ProjectRef, output: z.void() },
+  /** Asks where to save the article, then writes it there as Markdown. Resolves with the path, or null when cancelled. */
+  "project:save-article": { input: ProjectRef, output: z.object({ path: z.string().nullable() }) },
   /** Queues designing the project's slides that have no design yet (one that failed, say). */
   "project:design-slides": { input: ProjectRef, output: z.void() },
   /** Queues a pass that fixes misheard names and terms, using the dictionary. */

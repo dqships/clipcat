@@ -12,3 +12,4 @@ export * from "./punchins";
 export * from "./overlays";
 export * from "./slides";
 export * from "./sounds";
+export * from "./writeup";

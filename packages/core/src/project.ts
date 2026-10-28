@@ -209,6 +209,16 @@ export const History = z.object({
   future: z.array(Snapshot).default([]),
 });
 
+/** A chapter: its title, on the word it starts with. */
+export const Chapter = z.object({ wordId: z.string(), title: z.string().trim().min(1).max(100) });
+export const Article = z.object({ title: z.string().trim().max(200), markdown: z.string().max(100_000) });
+/** What goes with the video when it is posted (see writeup.ts). */
+export const Writeup = z.object({
+  chapters: z.array(Chapter).max(30).default([]),
+  description: z.string().max(5000).default(""),
+  article: Article.default({ title: "", markdown: "" }),
+});
+
 /** The last file exported, so the project can point back to it. */
 export const LastExport = z.object({
   path: z.string(),
@@ -254,6 +264,8 @@ export const Project = z.object({
   origin: Origin.nullable().default(null),
   /** Shorts made from this project, newest last. */
   shorts: z.array(ShortRef).default([]),
+  /** Chapters, a description and an article; null until written. */
+  writeup: Writeup.nullable().default(null),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -278,6 +290,9 @@ export type Slide = z.infer<typeof Slide>;
 export type Captions = z.infer<typeof Captions>;
 export type Snapshot = z.infer<typeof Snapshot>;
 export type LastExport = z.infer<typeof LastExport>;
+export type Chapter = z.infer<typeof Chapter>;
+export type Article = z.infer<typeof Article>;
+export type Writeup = z.infer<typeof Writeup>;
 export type Origin = z.infer<typeof Origin>;
 export type ShortRef = z.infer<typeof ShortRef>;
 export type Project = z.infer<typeof Project>;

@@ -1,7 +1,7 @@
 import { buildTimeline, defaultOverlay, initialSegments, overlayProposal, punchProposal, setRange, slideAsset, timedOverlays, timedPunches } from "@clipcat/core";
 import { asset, source } from "@clipcat/core/fixtures";
 import { describe, expect, it } from "vitest";
-import { audioCommand, chunkCommand, chunkList, chunkOverlays, exportChunks, exportSize, frameTimeline, muxArgs, overlayFit, punchPieces } from "./export";
+import { audioCommand, chunkCommand, chunkList, chunkOverlays, exportChunks, exportSize, ffmetadata, frameTimeline, muxArgs, overlayFit, punchPieces } from "./export";
 
 let n = 0;
 const id = () => `g${++n}`;
@@ -275,6 +275,20 @@ describe("audioCommand", () => {
     const { graph } = audioCommand({ ...shape, timeline, out: "a.m4a", music: { file: "/m.wav", volume: 0.3, duck: false } });
     expect(graph).not.toContain("sidechaincompress");
     expect(graph).toContain("[speech][mus]amix=inputs=2:");
+  });
+});
+
+describe("ffmetadata", () => {
+  it("writes the title and each chapter up to the next, escaping what the format reserves", () => {
+    expect(ffmetadata("Tips; tricks = fun", [{ start: 0, title: "Intro" }, { start: 12.3456, title: "#1 tip" }], 30)).toBe(
+      [";FFMETADATA1", "title=Tips\\; tricks \\= fun", "[CHAPTER]", "TIMEBASE=1/1000", "START=0", "END=12346", "title=Intro", "[CHAPTER]", "TIMEBASE=1/1000", "START=12346", "END=30000", "title=\\#1 tip", ""].join("\n"),
+    );
+    expect(ffmetadata("", [], 5)).toBe(";FFMETADATA1\n");
+  });
+
+  it("maps the chapters and title into the joined file only when there are some", () => {
+    expect(muxArgs("c.txt", "a.m4a", "/o.mp4", "meta.txt").join(" ")).toContain("-i a.m4a -f ffmetadata -i meta.txt -map_metadata 2 -map_chapters 2 -map 0:v:0");
+    expect(muxArgs("c.txt", "a.m4a", "/o.mp4")).not.toContain("ffmetadata");
   });
 });
 

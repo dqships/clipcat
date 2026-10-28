@@ -20,9 +20,11 @@ import {
   SlideLook,
   type Snapshot,
   type Word,
+  Writeup,
 } from "./project";
 import { defaultOverlay, overlayProposal } from "./overlays";
 import { PUNCH_SCALE, punchProposal, punchRange } from "./punchins";
+import { CHAPTERS } from "./writeup";
 import { slideAsset, slideName } from "./slides";
 import { soundProposal } from "./sounds";
 
@@ -55,6 +57,17 @@ export const EditOp = z.discriminatedUnion("type", [
   z.object({ type: z.literal("music"), volume: z.number().min(0).max(1).optional(), duck: z.boolean().optional() }),
   /** Takes the music out. Not an undo step. */
   z.object({ type: z.literal("remove-music") }),
+  /** Starts a chapter on this word with this title, or renames the one there. Not an undo step: the write-up shows it. */
+  z.object({ type: z.literal("chapter"), wordId: z.string(), title: z.string().trim().min(1).max(100) }),
+  /** Takes out the chapter that starts on this word. Not an undo step. */
+  z.object({ type: z.literal("remove-chapter"), wordId: z.string() }),
+  /** Changes the description or the article. Not an undo step. */
+  z.object({
+    type: z.literal("writeup"),
+    description: z.string().max(5000).optional(),
+    articleTitle: z.string().max(200).optional(),
+    article: z.string().max(100_000).optional(),
+  }),
   /** Where and how b-roll shows. Not an undo step: the list shows it. */
   z.object({
     type: z.literal("overlay-style"),
@@ -178,6 +191,30 @@ export function applyEdit(project: Project, op: EditOp, id: IdFactory): Project 
 
   if (op.type === "remove-music") {
     p.music = null;
+    return p;
+  }
+
+  if (op.type === "chapter") {
+    if (!p.transcript.some((w) => w.id === op.wordId)) throw new Error(`Unknown words: ${op.wordId}`);
+    const w = (p.writeup ??= Writeup.parse({}));
+    const here = w.chapters.find((c) => c.wordId === op.wordId);
+    if (here) here.title = op.title;
+    else if (w.chapters.length >= CHAPTERS.max) throw new Error(`A video can have at most ${CHAPTERS.max} chapters`);
+    else w.chapters.push({ wordId: op.wordId, title: op.title });
+    return p;
+  }
+
+  if (op.type === "remove-chapter") {
+    if (!p.writeup?.chapters.some((c) => c.wordId === op.wordId)) throw new Error(`Unknown chapter: ${op.wordId}`);
+    p.writeup.chapters = p.writeup.chapters.filter((c) => c.wordId !== op.wordId);
+    return p;
+  }
+
+  if (op.type === "writeup") {
+    const w = (p.writeup ??= Writeup.parse({}));
+    if (op.description !== undefined) w.description = op.description;
+    if (op.articleTitle !== undefined) w.article.title = op.articleTitle;
+    if (op.article !== undefined) w.article.markdown = op.article;
     return p;
   }
 

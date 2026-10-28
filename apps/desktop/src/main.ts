@@ -5,7 +5,8 @@
 import { BrowserWindow, app, dialog, nativeTheme, safeStorage, shell } from "electron";
 import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
-import { applyEdit } from "@clipcat/core";
+import { writeFile } from "node:fs/promises";
+import { type Article, applyEdit } from "@clipcat/core";
 import tokens from "../../../design/tokens.json";
 import { extname, join, resolve } from "node:path";
 import type { AppInfoValue } from "@clipcat/ipc";
@@ -189,6 +190,9 @@ function startPipeline() {
 /** A file name from the video's title: no characters Windows or macOS refuse. */
 const fileName = (title: string) => title.replace(/[\\/:*?"<>|\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim().slice(0, 120) || "ClipCat export";
 
+/** The article as a Markdown file: its title as the heading, then the body. */
+const articleFile = (a: Article) => `${a.title.trim() ? `# ${a.title.trim()}\n\n` : ""}${a.markdown.trim()}\n`;
+
 /** The app's window; the face detector's hidden window is never it. */
 let mainWindow: BrowserWindow | null = null;
 
@@ -336,6 +340,23 @@ if (!squirrelLaunch) {
         "project:request": async ({ id, request }) => analysis.request(id, request),
         "project:correct": async ({ id }) => analysis.correct(id),
         "project:design-slides": ({ id }) => analysis.designMissing(id),
+        "project:writeup": async ({ id }) => analysis.writeup(id),
+        "project:save-article": async ({ id }, event) => {
+          const project = await store.get(id);
+          const article = project.writeup?.article;
+          if (!article?.markdown.trim()) throw new Error("There is no article yet");
+          const win = BrowserWindow.fromWebContents(event.sender);
+          const options: Electron.SaveDialogOptions = {
+            title: "Save the article",
+            defaultPath: join(app.getPath("documents"), `${fileName(article.title || project.suggestedTitle || project.name)}.md`),
+            filters: [{ name: "Markdown", extensions: ["md"] }],
+          };
+          const result = win ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options);
+          if (result.canceled || !result.filePath) return { path: null };
+          const path = extname(result.filePath).toLowerCase() === ".md" ? result.filePath : `${result.filePath}.md`;
+          await writeFile(path, articleFile(article));
+          return { path };
+        },
         "project:shorts": async ({ id, count, seconds }) => analysis.shorts(id, count, seconds),
         "project:edit": async ({ id, revision, op }) => {
           const next = await store.update(id, revision, (p) => applyEdit(p, op, () => `g${randomUUID().slice(0, 8)}`));

@@ -3,7 +3,7 @@
 // marks it included again. Neighbours with the same state are merged, so the
 // list stays as short as the edit allows.
 
-import type { Range, Segment, Word } from "./project";
+import type { Project, Range, Segment, Word } from "./project";
 
 export type IdFactory = () => string;
 
@@ -66,4 +66,11 @@ export function wordSpanRange(words: Word[], from: number, to: number, sourceDur
 export function isWordKept(segments: Segment[], word: Word): boolean {
   const mid = (word.start + word.end) / 2;
   return segments.some((s) => s.sourceId === word.sourceId && s.included && mid >= s.sourceStart && mid < s.sourceEnd);
+}
+
+/** Every word, recording by recording in project order, then by time: the order the video plays them and the agents number them. */
+export function orderedWords(project: Pick<Project, "sources" | "transcript">): Word[] {
+  return [...project.sources]
+    .sort((a, b) => a.order - b.order)
+    .flatMap((s) => project.transcript.filter((w) => w.sourceId === s.id).sort((a, b) => a.start - b.start));
 }
