@@ -60,7 +60,7 @@ export const PAGES = [
         body: ["Each kind of change gets its own track. Turn any of them off before you export."],
         cards: [
           { track: "A1", title: "Cuts for retakes and pauses", text: "Repeated lines, stumbles, filler words and long pauses, each with a reason. Nothing is cut until you accept it." },
-          { track: "V1", title: "Punch-ins", text: "Zooms toward your face on the lines that matter, as a snap, a quick push or a slow creep." },
+          { track: "V1", title: "Zooms", text: "Zooms in on your face for the lines that matter, as a jump, a smooth zoom or a slow zoom." },
           { track: "V2", title: "B-roll from your files", text: "Your own screenshots and clips, placed where you talk about them, full frame or picture in picture." },
           { track: "V3", title: "Motion slides", text: "Short animated title, list and number cards, timed to your words." },
           { track: "A2", title: "Sound and music", text: "Sound effects on the right word, and a music bed that gets quieter while you talk." },
@@ -129,7 +129,7 @@ export const PAGES = [
     nav: "Features",
     title: "ClipCat features: cuts, captions, shorts and recording",
     description:
-      "Everything ClipCat does: transcript editing, AI cut suggestions, captions, vertical shorts, punch-ins, b-roll, sound, recording and Final Cut timelines.",
+      "Everything ClipCat does: transcript editing, AI cut suggestions, captions, vertical shorts, zooms, b-roll, sound, recording and Final Cut timelines.",
     h1: "Everything ClipCat does",
     lede: "ClipCat edits videos of one person talking to the camera. This page lists everything it does today.",
     updated: UPDATED,
@@ -159,12 +159,12 @@ export const PAGES = [
         ],
       },
       {
-        h2: "Punch-ins, b-roll, slides and sound",
+        h2: "Zooms, b-roll, slides and sound",
         list: [
-          "Punch-ins zoom toward the speaker to give a line weight: a snap, a quick push or a slow creep.",
+          "Zooms move in on the speaker to give a line weight: a jump, a smooth zoom or a slow zoom.",
           "B-roll lays your own pictures and clips over the talking, full frame or picture in picture.",
           "Motion slides are short animated cards (a title, a list, a number) designed by the AI in ClipCat's style.",
-          "Sound effects land on the word they belong to, and music ducks while you speak.",
+          "Sound effects land on the word they belong to, and the music gets quieter while you talk.",
         ],
       },
       {
@@ -210,7 +210,7 @@ export const PAGES = [
         h2: "How it works",
         body: [
           "Connecting adds a ClipCat entry to the agent's own settings file. When the agent starts, it runs a small ClipCat helper on your computer that talks to the open ClipCat window. There's no account and no sign-in, and nothing goes over the internet.",
-          "The agent reads the numbered transcript first, then cuts words, accepts or rejects suggested edits, adds punch-ins, b-roll, slides and sounds, and starts jobs like shorts and exports. Every change is one undo step in ClipCat, just like an edit you make yourself, and nothing deletes your footage.",
+          "The agent reads the numbered transcript first, then cuts words, accepts or rejects suggested edits, adds zooms, b-roll, slides and sounds, and starts jobs like shorts and exports. Every change is one undo step in ClipCat, just like an edit you make yourself, and nothing deletes your footage.",
         ],
       },
       {
@@ -241,7 +241,7 @@ export const PAGES = [
           "In ClipCat, cut the filler words and long pauses from my newest project. Show me what you'll cut before you do it.",
           "Ask ClipCat's AI editor for cuts on my newest project, then accept the retakes and leave the rest for me.",
           "In my newest ClipCat project, cut the part where I talk about pricing.",
-          "Add a punch-in on each line where I give a number, and a whoosh where each new topic starts.",
+          "Add a zoom on each line where I give a number, and a whoosh where each new topic starts.",
           "Make three ClipCat shorts of up to 60 seconds from my newest project.",
           "Write the chapters and a YouTube description for my newest ClipCat project.",
           "Import ~/Movies/take-1.mov and ~/Movies/take-2.mov into a new ClipCat project, and cut the retakes once it's transcribed.",
@@ -253,7 +253,7 @@ export const PAGES = [
         list: [
           "**list_projects**, **get_project**, **get_transcript**, **list_proposals** and **list_jobs** read your projects, transcripts, suggested edits and what ClipCat is working on.",
           "**cut_words** cuts or restores a run of words. **decide_proposals** accepts or rejects suggested edits.",
-          "**edit_project** makes any other change: punch-ins, b-roll, motion slides, sound effects, chapters, captions, speed, aspect ratio, music volume, the write-up, the thumbnail, and undo or redo.",
+          "**edit_project** makes any other change: zooms, b-roll, motion slides, sound effects, chapters, captions, speed, aspect ratio, music volume, the write-up, the thumbnail, and undo or redo.",
           "**find_cuts**, **make_shorts** and **write_up** ask ClipCat's own AI editor (the Claude Code, Codex or API key you picked in ClipCat) for cuts, shorts and a write-up.",
           "**import_videos**, **export_video** and **export_timeline** bring recordings in and send the video or a Final Cut, Premiere or EDL timeline out.",
         ],
@@ -338,7 +338,7 @@ export const PAGES = [
       {
         h2: "The idea",
         body: [
-          "Editing a talking-head video is mostly the same chores every time: cut the retakes and pauses, punch in on the good lines, add the screenshots, the captions and a little sound, then cut shorts and write the description. ClipCat does that first pass with the AI you already use, lays every change out on the timeline with a reason, and leaves every call to you.",
+          "Editing a talking-head video is mostly the same chores every time: cut the retakes and pauses, zoom in on the good lines, add the screenshots, the captions and a little sound, then cut shorts and write the description. ClipCat does that first pass with the AI you already use, lays every change out on the timeline with a reason, and leaves every call to you.",
         ],
       },
       {

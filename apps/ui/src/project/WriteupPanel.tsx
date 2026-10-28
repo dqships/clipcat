@@ -49,13 +49,13 @@ export function WriteupPanel({ project, jobs, onSeek, onEdit }: Props) {
       </h2>
       <p className="project__summary">
         {w
-          ? "Chapters follow their words through the edit, and go into the exported file."
+          ? "Chapters follow their words through the edit, and go into the exported file. Rewriting replaces the chapters, description and article, including your changes."
           : "The AI editor writes chapters, a description and an article from the edited video. Select a word in the transcript to start a chapter there yourself."}
       </p>
       <div>
         <button type="button" className="button" disabled={project.transcript.length === 0 || running} onClick={write}>
           <PenLine className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
-          {running ? "Writing…" : w ? "Write again" : "Write chapters and article"}
+          {running ? "Writing…" : w ? "Rewrite chapters and article" : "Write chapters and article"}
         </button>
       </div>
       {error && (

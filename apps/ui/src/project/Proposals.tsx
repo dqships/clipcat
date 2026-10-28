@@ -3,10 +3,10 @@ import { Check, X } from "lucide-react";
 import { formatDuration } from "../format";
 import { ICON_STROKE } from "../icons";
 
-const TYPE_LABEL: Record<string, string> = { silence: "Pause", retake: "Retake", cleanup: "Clean-up", tighten: "Tighten", "punch-in": "Punch-in", visual: "B-roll", sound: "Sound" };
+const TYPE_LABEL: Record<string, string> = { silence: "Silence", retake: "Retake", cleanup: "Filler words", tighten: "Tangent", "punch-in": "Zoom", visual: "B-roll", sound: "Sound" };
 const LOOK_LABEL: Record<string, string> = { paper: "paper", ink: "ink", overlay: "over the video" };
 const PLACEMENT_LABEL: Record<string, string> = { full: "full frame", pip: "picture in picture" };
-const STYLE_LABEL: Record<string, string> = { cut: "snap in", "zoom-in": "push in", "slow-zoom": "slow zoom" };
+const STYLE_LABEL: Record<string, string> = { cut: "jump", "zoom-in": "smooth", "slow-zoom": "slow" };
 const EFFECT_NAME = new Map(SOUND_EFFECTS.map((e) => [e.id, e.name.toLowerCase()]));
 
 type Props = {
@@ -19,7 +19,7 @@ const length = (p: Proposal) => p.cuts.reduce((n, [a, b]) => n + (b - a), 0);
 
 const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
-/** "2 cuts, 1 punch-in, 3 b-roll, 1 slide and 2 sounds to review" */
+/** "2 cuts, 1 zoom, 3 b-roll, 1 slide and 2 sounds to review" */
 function toReview(pending: Proposal[], slides: Set<string>): string {
   const punches = pending.filter((p) => p.punch).length;
   const slideCount = pending.filter((p) => p.overlay && slides.has(p.overlay.assetId)).length;
@@ -28,7 +28,7 @@ function toReview(pending: Proposal[], slides: Set<string>): string {
   const cuts = pending.length - punches - broll - slideCount - sounds;
   const parts = [
     cuts > 0 && count(cuts, "cut", "cuts"),
-    punches > 0 && count(punches, "punch-in", "punch-ins"),
+    punches > 0 && count(punches, "zoom", "zooms"),
     broll > 0 && `${broll} b-roll`,
     slideCount > 0 && count(slideCount, "slide", "slides"),
     sounds > 0 && count(sounds, "sound", "sounds"),

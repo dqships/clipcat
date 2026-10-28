@@ -91,7 +91,7 @@ export function ThumbnailPanel({ project, playhead, jobs, onEdit }: Props) {
       <div>
         <button type="button" className="button" disabled={!source || running} onClick={pick}>
           <ImagePlus className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
-          {running ? "Making the thumbnail…" : `Use the frame at ${formatDuration(at)}`}
+          {running ? "Making the thumbnail…" : `Make a thumbnail from ${formatDuration(at)}`}
         </button>
       </div>
       {error && (

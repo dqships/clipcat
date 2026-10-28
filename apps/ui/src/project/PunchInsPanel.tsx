@@ -7,9 +7,9 @@ import { ICON_STROKE } from "../icons";
 type Props = { project: Project; onSeek: (sourceId: string, time: number) => void; onEdit: (op: EditOp) => void };
 
 const STYLES: { style: PunchStyle; label: string }[] = [
-  { style: "cut", label: "Snap in" },
-  { style: "zoom-in", label: "Push in" },
-  { style: "slow-zoom", label: "Slow zoom" },
+  { style: "cut", label: "Jump" },
+  { style: "zoom-in", label: "Smooth" },
+  { style: "slow-zoom", label: "Slow" },
 ];
 
 /**
@@ -27,7 +27,7 @@ export function PunchInsPanel({ project, onSeek, onEdit }: Props) {
   return (
     <section className="panel" aria-labelledby="punch-title">
       <h2 id="punch-title" className="section-title">
-        Punch-ins
+        Zooms
       </h2>
       <ol className="punches">
         {punches.map((p) => {
@@ -40,7 +40,7 @@ export function PunchInsPanel({ project, onSeek, onEdit }: Props) {
               </button>
               <select
                 className="field__control"
-                aria-label={`Zoom for the punch-in at ${formatDuration(p.start)}`}
+                aria-label={`How the zoom at ${formatDuration(p.start)} moves`}
                 value={p.style}
                 onChange={(e) => onEdit({ type: "punch-style", id: p.id, style: e.target.value as PunchStyle })}
               >
@@ -53,7 +53,7 @@ export function PunchInsPanel({ project, onSeek, onEdit }: Props) {
               <button
                 type="button"
                 className="button button--icon"
-                aria-label={`Remove the punch-in at ${formatDuration(p.start)}`}
+                aria-label={`Remove the zoom at ${formatDuration(p.start)}`}
                 onClick={() => onEdit({ type: "decide", ids: [p.id], status: "rejected" })}
               >
                 <X className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />

@@ -21,17 +21,17 @@ export function FramingPanel({ project, playhead, onEdit }: Props) {
   return (
     <section className="panel" aria-labelledby="framing-title">
       <h2 id="framing-title" className="section-title">
-        Shape
+        Video shape
       </h2>
       <label className="field">
-        <span className="field__label">Made for</span>
+        <span className="field__label">Shape</span>
         <select
           className="field__control"
           value={tall ? "9:16" : "16:9"}
           onChange={(e) => onEdit({ type: "aspect", aspectRatio: e.target.value as "16:9" | "9:16" })}
         >
-          <option value="16:9">Landscape 16:9</option>
-          <option value="9:16">Vertical 9:16</option>
+          <option value="16:9">Landscape 16:9 (YouTube)</option>
+          <option value="9:16">Vertical 9:16 (Shorts, TikTok, Reels)</option>
         </select>
       </label>
       {tall && source && (

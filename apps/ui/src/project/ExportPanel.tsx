@@ -56,7 +56,7 @@ export function ExportPanel({ project, jobs, onEdit }: Props) {
         {duration > 0 ? `The edit runs ${formatDuration(duration)}.` : "Everything is cut, so there is nothing to export."}
       </p>
       <label className="field">
-        <span className="field__label">Speed</span>
+        <span className="field__label">Playback speed</span>
         <select
           className="field__control"
           value={project.speed}

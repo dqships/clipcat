@@ -94,15 +94,16 @@ export function MediaPanel({ project, onSeek, onEdit }: Props) {
                   {a.slide && !a.slide.html && (
                     <button type="button" className="button" onClick={() => void designAgain()}>
                       <RefreshCw className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
-                      Design
+                      Design now
                     </button>
                   )}
                 </span>
+                <span className="field__label">{a.slide ? "What the slide says" : "What this shows (the AI editor reads this)"}</span>
                 <textarea
                   key={a.description}
                   className="field__control media__description"
                   aria-label={a.slide ? `What ${a.name} says` : `What ${a.name} shows`}
-                  placeholder={a.slide ? (a.slide.html ? "What the slide says" : "Being designed…") : a.prep ? "What it shows, for the AI editor" : "Preparing…"}
+                  placeholder={a.slide ? (a.slide.html ? "What the slide says" : "Being designed…") : a.prep ? "A screenshot of the pricing page" : "Preparing…"}
                   defaultValue={a.description}
                   rows={2}
                   maxLength={1000}

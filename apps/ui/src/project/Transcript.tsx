@@ -20,8 +20,8 @@ type Props = {
 /**
  * The transcript as the edit: struck words are cut, and cutting words cuts
  * the video. Click a word to jump there, shift-click to select a run, then
- * Delete to cut it (or to restore it, when it is all cut already), punch in on
- * it so the picture zooms there, show b-roll over it, have the AI editor
+ * Delete to cut it (or to restore it, when it is all cut already), zoom in on
+ * it, show b-roll over it, have the AI editor
  * design a slide for it, or land a sound effect or start a chapter on its
  * first word.
  */
@@ -67,6 +67,7 @@ export function Transcript({ project, playhead, onSeek, onEdit }: Props) {
   const selected = words.slice(from, to + 1);
   const allCut = selected.length > 0 && kept.slice(from, to + 1).every((k) => !k);
   const oneRecording = selected.every((w) => w.sourceId === selected[0]?.sourceId);
+  const oneTake = oneRecording ? undefined : "Select words from one take to zoom in, or add b-roll or a slide";
 
   const apply = (included: boolean) => {
     if (selected.length === 0) return;
@@ -107,18 +108,23 @@ export function Transcript({ project, playhead, onSeek, onEdit }: Props) {
                   <Scissors className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
                   Cut
                 </button>
-                {oneRecording && (
-                  <button type="button" className="button" onClick={() => onEdit({ type: "punch", wordIds: selected.map((w) => w.id), style: "zoom-in" })}>
-                    <ZoomIn className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
-                    Punch in
-                  </button>
-                )}
-                {oneRecording && media.length > 0 && (
-                  <label className="editor__broll">
+                <button
+                  type="button"
+                  className="button"
+                  disabled={!oneRecording}
+                  title={oneTake}
+                  onClick={() => onEdit({ type: "punch", wordIds: selected.map((w) => w.id), style: "zoom-in" })}
+                >
+                  <ZoomIn className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
+                  Zoom in
+                </button>
+                {!slide && (
+                  <label className="editor__broll" title={oneTake ?? (media.length === 0 ? "Add pictures or clips in the B-roll section first" : undefined)}>
                     <Image className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
                     <select
                       className="field__control"
                       aria-label="Show b-roll over the selection"
+                      disabled={!oneRecording || media.length === 0}
                       value=""
                       onChange={(e) => {
                         if (e.target.value) onEdit({ type: "overlay", wordIds: selected.map((w) => w.id), assetId: e.target.value, placement: "full" });
@@ -133,8 +139,8 @@ export function Transcript({ project, playhead, onSeek, onEdit }: Props) {
                     </select>
                   </label>
                 )}
-                {oneRecording && !slide && (
-                  <button type="button" className="button" onClick={() => setSlide({ brief: "", look: "paper" })}>
+                {!slide && (
+                  <button type="button" className="button" disabled={!oneRecording} title={oneTake} onClick={() => setSlide({ brief: "", look: "paper" })}>
                     <Presentation className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
                     Slide
                   </button>
@@ -200,7 +206,9 @@ export function Transcript({ project, playhead, onSeek, onEdit }: Props) {
             )}
           </>
         ) : (
-          <span className="editor__count">Click a word to jump to it. Shift-click to select, Delete to cut.</span>
+          <span className="editor__count">
+            Click a word to jump to it. Shift-click to select words, then cut them or add a zoom, b-roll, slide, chapter or sound.
+          </span>
         )}
       </div>
       <p className="transcript">
