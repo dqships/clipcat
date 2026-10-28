@@ -12,8 +12,8 @@ import { type HostEnv, compareVersions, parseVersion, resolveBinary, resolveClau
 
 const MIN_VERSION = "2.0.0";
 const SERVER = "clipcat";
-/** Long enough for one answer and one corrected answer. */
-const MAX_TURNS = 6;
+/** Long enough for an answer, a corrected one, and a slide's look at its stills. */
+const MAX_TURNS = 8;
 
 export const SIGN_IN_HINT = "Run `claude auth login` in a terminal, then try again.";
 
@@ -80,7 +80,10 @@ export function claudeAgent(host: HostEnv, appVersion: string): Agent {
           run.activity("Checking Claude's answer");
           const reply = await run.submit(args);
           done ||= reply.done;
-          return { content: [{ type: "text" as const, text: reply.text }], isError: !reply.done };
+          const pictures = await Promise.all(
+            (reply.images ?? []).map(async (path) => ({ type: "image" as const, data: (await readFile(path)).toString("base64"), mimeType: "image/jpeg" })),
+          );
+          return { content: [{ type: "text" as const, text: reply.text }, ...pictures], isError: !reply.done && pictures.length === 0 };
         });
       const abort = new AbortController();
       const stop = () => abort.abort();

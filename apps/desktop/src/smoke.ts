@@ -3,15 +3,17 @@
 // and the bundled tools ran, 1 when one didn't, 2 when the UI never drew.
 // With CLIPCAT_SMOKE_IMPORT=<file> it also imports that file and waits for
 // prep, transcription and silence analysis, then exports it as 9:16 with
-// captions; a failed step is a 1, and so is an empty transcript when
+// captions and a motion slide over its start (rendered in the hidden
+// offscreen window, as a real export does); a failed step is a 1, and so is an empty transcript when
 // CLIPCAT_SMOKE_EXPECT_WORDS=1. The report says whether the face detector
 // runs and how many frames had a face. CI runs this against the
 // packaged app on macOS and Windows.
 
 import { app } from "electron";
 import { writeFileSync } from "node:fs";
-import { stat } from "node:fs/promises";
+import { readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
+import { defaultOverlay, overlayProposal, slideAsset } from "@clipcat/core";
 import type { AiStatusValue, AppInfoValue, JobEventValue } from "@clipcat/ipc";
 import type { JobQueue } from "./jobs/queue";
 import type { ExportRunner } from "./pipeline/export";
@@ -51,6 +53,8 @@ export type SmokeImport = {
   faces: number | null;
   /** Bytes in the exported video; 0 when the export failed. */
   exported: number;
+  /** Whether the export rendered the slide's video. */
+  slide: boolean;
   failed: string[];
   error?: string;
 };
@@ -59,6 +63,26 @@ export type SmokeImport = {
 const failures: string[] = [];
 export function recordSmokeJob(event: JobEventValue): void {
   if (event.state === "failed") failures.push(`${event.kind}: ${event.error ?? "failed"}`);
+}
+
+/** A designed slide, shown over the first two seconds, so the export renders it. */
+const SMOKE_SLIDE = `<style>.t{position:absolute;left:8vw;top:30vh;font-size:12vw;animation:in var(--spring-duration) var(--spring) both}
+.tape{position:absolute;left:8vw;top:45vh;width:40vw;height:2vh;background:var(--tape);transform-origin:left;animation:wipe .5s var(--spring) both .2s}
+@keyframes in{from{opacity:0;transform:translateY(3vh)}}@keyframes wipe{from{transform:scaleX(0)}}</style><div class="t">Smoke</div><div class="tape"></div>`;
+
+async function addSmokeSlide(store: ProjectStore, projectId: string): Promise<void> {
+  await store.update(projectId, null, (p) => {
+    const source = p.sources[0];
+    if (!source) return;
+    const end = Math.min(2, source.media.duration);
+    const card = slideAsset("smoke-slide", "Smoke", "paper", end);
+    card.slide!.html = SMOKE_SLIDE;
+    card.prep = { preview: "", frames: [] };
+    p.assets.push(card);
+    p.proposals.push(
+      overlayProposal({ id: "smoke-slide", sourceId: source.id, wordIds: [], reason: "", confidence: 1, status: "accepted" }, defaultOverlay([0, end], card.id, "full")),
+    );
+  });
 }
 
 /** Exports with the packaged ffmpeg, encoder and caption fonts; the size of the file, or 0. */
@@ -83,7 +107,10 @@ export async function smokeImport(
   try {
     const created = await pipeline.import([file], null);
     await queue.idle(created.id);
+    await addSmokeSlide(store, created.id);
     const exported = await smokeExport(exporter, created.id);
+    const renders = await readdir(join(store.dir(created.id), "media", "assets", "smoke-slide")).catch(() => [] as string[]);
+    const slide = renders.some((f) => /^render-1080x1920-.*\.mov$/.test(f));
     const p = await store.get(created.id);
     const words = p.transcript.length;
     return {
@@ -92,7 +119,8 @@ export async function smokeImport(
         failures.length === 0 &&
         (words > 0 || process.env.CLIPCAT_SMOKE_EXPECT_WORDS !== "1") &&
         p.sources.every((s) => s.prep !== null) &&
-        exported > 0,
+        exported > 0 &&
+        slide,
       words,
       text: p.transcript.map((w) => w.text).join(" ").slice(0, 300),
       span: words > 0 ? [p.transcript[0]!.start, p.transcript[words - 1]!.end] : null,
@@ -100,10 +128,11 @@ export async function smokeImport(
       backends: p.sources.map((s) => s.transcription?.backend ?? "none"),
       faces: p.sources.every((s) => s.faces === null) ? null : p.sources.reduce((n, s) => n + (s.faces?.length ?? 0), 0),
       exported,
+      slide,
       failed: failures,
     };
   } catch (e) {
-    return { ok: false, words: 0, text: "", span: null, pauses: [], backends: [], faces: null, exported: 0, failed: failures, error: e instanceof Error ? e.message : String(e) };
+    return { ok: false, words: 0, text: "", span: null, pauses: [], backends: [], faces: null, exported: 0, slide: false, failed: failures, error: e instanceof Error ? e.message : String(e) };
   }
 }
 

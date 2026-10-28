@@ -4,7 +4,7 @@
 
 import { BrowserWindow, app, dialog, nativeTheme, safeStorage, shell } from "electron";
 import { randomUUID } from "node:crypto";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { applyEdit } from "@clipcat/core";
 import tokens from "../../../design/tokens.json";
 import { extname, join, resolve } from "node:path";
@@ -25,7 +25,9 @@ import { AssetPipeline } from "./pipeline/assets";
 import { realAssetDeps, realDeps } from "./pipeline/deps";
 import { ExportRunner } from "./pipeline/export";
 import { ImportPipeline } from "./pipeline/import";
-import { APP_ORIGIN, registerSchemes, serveMedia, serveUi } from "./protocol";
+import { APP_ORIGIN, registerSchemes, serveMedia, serveSlides, serveUi } from "./protocol";
+import { SLIDE_COLORS, SLIDE_CSP, SLIDE_FONTS, fontFaces, slidePage } from "./slides/page";
+import { renderStills, renderVideo } from "./slides/render";
 import { handleSquirrelEvent } from "./squirrel";
 import { ProjectStore } from "./store/projects";
 import { KeyStore } from "./store/keys";
@@ -85,6 +87,16 @@ const MODEL: ModelId = process.env.CLIPCAT_MODEL === "base" ? "base" : "large-v3
 /** The user's PATH from their login shell, read once; the agent CLIs are found on it. */
 const hostEnv = hydrateEnv();
 
+const FONTS_DIR = app.isPackaged ? join(process.resourcesPath, "fonts") : join(REPO_ROOT, "apps", "desktop", "resources", "fonts");
+
+/** Slides being designed, served on slide://draft/<token> while their stills render. */
+const drafts = new Map<string, string>();
+let slideFonts: string | null = null;
+const slideHtml = (body: string, look: Parameters<typeof slidePage>[1]) => {
+  slideFonts ??= fontFaces(SLIDE_FONTS.map((font) => ({ font, data: readFileSync(join(FONTS_DIR, font.file)) })));
+  return slidePage(body, look, slideFonts);
+};
+
 function startPipeline() {
   const data = app.getPath("userData");
   const store = new ProjectStore(join(data, "projects"));
@@ -117,6 +129,19 @@ function startPipeline() {
     },
     dictionary: async () => (await settings.get()).dictionary,
     changed,
+    slides: {
+      stills: async (draft, frame, times, files) => {
+        const token = randomUUID();
+        drafts.set(token, slideHtml(draft.html, draft.look));
+        try {
+          // An overlay slide is checked over a mid tone, standing in for the video behind it.
+          return await renderStills(`slide://draft/${token}`, frame, times, files, 1280, draft.look === "overlay" ? SLIDE_COLORS.muted : undefined);
+        } finally {
+          drafts.delete(token);
+        }
+      },
+    },
+    forget: (projectId, assetId) => void media.forget(projectId, assetId),
   });
   const pipeline = new ImportPipeline({
     ...realDeps({
@@ -149,7 +174,9 @@ function startPipeline() {
     ffmpeg: (args, { cwd, duration, ctx }) =>
       runFfmpeg(tool("ffmpeg"), args, { cwd, duration, onProgress: (f) => ctx.progress(f), signal: ctx.signal }),
     encoder,
-    fontsDir: app.isPackaged ? join(process.resourcesPath, "fonts") : join(REPO_ROOT, "apps", "desktop", "resources", "fonts"),
+    fontsDir: FONTS_DIR,
+    renderSlide: (projectId, asset, size, fps, out, ctx) =>
+      renderVideo(tool("ffmpeg"), `slide://${projectId}/${asset.id}`, size, fps, asset.media.duration, out, { signal: ctx.signal, progress: (f) => ctx.progress(f) }),
   });
   return { store, settings, keys, queue, pipeline, media, analysis, exporter };
 }
@@ -215,6 +242,11 @@ if (!squirrelLaunch) {
     serveUi(UI_ROOT);
     setFacePage(DEV_URL ? new URL("faces.html", DEV_URL).toString() : `${APP_ORIGIN}/faces.html`);
     serveMedia((id) => store.dir(id));
+    serveSlides(async (host, id) => {
+      if (host === "draft") return drafts.get(id) ?? null;
+      const slide = (await store.get(host)).assets.find((a) => a.id === id)?.slide;
+      return slide?.html ? slideHtml(slide.html, slide.look) : null;
+    }, SLIDE_CSP);
     registerIpc(
       {
         "app:info": () => appInfo(),
@@ -283,11 +315,13 @@ if (!squirrelLaunch) {
         "project:analyze": ({ id, brief }) => analysis.analyze(id, brief),
         "project:request": async ({ id, request }) => analysis.request(id, request),
         "project:correct": async ({ id }) => analysis.correct(id),
+        "project:design-slides": ({ id }) => analysis.designMissing(id),
         "project:shorts": async ({ id, count, seconds }) => analysis.shorts(id, count, seconds),
         "project:edit": async ({ id, revision, op }) => {
           const next = await store.update(id, revision, (p) => applyEdit(p, op, () => `g${randomUUID().slice(0, 8)}`));
           broadcast("project:changed", { id, revision: next.revision });
           if (op.type === "remove-asset") void media.forget(id, op.assetId);
+          if (op.type === "slide" || op.type === "describe") void analysis.designMissing(id);
           return next;
         },
         "project:export": async ({ id, format }, event) => {

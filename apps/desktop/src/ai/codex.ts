@@ -14,7 +14,8 @@ import { type HostEnv, compareVersions, killTree, needsShell, parseVersion, quot
 
 /** The first release with `exec --output-schema` and `--ephemeral`. */
 const MIN_VERSION = "0.100.0";
-const ATTEMPTS = 2;
+/** Runs per task at most; ClipCat's reply says when it's done, which is usually after one or two. */
+const ATTEMPTS = 4;
 
 export const CODEX_SIGN_IN_HINT = "Run `codex login` in a terminal, then try again.";
 
@@ -107,10 +108,11 @@ export function codexAgent(host: HostEnv): Agent {
       try {
         await writeFile(join(dir, "schema.json"), JSON.stringify(run.task.jsonSchema));
         let prompt = `${instructions}\n\n${run.prompt}`;
+        let images = run.images;
         for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
           run.activity(attempt > 1 ? "Codex is fixing its answer" : run.images?.length ? "Codex is looking at your media" : "Codex is reading the transcript");
           await rm(join(dir, "answer.json"), { force: true });
-          await exec(binary, dir, prompt, run.images, host, run.signal);
+          await exec(binary, dir, prompt, images, host, run.signal);
           const raw = await readFile(join(dir, "answer.json"), "utf8").catch(() => "");
           if (!raw.trim()) throw new Error("Codex finished without an answer");
           let answer: unknown;
@@ -122,7 +124,10 @@ export function codexAgent(host: HostEnv): Agent {
           run.activity("Checking Codex's answer");
           const reply = await run.submit(answer);
           if (reply.done) return;
-          prompt = `${instructions}\n\n${run.prompt}\n\nYour previous answer was:\n${raw.trim()}\n\nClipCat found problems with it:\n${reply.text}\n\nAnswer again with the whole corrected answer.`;
+          // A reply with pictures (a slide's stills) replaces the prompt's own.
+          images = reply.images?.length ? reply.images : run.images;
+          const about = reply.images?.length ? "ClipCat rendered it; the attached images are how it looks. ClipCat says" : "ClipCat found problems with it";
+          prompt = `${instructions}\n\n${run.prompt}\n\nYour previous answer was:\n${raw.trim()}\n\n${about}:\n${reply.text}\n\nAnswer again with the whole answer.`;
         }
       } finally {
         await rm(dir, { recursive: true, force: true });

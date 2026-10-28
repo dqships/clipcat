@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { AgentRun, SubmitReply } from "./analyze";
 import { codexAgent, execArgs, isCodexAuthFailure, parseAnswer, probeCodex } from "./codex";
 import { inheritedEnv } from "./env";
-import { ANALYSIS_TASK, type AgentTask, CORRECTIONS_TASK, DESCRIBE_TASK, EDITOR_PROMPT, SHORTS_TASK } from "./prompt";
+import { ANALYSIS_TASK, type AgentTask, CORRECTIONS_TASK, DESCRIBE_TASK, EDITOR_PROMPT, SHORTS_TASK, SLIDE_TASK } from "./prompt";
 
 let dir: string;
 beforeEach(async () => {
@@ -76,7 +76,7 @@ describe("codex", () => {
       }
       if (node.items) strict(node.items);
     };
-    for (const task of [ANALYSIS_TASK, CORRECTIONS_TASK, SHORTS_TASK, DESCRIBE_TASK] as AgentTask[]) strict(task.jsonSchema as Node);
+    for (const task of [ANALYSIS_TASK, CORRECTIONS_TASK, SHORTS_TASK, DESCRIBE_TASK, SLIDE_TASK] as AgentTask[]) strict(task.jsonSchema as Node);
   });
 
   it("attaches pictures right after the subcommand, where the list can't swallow the prompt", () => {
@@ -118,5 +118,21 @@ describe("codex", () => {
     expect(first!.prompt).not.toContain("Call submit_analysis");
     expect(first!.prompt).toContain("TRANSCRIPT");
     expect(second!.prompt).toContain("word indices out of range");
+  });
+});
+
+describe("codexAgent pictures", () => {
+  it.skipIf(process.platform === "win32")("attaches a reply's pictures to the next run", async () => {
+    const { host, calls } = await fakeCodex([{ html: "<h1>1</h1>" }, { html: "<h1>2</h1>" }]);
+    const { r } = run([
+      { text: "Here is your slide.", done: false, images: ["/s/still-1.jpg", "/s/still-2.jpg"] },
+      { text: "Saved the slide.", done: true },
+    ]);
+    await codexAgent(host).run(r);
+
+    const [first, second] = await calls();
+    expect(first!.args).not.toContain("--image");
+    expect(second!.args.slice(0, 3)).toEqual(["exec", "--image", "/s/still-1.jpg,/s/still-2.jpg"]);
+    expect(second!.prompt).toContain("the attached images are how it looks");
   });
 });

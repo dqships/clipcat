@@ -50,7 +50,7 @@ export class AssetPipeline {
         }
       }),
     );
-    const added: Asset[] = probed.map(({ path, kind, media }) => ({ id: `m${shortId()}`, name: basename(path), path, kind, media, prep: null, description: "" }));
+    const added: Asset[] = probed.map(({ path, kind, media }) => ({ id: `m${shortId()}`, name: basename(path), path, kind, media, prep: null, description: "", slide: null }));
     const project = await this.deps.store.update(projectId, null, (p) => {
       p.assets.push(...added);
     });
@@ -65,7 +65,8 @@ export class AssetPipeline {
   async resume(): Promise<void> {
     for (const summary of await this.deps.store.list()) {
       const p = await this.deps.store.get(summary.id);
-      const waiting = p.assets.filter((a) => !a.prep);
+      // A slide has nothing to prepare: the AI editor designs it (see AnalysisRunner.designMissing).
+      const waiting = p.assets.filter((a) => !a.prep && a.kind !== "slide");
       for (const a of waiting) this.enqueue(p.id, a);
       if (waiting.length > 0) this.deps.describe(p.id);
     }
@@ -83,7 +84,7 @@ export class AssetPipeline {
 
   async runPrep(projectId: string, assetId: string, ctx: JobContext): Promise<void> {
     const asset = (await this.deps.store.get(projectId)).assets.find((a) => a.id === assetId);
-    if (!asset) return; // removed while queued
+    if (!asset || asset.kind === "slide") return; // removed while queued
     const rel = assetPaths(asset);
     const root = this.deps.store.dir(projectId);
     await mkdir(join(root, rel.dir), { recursive: true });

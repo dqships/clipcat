@@ -166,3 +166,21 @@ describe("applyEdit b-roll", () => {
     expect(() => applyEdit(p, { type: "describe", assetId: "nope", description: "" }, counter("n"))).toThrow("Unknown media");
   });
 });
+
+describe("applyEdit slides", () => {
+  it("adds a slide to design over words as one undo step, and a new brief has it designed again", () => {
+    const p = applyEdit(project(), { type: "slide", wordIds: ["a-w2", "a-w3"], brief: "Three steps\nPlan, cut, ship", look: "paper" }, counter("n"));
+    const slide = p.assets.at(-1)!;
+    expect(slide).toMatchObject({ kind: "slide", name: "Three steps", prep: null, slide: { look: "paper", html: "" } });
+    expect(p.proposals.at(-1)).toMatchObject({ type: "visual", status: "accepted", overlay: { assetId: slide.id, placement: "full" } });
+    expect(p.history.past).toHaveLength(1);
+
+    const designed = structuredClone(p);
+    designed.assets.at(-1)!.slide!.html = "<h1>Three steps</h1>";
+    designed.assets.at(-1)!.prep = { preview: "still.jpg", frames: ["still.jpg"] };
+    const rebriefed = applyEdit(designed, { type: "describe", assetId: slide.id, description: "Four steps" }, counter("m"));
+    expect(rebriefed.assets.at(-1)).toMatchObject({ name: "Four steps", prep: null, slide: { brief: "Four steps", html: "" } });
+    const same = applyEdit(designed, { type: "describe", assetId: slide.id, description: "Three steps\nPlan, cut, ship" }, counter("m"));
+    expect(same.assets.at(-1)!.slide!.html).toBe("<h1>Three steps</h1>");
+  });
+});

@@ -42,5 +42,6 @@ export function asset(id: string, kind: "video" | "image" = "video", duration = 
     media: { duration: kind === "video" ? duration : 0, width: 1920, height: 1080 },
     prep: { preview: `media/assets/${id}/preview.${kind === "video" ? "mp4" : "png"}`, frames: [`media/assets/${id}/frame-1.jpg`] },
     description: "",
+    slide: null,
   };
 }

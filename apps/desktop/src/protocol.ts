@@ -1,7 +1,7 @@
 // Serves the built UI from app://clipcat/ so the renderer runs on a real,
-// secure origin instead of file://, and a project's prepared media (proxies,
-// thumbnails, waveforms) from media://<project id>/. Both refuse any path
-// outside their folder.
+// secure origin instead of file://, a project's prepared media (proxies,
+// thumbnails, waveforms) from media://<project id>/, and motion slides'
+// pages from slide://. The first two refuse any path outside their folder.
 
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
@@ -13,12 +13,14 @@ import { net, protocol } from "electron";
 export const APP_SCHEME = "app";
 export const APP_ORIGIN = "app://clipcat";
 export const MEDIA_SCHEME = "media";
+export const SLIDE_SCHEME = "slide";
 
 /** Must run before the app is ready. */
 export function registerSchemes(): void {
   protocol.registerSchemesAsPrivileged([
     { scheme: APP_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true } },
     { scheme: MEDIA_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
+    { scheme: SLIDE_SCHEME, privileges: { standard: true, secure: true } },
   ]);
 }
 
@@ -107,5 +109,23 @@ export function serveMedia(projectDir: (id: string) => string): void {
         ...(range ? { "Content-Range": `bytes ${start}-${end}/${size}` } : {}),
       },
     });
+  });
+}
+
+const SAFE_ID = /^[a-z0-9-]+$/i;
+
+/**
+ * Serves slide://<project id>/<asset id> (and slide://draft/<token> for one
+ * being designed) as a whole page from `page`, under the slide policy, so
+ * the page can run its own inline script and load nothing else.
+ */
+export function serveSlides(page: (host: string, id: string) => Promise<string | null>, csp: string): void {
+  protocol.handle(SLIDE_SCHEME, async (request) => {
+    const url = new URL(request.url);
+    const id = url.pathname.replace(/^\/+/, "");
+    if (!SAFE_ID.test(url.host) || !SAFE_ID.test(id)) return new Response("Not found", { status: 404 });
+    const html = await page(url.host, id).catch(() => null);
+    if (html === null) return new Response("Not found", { status: 404 });
+    return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8", "Content-Security-Policy": csp, "Cache-Control": "no-store" } });
   });
 }

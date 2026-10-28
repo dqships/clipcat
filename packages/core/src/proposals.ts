@@ -6,11 +6,12 @@
 import { z } from "zod";
 import { wordSpanRange } from "./edits";
 import { OVERLAY, defaultOverlay, overlayProposal } from "./overlays";
-import { type Asset, OverlayPlacement, type Proposal, PunchStyle, type Range, type Source, type Word } from "./project";
+import { type Asset, OverlayPlacement, type Proposal, PunchStyle, type Range, SlideLook, type Source, type Word } from "./project";
 import { PUNCH, punchProposal, punchRange } from "./punchins";
+import { SLIDE, slideAsset } from "./slides";
 
 export const AgentProposal = z.object({
-  type: z.enum(["retake", "cleanup", "tighten", "punch-in", "visual"]),
+  type: z.enum(["retake", "cleanup", "tighten", "punch-in", "visual", "slide"]),
   from: z.number().int(),
   to: z.number().int(),
   keepFrom: z.number().int().nullable().optional(),
@@ -19,6 +20,9 @@ export const AgentProposal = z.object({
   /** For b-roll: the media's number in the list the agent was given, and how it covers the speaker. */
   media: z.number().int().nullable().optional(),
   placement: OverlayPlacement.nullable().optional(),
+  /** For a motion slide: what it shows (the words on it, in order), and its look. */
+  brief: z.string().max(1000).nullable().optional(),
+  look: SlideLook.nullable().optional(),
   reason: z.string().min(1).max(400),
   confidence: z.number().min(0).max(1),
 });
@@ -31,14 +35,16 @@ export const AgentAnalysis = z.object({
 export type AgentProposal = z.infer<typeof AgentProposal>;
 export type AgentAnalysis = z.infer<typeof AgentAnalysis>;
 
-export type Validated = { proposals: Proposal[]; errors: string[] };
+/** `slides` are the new slide assets the kept slide proposals show, still to be designed. */
+export type Validated = { proposals: Proposal[]; slides: Asset[]; errors: string[] };
 
 /**
  * Checks each proposal against `words` (the numbered transcript, all sources
  * in order) and converts it into source-time cuts, or for a punch-in or
- * b-roll the range it covers. Overlapping proposals keep the more confident
- * one; a punch-in only competes with other punch-ins and b-roll with other
- * b-roll, and neither can sit on words a proposed cut removes. `assets` is the
+ * b-roll the range it covers. A slide is b-roll the AI editor designs, so it
+ * comes with a new slide asset. Overlapping proposals keep the more confident
+ * one; a punch-in only competes with other punch-ins and b-roll (slides
+ * included) with other b-roll, and neither can sit on words a proposed cut removes. `assets` is the
  * media list the agent was given, numbered from 0.
  */
 export function validateProposals(
@@ -99,6 +105,20 @@ export function validateProposals(
       errors.push(`${where}: only b-roll may set media and placement`);
       return;
     }
+    if (p.type === "slide") {
+      if (!p.brief?.trim() || !p.look) {
+        errors.push(`${where}: a slide must set brief and look`);
+        return;
+      }
+      const length = words[p.to]!.end - words[p.from]!.start;
+      if (length < SLIDE.min || length > SLIDE.max) {
+        errors.push(`${where}: a slide lasts ${SLIDE.min} to ${SLIDE.max} seconds; this one is ${length.toFixed(1)}`);
+        return;
+      }
+    } else if (p.brief || p.look) {
+      errors.push(`${where}: only slides may set brief and look`);
+      return;
+    }
     if (p.type === "retake") {
       if (p.keepFrom == null || p.keepTo == null) {
         errors.push(`${where}: a retake must set both keepFrom and keepTo`);
@@ -120,9 +140,10 @@ export function validateProposals(
   candidates.sort((x, y) => y.p.confidence - x.p.confidence || x.index - y.index);
   const taken = { cut: [] as [number, number][], punch: [] as [number, number][], visual: [] as [number, number][] };
   const proposals: Proposal[] = [];
+  const slides: Asset[] = [];
   const cutIndices = new Set<number>();
   for (const { p, index } of candidates) {
-    const kind = p.type === "punch-in" ? taken.punch : p.type === "visual" ? taken.visual : taken.cut;
+    const kind = p.type === "punch-in" ? taken.punch : p.type === "visual" || p.type === "slide" ? taken.visual : taken.cut;
     if (kind.some(([a, b]) => p.from <= b && a <= p.to)) {
       errors.push(`proposal ${index} (${p.type} ${p.from}..${p.to}): overlaps a more confident proposal, dropped`);
       continue;
@@ -153,6 +174,20 @@ export function validateProposals(
         overlayProposal(
           { id: id(), sourceId, wordIds: spoken.map((w) => w.id), reason: p.reason, confidence: p.confidence, status: "pending" },
           defaultOverlay(punchRange(spoken), assets[p.media!]!.id, p.placement!),
+        ),
+      );
+      continue;
+    }
+
+    if (p.type === "slide") {
+      const spoken = words.slice(p.from, p.to + 1);
+      const range = punchRange(spoken);
+      const slide = slideAsset(id(), p.brief!, p.look!, range[1] - range[0]);
+      slides.push(slide);
+      proposals.push(
+        overlayProposal(
+          { id: id(), sourceId, wordIds: spoken.map((w) => w.id), reason: p.reason, confidence: p.confidence, status: "pending" },
+          defaultOverlay(range, slide.id, "full"),
         ),
       );
       continue;
@@ -192,11 +227,13 @@ export function validateProposals(
       const index = words.findIndex((w) => w.id === x.wordIds[0]);
       errors.push(`${x.punch ? "punch-in" : "b-roll"} at word ${index}: it sits on words another proposal cuts, dropped`);
       proposals.splice(k, 1);
+      const dropped = slides.findIndex((a) => a.id === x.overlay?.assetId);
+      if (dropped >= 0) slides.splice(dropped, 1);
     }
   }
 
   proposals.sort((x, y) => words.findIndex((w) => w.id === x.wordIds[0]) - words.findIndex((w) => w.id === y.wordIds[0]));
-  return { proposals, errors };
+  return { proposals, slides, errors };
 }
 
 /** The proposal types the AI editor makes; silence comes from the meter. */

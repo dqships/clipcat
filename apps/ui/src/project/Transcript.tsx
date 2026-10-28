@@ -1,8 +1,14 @@
-import { type EditOp, type Project, type Word, isWordKept } from "@clipcat/core";
-import { Image, Scissors, Undo2, ZoomIn } from "lucide-react";
+import { type EditOp, type Project, type SlideLook, type Word, isWordKept } from "@clipcat/core";
+import { Image, Presentation, Scissors, Undo2, ZoomIn } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ICON_STROKE } from "../icons";
 import type { Playhead } from "./Preview";
+
+const LOOKS: { value: SlideLook; label: string }[] = [
+  { value: "paper", label: "Paper" },
+  { value: "ink", label: "Ink" },
+  { value: "overlay", label: "Over the video" },
+];
 
 type Props = {
   project: Project;
@@ -21,7 +27,8 @@ export function orderedWords(project: Project): Word[] {
  * The transcript as the edit: struck words are cut, and cutting words cuts
  * the video. Click a word to jump there, shift-click to select a run, then
  * Delete to cut it (or to restore it, when it is all cut already), punch in on
- * it so the picture zooms there, or show b-roll over it.
+ * it so the picture zooms there, show b-roll over it, or have the AI editor
+ * design a slide for it.
  */
 export function Transcript({ project, playhead, onSeek, onEdit }: Props) {
   const words = useMemo(() => orderedWords(project), [project]);
@@ -39,7 +46,8 @@ export function Transcript({ project, playhead, onSeek, onEdit }: Props) {
     () => new Set(project.proposals.filter((p) => p.overlay && p.status === "accepted").flatMap((p) => p.wordIds)),
     [project.proposals],
   );
-  const media = project.assets.filter((a) => a.prep);
+  const media = project.assets.filter((a) => a.prep && a.kind !== "slide");
+  const [slide, setSlide] = useState<{ brief: string; look: SlideLook } | null>(null);
   const kept = useMemo(() => words.map((w) => isWordKept(project.segments, w)), [words, project.segments]);
   const names = new Map(project.sources.map((s) => [s.id, s.name]));
   const several = project.sources.length > 1;
@@ -49,6 +57,8 @@ export function Transcript({ project, playhead, onSeek, onEdit }: Props) {
     setAnchor(null);
     setFocus(null);
   }, [words.length]);
+  // The slide form belongs to the selection it was opened for.
+  useEffect(() => setSlide(null), [anchor, focus]);
 
   const [from, to] = anchor === null || focus === null ? [-1, -2] : [Math.min(anchor, focus), Math.max(anchor, focus)];
   const selected = words.slice(from, to + 1);
@@ -119,6 +129,43 @@ export function Transcript({ project, playhead, onSeek, onEdit }: Props) {
                       ))}
                     </select>
                   </label>
+                )}
+                {oneRecording && !slide && (
+                  <button type="button" className="button" onClick={() => setSlide({ brief: "", look: "paper" })}>
+                    <Presentation className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
+                    Slide
+                  </button>
+                )}
+                {oneRecording && slide && (
+                  <form
+                    className="editor__slide"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      if (!slide.brief.trim()) return;
+                      onEdit({ type: "slide", wordIds: selected.map((w) => w.id), brief: slide.brief, look: slide.look });
+                      setSlide(null);
+                    }}
+                  >
+                    <input
+                      className="field__control editor__brief"
+                      aria-label="What the slide says"
+                      placeholder="What the slide says"
+                      value={slide.brief}
+                      maxLength={1000}
+                      autoFocus
+                      onChange={(e) => setSlide({ ...slide, brief: e.target.value })}
+                    />
+                    <select className="field__control" aria-label="Slide look" value={slide.look} onChange={(e) => setSlide({ ...slide, look: e.target.value as SlideLook })}>
+                      {LOOKS.map((l) => (
+                        <option key={l.value} value={l.value}>
+                          {l.label}
+                        </option>
+                      ))}
+                    </select>
+                    <button type="submit" className="button" disabled={!slide.brief.trim()}>
+                      Add slide
+                    </button>
+                  </form>
                 )}
               </>
             )}

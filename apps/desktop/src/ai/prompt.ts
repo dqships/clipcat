@@ -2,7 +2,19 @@
 // line per phrase, with the pauses between phrases written in, so the agent
 // can cite exact word ranges and see where the takes break.
 
-import { AgentAnalysis, AgentCorrections, AgentDescriptions, AgentShorts, type Asset, type Project, type Word, isWordKept } from "@clipcat/core";
+import {
+  AgentAnalysis,
+  AgentCorrections,
+  AgentDescriptions,
+  AgentShorts,
+  AgentSlide,
+  type Asset,
+  type Project,
+  SLIDE,
+  type SlideLook,
+  type Word,
+  isWordKept,
+} from "@clipcat/core";
 import type { z } from "zod";
 
 /** A gap between words at least this long starts a new line. */
@@ -31,7 +43,7 @@ const JSON_ONLY = "Don't run commands or read files; everything you need is belo
 
 export const ANALYSIS_TASK: AgentTask = {
   tool: "submit_analysis",
-  description: "Submit the cut, punch-in and b-roll proposals for this video. Call once with every proposal; if problems come back, fix them and call again.",
+  description: "Submit the cut, punch-in, b-roll and slide proposals for this video. Call once with every proposal; if problems come back, fix them and call again.",
   shape: AgentAnalysis.shape,
   jsonSchema: {
     type: "object",
@@ -43,9 +55,9 @@ export const ANALYSIS_TASK: AgentTask = {
         items: {
           type: "object",
           additionalProperties: false,
-          required: ["type", "from", "to", "keepFrom", "keepTo", "punchStyle", "media", "placement", "reason", "confidence"],
+          required: ["type", "from", "to", "keepFrom", "keepTo", "punchStyle", "media", "placement", "brief", "look", "reason", "confidence"],
           properties: {
-            type: { type: "string", enum: ["retake", "cleanup", "tighten", "punch-in", "visual"] },
+            type: { type: "string", enum: ["retake", "cleanup", "tighten", "punch-in", "visual", "slide"] },
             from: { type: "integer" },
             to: { type: "integer" },
             keepFrom: { type: ["integer", "null"] },
@@ -53,6 +65,8 @@ export const ANALYSIS_TASK: AgentTask = {
             punchStyle: { type: ["string", "null"], enum: ["cut", "zoom-in", "slow-zoom", null] },
             media: { type: ["integer", "null"] },
             placement: { type: ["string", "null"], enum: ["full", "pip", null] },
+            brief: { type: ["string", "null"] },
+            look: { type: ["string", "null"], enum: ["paper", "ink", "overlay", null] },
             reason: { type: "string" },
             confidence: { type: "number" },
           },
@@ -63,7 +77,7 @@ export const ANALYSIS_TASK: AgentTask = {
   },
   toolAnswer:
     "Call submit_analysis once with every proposal. If it reports problems, fix them and call it again with the whole analysis. Once it says the analysis is saved, stop. Don't write anything else.",
-  jsonAnswer: `Answer with only the JSON object the output schema describes: every proposal, and suggestedTitle. Use null for keepFrom and keepTo except on retakes, for punchStyle except on punch-ins, and for media and placement except on b-roll. ${JSON_ONLY}`,
+  jsonAnswer: `Answer with only the JSON object the output schema describes: every proposal, and suggestedTitle. Use null for keepFrom and keepTo except on retakes, for punchStyle except on punch-ins, for media and placement except on b-roll, and for brief and look except on slides. ${JSON_ONLY}`,
 };
 
 export const CORRECTIONS_TASK: AgentTask = {
@@ -153,6 +167,47 @@ export const DESCRIBE_TASK: AgentTask = {
   jsonAnswer: `Answer with only the JSON object the output schema describes: a description of every item. The attached images are the frames, in the order listed. ${JSON_ONLY}`,
 };
 
+export const SLIDE_TASK: AgentTask = {
+  tool: "submit_slide",
+  description: "Submit the slide's HTML. ClipCat renders it and sends back stills to check; call again with the final HTML.",
+  shape: AgentSlide.shape,
+  jsonSchema: {
+    type: "object",
+    additionalProperties: false,
+    required: ["html"],
+    properties: { html: { type: "string" } },
+  },
+  toolAnswer:
+    "Call submit_slide with the slide's HTML. ClipCat renders it and replies with stills of it, or with problems: look at them, then call submit_slide again with the final HTML (the same HTML if it is right). Once it says the slide is saved, stop. Don't write anything else.",
+  jsonAnswer: `Answer with only the JSON object the output schema describes: the slide's HTML. When stills of your slide are attached, they are how your last answer rendered: check them and answer with the final HTML (the same HTML if it is right). ${JSON_ONLY}`,
+};
+
+export const DESIGNER_PROMPT = `You are ClipCat's motion designer. You design one short animated slide, built in HTML and CSS, that shows for a few seconds while the speaker in a talking-head video keeps talking. ClipCat steps through it frame by frame and lays it over the video, so it must look finished on every frame.
+
+What you write: only what goes inside <body>: the elements, one <style> block, and a <script> only if something must be drawn from the time. No <html>, <head> or <body> tags.
+The page loads nothing: no links, web images, web fonts or external scripts. Draw shapes with CSS or inline SVG.
+
+The frame:
+- The viewport is the whole frame. Size and place everything in vw, vh or vmin, never px.
+- Keep everything 6% in from the left and right edges and 8% from the top. Keep the bottom 25% free of text: captions show there.
+- Text must fit with room to spare. Use at most about 12 words.
+
+The look you are given:
+- paper: the page is warm paper (var(--paper)) with ink text (var(--ink)).
+- ink: the page is ink (var(--ink)) with paper text (var(--paper)).
+- overlay: the page is see-through and the speaker shows behind it. Use a lower third or one corner only, never the middle where the face is: a short line on a solid strip of ink or tape, so it reads over any picture. Text on tape is ink.
+The body already has the look's background and text color. var(--tape) is splice-tape yellow: use it for one thing that matters (a strip, an underline, the backing of a number), never for text on paper.
+
+Style: ClipCat's cutting room. Jost semibold is the only font (var(--font), already set). Flat shapes, straight cuts, strips like splice tape. No gradients, shadows, glows, blur, rounded blobs, emoji or icon fonts. Big type: a headline about 6 to 9vw on a wide frame, 9 to 12vw on a vertical one. Left-aligned unless one number or word stands alone.
+
+Motion:
+- Animate with CSS @keyframes animations (or the Web Animations API). ClipCat pauses them and moves time itself, so never use setTimeout, setInterval, requestAnimationFrame, Date, performance.now, transitions or hover.
+- Ease with var(--spring) over var(--spring-duration), ClipCat's spring. Use animation-fill-mode: both, so an element is hidden before its delay and stays put after.
+- Bring elements in during the first second, one after another about 0.1s apart: slide a few vh, wipe with a scaleX from the left, or fade. Then hold, still and readable, to the end. Nothing animates out; the cut does that.
+- Something drawn from the time (a counter, a bar that fills) goes in motion.onSeek((t) => { ... }), which ClipCat calls with the seconds whenever it moves to a frame.
+
+ClipCat replies to your first submit_slide with stills of the slide at a few moments. Check them closely: every word fits inside the frame and isn't cut off, nothing overlaps, it reads at a glance, it uses the look, and it says what the brief says. Then submit the final HTML.`;
+
 export const DESCRIBER_PROMPT = `You are ClipCat's media librarian. The user added pictures and video clips to use as b-roll over a talking-head video. You look at each one and write what it shows, so the editor can later pick the right one for a line without seeing it.
 
 Each item is numbered [m] and comes with frames: one for a picture, a few across a video's length.
@@ -179,7 +234,7 @@ Rules:
 - reason: one sentence the user reads: the hook and why it stands alone.
 - Follow the user's brief when there is one.`;
 
-export const EDITOR_PROMPT = `You are ClipCat's editor. You read the transcript of a talking-head recording and propose cuts that make it tight and watchable, punch-ins that give its best lines weight, and b-roll from the user's own media. You never change anything yourself: every proposal is shown to the user, who accepts or rejects it.
+export const EDITOR_PROMPT = `You are ClipCat's editor. You read the transcript of a talking-head recording and propose cuts that make it tight and watchable, punch-ins that give its best lines weight, b-roll from the user's own media, and motion slides. You never change anything yourself: every proposal is shown to the user, who accepts or rejects it.
 
 Words are numbered [n] across the whole project. Ranges are inclusive word indices.
 
@@ -188,6 +243,7 @@ Proposal types:
 - cleanup: filler words (um, uh, "you know", "like" used as filler), stutters, repeated words, false starts, and remarks to the camera operator such as "let me do that again".
 - tighten: a tangent or a rambling stretch that can go without losing anything the viewer needs. Be conservative.
 - punch-in: not a cut. The picture zooms toward the speaker over from..to to give a line weight: the key claim, a punchline, a number worth remembering. from..to covers the words that land it, 1.5 to 8 seconds. Set punchStyle: "cut" snaps in (a punchline or a blunt statement), "zoom-in" pushes in quickly (a key point), "slow-zoom" creeps in over the range (a story building to its point).
+- slide: not a cut. A motion slide ClipCat designs from your brief and shows full-frame over from..to: a title card for a new section, a list of steps as they're named, a number or a short quote worth seeing. from..to covers the words it goes with, ${SLIDE.min} to ${SLIDE.max} seconds. Set brief to exactly what the slide says, in order, in a few words (a heading and up to four short lines), and look: "paper" (ink on warm paper) or "ink" (paper on ink) for a full card, or "overlay" for a short label over the speaker, such as a name or a key term.
 - visual: b-roll, not a cut. One of the user's media items (listed after the transcript, if there are any) shows over from..to while the speaker keeps talking. Set media to its number and placement: "full" covers the whole frame (the speaker is heard, not seen), "pip" shows it in a window in the corner beside the speaker. from..to covers the words it illustrates, 1.5 to 15 seconds.
 
 Rules:
@@ -196,8 +252,9 @@ Rules:
 - Cut proposals must not overlap each other, and punch-ins must not overlap each other or sit on words you propose to cut.
 - Punch-ins are seasoning: at most one every 10 seconds of the finished video, with at least 6 seconds without one in between. Fewer, well-placed ones are better; skip them in a video that has no line that needs one.
 - Use b-roll only where a media item's description matches what is being said, and never two over the same words. Each item can be used more than once, but don't. With no media list, propose no b-roll.
+- Slides are b-roll too: never over the same words as other b-roll. Use them where seeing the words helps: at most one every 30 seconds, and none in a video that doesn't need them.
 - reason: one short sentence the user reads in the editor, e.g. "Second take is complete; first stumbles".
-- confidence: 0 to 1, how sure you are the user wants this cut, punch-in or b-roll.
+- confidence: 0 to 1, how sure you are the user wants this cut, punch-in, b-roll or slide.
 - suggestedTitle: a short, plain title for the finished video.
 - Follow the user's brief when there is one.`;
 
@@ -260,8 +317,8 @@ export function mediaList(assets: Pick<Asset, "name" | "kind" | "media" | "descr
     .join("\n");
 }
 
-/** The media the AI editor is shown: prepared, so they can be placed. */
-export const placeableAssets = (project: Pick<Project, "assets">) => project.assets.filter((a) => a.prep);
+/** The media the AI editor is shown: the user's own, prepared, so they can be placed. Slides are made for one spot. */
+export const placeableAssets = (project: Pick<Project, "assets">) => project.assets.filter((a) => a.prep && a.kind !== "slide");
 
 /** The user turn: the brief (or a one-off request), then the transcript, then the media for b-roll. */
 export function analysisPrompt(project: Pick<Project, "sources" | "transcript" | "brief" | "language" | "assets">, request?: string): string {
@@ -315,5 +372,18 @@ export function shortsPrompt(
     `Transcript language: ${project.language}.`,
     "",
     numberedTranscript(project, (w) => !isWordKept(project.segments, w)),
+  ].join("\n");
+}
+
+/** The user turn for designing a slide: the brief, its look, the frame, how long it shows, and what is said over it. */
+export function designPrompt(slide: { brief: string; look: SlideLook }, frame: { width: number; height: number }, seconds: number, line: string): string {
+  const shape = frame.width > frame.height ? "wide" : frame.width < frame.height ? "vertical" : "square";
+  return [
+    "Design this slide.",
+    `Brief:\n${slide.brief.trim()}`,
+    `Look: ${slide.look}`,
+    `Frame: ${frame.width}×${frame.height} (${shape})`,
+    `It shows for ${seconds.toFixed(1)} seconds: have everything in place by ${Math.max(0.6, Math.min(1.5, seconds - 0.5)).toFixed(1)} seconds.`,
+    ...(line.trim() ? [`What the speaker says over it: "${line.trim()}"`] : []),
   ].join("\n");
 }

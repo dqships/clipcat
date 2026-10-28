@@ -10,3 +10,4 @@ export * from "./shorts";
 export * from "./framing";
 export * from "./punchins";
 export * from "./overlays";
+export * from "./slides";
