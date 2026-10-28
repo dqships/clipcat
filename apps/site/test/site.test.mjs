@@ -1,82 +1,37 @@
-// Checks the built site against the launch checklist: every page's head,
-// one H1 and real content in the raw HTML, links that resolve, Markdown at
-// every URL, real 404s, and the root files and headers.
+// The parts of the launch checklist that don't need a running site: page
+// copy lengths, the Markdown for agents, content negotiation, the proxy's
+// matcher, the response headers and the design tokens. test/server checks the
+// built site itself.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { build, siteOrigin } from "../build.mjs";
-import { NOT_FOUND, PAGES } from "../content.mjs";
-import { negotiate, wantsMarkdown } from "../negotiate.mjs";
-import { config as middlewareConfig } from "../middleware.js";
+import { NOT_FOUND, PAGES, llmsTxt, pageMarkdown, robotsTxt, sitemapXml } from "../lib/markdown.mjs";
+import { negotiate, wantsMarkdown } from "../lib/negotiate.mjs";
+import { SECURITY_HEADERS, siteOrigin } from "../lib/site.mjs";
+import nextConfig from "../next.config.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const ORIGIN = "https://clipcat.example";
-const out = mkdtempSync(join(tmpdir(), "clipcat-site-"));
-build(out, ORIGIN);
-process.on("exit", () => rmSync(out, { recursive: true, force: true }));
-
-const htmlFile = (path) => join(out, path === "/" ? "index.html" : `${path.slice(1)}.html`);
 const read = (file) => readFileSync(file, "utf8");
-const attr = (html, re) => html.match(re)?.[1];
-const text = (html) =>
-  html
-    .replace(/<head>[\s\S]*?<\/head>/, "")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
 
-for (const page of [...PAGES, NOT_FOUND]) {
-  test(`${page.path}: head`, () => {
-    const html = read(page === NOT_FOUND ? join(out, "404.html") : htmlFile(page.path));
-    assert.match(html, /^<!doctype html>\n<html lang="en">/);
-    assert.match(html, /<meta charset="utf-8">/);
-    assert.match(html, /<meta name="viewport" content="width=device-width, initial-scale=1">/);
-    const title = attr(html, /<title>([^<]*)<\/title>/);
-    assert.ok(title.length >= 15 && title.length <= 60, `title is ${title.length} characters`);
-    const description = attr(html, /<meta name="description" content="([^"]*)">/).replace(/&#39;/g, "'");
-    assert.ok(description.length >= 120 && description.length <= 160, `description is ${description.length} characters`);
-    assert.match(html, /<meta name="is-agentic-site-type" content="app">/);
-    assert.match(html, /<link rel="icon" href="\/favicon.ico"/);
-    for (const key of ["og:title", "og:description", "og:image", "og:url", "og:type"]) assert.match(html, new RegExp(`property="${key}" content="[^"]+"`));
-    for (const key of ["twitter:title", "twitter:description", "twitter:image"]) assert.match(html, new RegExp(`name="${key}" content="[^"]+"`));
-    assert.match(html, /name="twitter:card" content="summary_large_image"/);
-    assert.doesNotMatch(html, /noindex/);
-    const ld = JSON.parse(attr(html, /<script type="application\/ld\+json">(.*?)<\/script>/));
-    const types = ld["@graph"].map((n) => n["@type"]);
-    assert.ok(types.includes("Organization") && types.includes("SoftwareApplication"));
-    assert.ok(ld["@graph"][0].contactPoint && ld["@graph"][0].sameAs.length);
-    if (page !== NOT_FOUND) {
-      assert.ok(title.length >= 30, `title is ${title.length} characters`);
-      assert.equal(attr(html, /<link rel="canonical" href="([^"]+)">/), page.path === "/" ? `${ORIGIN}/` : `${ORIGIN}${page.path}`);
-    }
-  });
+test("titles and descriptions fit search results", () => {
+  for (const page of [...PAGES, NOT_FOUND]) {
+    const min = page === NOT_FOUND ? 15 : 30;
+    assert.ok(page.title.length >= min && page.title.length <= 60, `${page.path} title is ${page.title.length} characters`);
+    assert.ok(page.description.length >= 120 && page.description.length <= 160, `${page.path} description is ${page.description.length} characters`);
+  }
+});
 
-  test(`${page.path}: content and structure`, () => {
-    const html = read(page === NOT_FOUND ? join(out, "404.html") : htmlFile(page.path));
-    assert.equal(html.match(/<h1[\s>]/g)?.length, 1, "one H1");
-    const levels = [...html.matchAll(/<h([1-6])[\s>]/g)].map((m) => Number(m[1]));
-    levels.forEach((level, i) => i && assert.ok(level <= levels[i - 1] + 1, `heading h${level} follows h${levels[i - 1]}`));
-    assert.equal(html.match(/<main[\s>]/g)?.length, 1);
-    assert.ok(text(html).length >= 500, `${text(html).length} characters of text`);
-    assert.ok(text(html).length / html.length >= 0.05, "content is at least 5% of the markup");
-    for (const img of html.match(/<img [^>]*>/g) ?? []) assert.match(img, / alt="[^"]+"/);
-    assert.doesNotMatch(html, /tabindex="[1-9]/);
-    assert.doesNotMatch(html, / style="/, "inline styles would break the CSP");
-    assert.doesNotMatch(html, /<script(?! type="application\/ld\+json")/, "no scripts");
-    for (const [, href] of html.matchAll(/href="(\/[^"#]*)"/g)) {
-      const path = href.replace(/\/$/, "") || "/";
-      assert.ok(existsSync(join(out, path)) || existsSync(htmlFile(path)), `${href} resolves`);
-    }
-  });
-}
+test("About, Contact, Privacy and Pricing pages exist", () => {
+  for (const path of ["/about", "/contact", "/privacy", "/pricing"]) assert.ok(PAGES.some((p) => p.path === path));
+});
 
-test("every page has Markdown beside it, with absolute links", () => {
+test("every page's Markdown has its H1 and only absolute links", () => {
   for (const page of PAGES) {
-    const md = read(join(out, page.path === "/" ? "index.md" : `${page.path.slice(1)}.md`));
+    const md = pageMarkdown(page, ORIGIN);
     assert.ok(md.startsWith(`# ${page.h1}\n`));
     assert.doesNotMatch(md, /\]\(\//, "links are absolute");
     assert.doesNotMatch(md, /<[a-z]/i, "no HTML");
@@ -84,22 +39,15 @@ test("every page has Markdown beside it, with absolute links", () => {
 });
 
 test("robots.txt, sitemap.xml and llms.txt", () => {
-  const robots = read(join(out, "robots.txt"));
+  const robots = robotsTxt(ORIGIN);
   assert.match(robots, /^User-agent: \*\nAllow: \/\n/);
   assert.match(robots, new RegExp(`Sitemap: ${ORIGIN}/sitemap.xml`));
-  assert.doesNotMatch(robots, /Disallow/);
-  const sitemap = read(join(out, "sitemap.xml"));
+  const sitemap = sitemapXml(ORIGIN);
   assert.equal(sitemap.match(/<url>/g).length, PAGES.length);
   assert.equal(sitemap.match(/<lastmod>\d{4}-\d{2}-\d{2}<\/lastmod>/g).length, PAGES.length);
-  const llms = read(join(out, "llms.txt"));
+  const llms = llmsTxt(ORIGIN);
   assert.match(llms, /^# ClipCat\n\n> /);
-  const own = [...llms.matchAll(/\]\((https:\/\/clipcat\.example[^)]*)\)/g)].map((m) => m[1].slice(ORIGIN.length));
-  assert.equal(own.length, PAGES.length);
-  for (const path of own) assert.ok(existsSync(join(out, path)), `${path} exists`);
-});
-
-test("About, Contact, Privacy and Pricing pages exist", () => {
-  for (const path of ["/about", "/contact", "/privacy", "/pricing"]) assert.ok(PAGES.some((p) => p.path === path));
+  assert.equal([...llms.matchAll(/\]\(https:\/\/clipcat\.example\/[^)]*\.md\)/g)].length, PAGES.length);
 });
 
 test("Markdown is chosen only when it's named and not ranked below HTML", () => {
@@ -114,44 +62,51 @@ test("Markdown is chosen only when it's named and not ranked below HTML", () => 
   assert.equal(wantsMarkdown(null), false);
 });
 
-test("negotiation answers known pages with Markdown and unknown ones with a 404", async () => {
+test("negotiation answers pages and .md addresses with Markdown, and unknown ones with a 404", async () => {
   const ask = (path, accept = "text/markdown", method = "GET") => negotiate(new Request(`${ORIGIN}${path}`, { method, headers: { accept } }), ORIGIN);
   const about = ask("/about");
   assert.equal(about.status, 200);
   assert.equal(about.headers.get("content-type"), "text/markdown; charset=utf-8");
   assert.equal(about.headers.get("vary"), "Accept");
+  assert.equal(about.headers.get("x-content-type-options"), "nosniff");
   assert.match(await about.text(), /^# About ClipCat\n/);
-  assert.match(await ask("/").text(), /^# Edit your talking-head videos/);
   assert.equal(ask("/about/").status, 200);
+  assert.equal(ask("/about.md", "text/html").status, 200);
+  assert.match(await ask("/index.md", "*/*").text(), new RegExp(`^# ${PAGES[0].h1}`));
   const missing = ask("/no-such-page");
   assert.equal(missing.status, 404);
   assert.match(await missing.text(), /^# Page not found\n[\s\S]*\[About\]\(https:\/\/clipcat\.example\/about\.md\)/);
+  assert.equal(ask("/no-such-page.md", "*/*").status, 404);
   assert.equal(await ask("/about", "text/markdown", "HEAD").text(), "");
   assert.equal(ask("/about", "text/html"), null);
   assert.equal(ask("/about", "text/markdown", "POST"), null);
 });
 
-test("the middleware runs on page paths only", () => {
-  const matches = (path) => middlewareConfig.matcher.some((m) => new RegExp(`^${m.replace("/((?!", "/((?!")}$`).test(path));
-  for (const path of ["/", "/about", "/no-such-page"]) assert.ok(matches(path), path);
-  for (const path of ["/about.md", "/styles.css", "/fonts/jost-latin-400-normal.woff2", "/robots.txt"]) assert.ok(!matches(path), path);
+test("the proxy runs on page paths and .md addresses only", () => {
+  // Next.js needs the matcher written out in proxy.ts, so it's read from there. Each one is anchored at both ends.
+  const matcher = JSON.parse(read(join(root, "proxy.ts")).match(/matcher: (\[.*\])/)[1]);
+  const matches = (path) => matcher.some((m) => new RegExp(`^${m}$`).test(path));
+  for (const path of ["/", "/about", "/no-such-page", "/about.md", "/index.md"]) assert.ok(matches(path), path);
+  for (const path of ["/_next/static/chunks/main.js", "/favicon.svg", "/fonts/jost-latin-400-normal.woff2", "/robots.txt", "/llms.txt"]) {
+    assert.ok(!matches(path), path);
+  }
 });
 
-test("vercel.json sends the security headers and Vary: Accept", () => {
-  const config = JSON.parse(read(join(root, "vercel.json")));
-  const all = Object.fromEntries(config.headers.find((h) => h.source === "/(.*)").headers.map((h) => [h.key, h.value]));
-  assert.equal(all["Strict-Transport-Security"], "max-age=31536000; includeSubDomains");
-  assert.match(all["Content-Security-Policy"], /default-src 'self'/);
-  assert.match(all["Content-Security-Policy"], /frame-ancestors 'self'/);
-  assert.equal(all["X-Frame-Options"], "SAMEORIGIN");
-  assert.equal(all["X-Content-Type-Options"], "nosniff");
-  assert.equal(all.Vary, "Accept");
-  assert.equal(config.outputDirectory, "dist");
-  assert.equal(config.cleanUrls, true);
+test("every response gets the security headers and Vary: Accept", async () => {
+  const [all] = await nextConfig.headers();
+  const headers = Object.fromEntries(all.headers.map((h) => [h.key, h.value]));
+  assert.equal(all.source, "/:path*");
+  assert.equal(headers["Strict-Transport-Security"], "max-age=31536000; includeSubDomains");
+  assert.match(headers["Content-Security-Policy"], /default-src 'self'/);
+  assert.match(headers["Content-Security-Policy"], /frame-ancestors 'self'/);
+  assert.equal(headers["X-Frame-Options"], "SAMEORIGIN");
+  assert.equal(headers["X-Content-Type-Options"], "nosniff");
+  assert.equal(headers.Vary, "Accept");
+  assert.equal(SECURITY_HEADERS.length, 6);
 });
 
 test("the site's tokens are the design system's tokens", () => {
-  assert.equal(read(join(root, "static", "tokens.css")), read(join(root, "..", "..", "design", "tokens.css")));
+  assert.equal(read(join(root, "styles", "tokens.css")), read(join(root, "..", "..", "design", "tokens.css")));
 });
 
 test("the production address comes from SITE_URL or Vercel", () => {

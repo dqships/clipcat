@@ -3,11 +3,24 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "ClipCat's marketing site: static HTML and Markdown, served by Vercel.",
+  "description": "ClipCat's marketing site: a Next.js app with Markdown for agents, served by Vercel.",
   "scripts": {
-    "build": "node build.mjs",
-    "serve": "node serve.mjs",
-    "og": "node scripts/og.mjs",
-    "test": "node --test \"test/*.test.mjs\""
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "check": "tsc --noEmit",
+    "test": "node --test \"test/*.test.mjs\"",
+    "test:server": "SITE_URL=https://clipcat.example next build && node --test \"test/server/*.test.mjs\"",
+    "og": "node scripts/og.mjs"
+  },
+  "dependencies": {
+    "next": "^16.4.3",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0"
   }
 }

@@ -1,8 +1,8 @@
-// Markdown content negotiation: the same URL answers with Markdown when the
-// request prefers it, so an agent never has to parse the HTML. Shared by the
-// Vercel middleware and the local server.
+// Markdown for agents: the same URL answers with Markdown when the request
+// prefers it, and every page also has a `.md` address. Used by proxy.ts.
 
-import { NOT_FOUND, findPage, pageMarkdown } from "./render.mjs";
+import { NOT_FOUND, findPage, pageMarkdown } from "./markdown.mjs";
+import { SECURITY_HEADERS } from "./site.mjs";
 
 /** The q value an Accept header gives a media type, through `type/*` and `*\/*` when not named. */
 function quality(accept, type) {
@@ -25,17 +25,24 @@ export function wantsMarkdown(accept) {
   return md.q >= quality(accept, "text/html").q;
 }
 
-const HEADERS = { "content-type": "text/markdown; charset=utf-8", vary: "Accept", "cache-control": "public, max-age=0, must-revalidate" };
+const HEADERS = {
+  ...Object.fromEntries(SECURITY_HEADERS.map(({ key, value }) => [key.toLowerCase(), value])),
+  "content-type": "text/markdown; charset=utf-8",
+  vary: "Accept",
+  "cache-control": "public, max-age=0, must-revalidate",
+};
 
 /**
- * The Markdown answer for a page request, or null to serve the HTML as usual.
- * An unknown path that asks for Markdown gets a real 404 with a Markdown body.
+ * The Markdown answer for a request, or null to serve the HTML as usual: for a
+ * `.md` address, or a page request that prefers Markdown. An unknown page gets
+ * a real 404 with a Markdown body.
  */
 export function negotiate(request, origin) {
   if (request.method !== "GET" && request.method !== "HEAD") return null;
-  if (!wantsMarkdown(request.headers.get("accept"))) return null;
   const { pathname } = new URL(request.url);
-  const page = findPage(pathname);
+  const file = pathname.endsWith(".md");
+  if (!file && !wantsMarkdown(request.headers.get("accept"))) return null;
+  const page = findPage(file ? pathname.slice(0, -3) : pathname);
   const body = pageMarkdown(page ?? NOT_FOUND, origin);
   return new Response(request.method === "HEAD" ? null : body, { status: page ? 200 : 404, headers: HEADERS });
 }
