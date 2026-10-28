@@ -106,6 +106,12 @@ export function upsertServer(text: string | null, format: ConfigFormat, entry: S
   return format === "toml" ? upsertToml(text, entry) : upsertJson(text, entry);
 }
 
+/** Our entry as `upsertServer` writes it into a file of `format`, for showing before it's written. */
+export function previewEntry(format: ConfigFormat, entry: ServerEntry): string {
+  if (format === "toml") return tomlTable(entry).trimEnd();
+  return JSON.stringify({ mcpServers: { [SERVER_NAME]: entry } }, null, 2);
+}
+
 /** The config with our entry taken out; null when it has none (or can't be parsed), so there is nothing to write. */
 export function removeServer(text: string | null, format: ConfigFormat): string | null {
   if (readServer(text, format) === null) return null;

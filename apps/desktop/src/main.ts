@@ -23,7 +23,9 @@ import { JobLog } from "./jobs/log";
 import { JobQueue } from "./jobs/queue";
 import { BACKGROUND_ARG } from "./mcp/config";
 import { type InstallEnv, connectAgent, healRegistrations, mcpStatus, serverSpec } from "./mcp/install";
+import { checkAgent } from "./mcp/check";
 import { createMcpServer } from "./mcp/server";
+import { SessionLog } from "./mcp/sessions";
 import { listen, socketPath } from "./mcp/socket";
 import { IMAGE_EXTENSIONS, VIDEO_EXTENSIONS } from "./media/assets";
 import { MUSIC_EXTENSIONS } from "./media/music";
@@ -399,24 +401,34 @@ if (!squirrelLaunch && !app.requestSingleInstanceLock()) {
     };
     // In case the bridge that started it gave up before connecting.
     if (background) setTimeout(leaveWhenDone, 60_000);
-    const mcp = listen(socket, () =>
-      createMcpServer({
-        version: app.getVersion(),
-        list: () => store.list(),
-        get: (id) => store.get(id),
-        edit,
-        analyze: (id, brief) => analysis.analyze(id, brief),
-        request: async (id, request) => analysis.request(id, request),
-        writeup: async (id) => analysis.writeup(id),
-        shorts: async (id, count, seconds) => analysis.shorts(id, count, seconds),
-        exportVideo: async (id, format, path) => {
-          await store.get(id);
-          exporter.export(id, format, path);
-        },
-        importFiles: (files, projectId) => pipeline.import(files, projectId),
-        exportTimeline: (id, format, path) => writeTimeline(store, id, format, path),
-        jobs: (projectId) => jobs.list(projectId),
-      }),
+    // Which agents really opened a session, so Settings shows what happened rather than what a file says.
+    const agentStatus = () => mcpStatus(installEnv, (id) => sessions.seen(id));
+    const sessions = new SessionLog(join(app.getPath("userData"), "agent-sessions.json"), () => {
+      void agentStatus().then((agents) => broadcast("mcp:agents", agents), () => {});
+    });
+    const mcp = listen(
+      socket,
+      () => {
+        const server = createMcpServer({
+          version: app.getVersion(),
+          list: () => store.list(),
+          get: (id) => store.get(id),
+          edit,
+          analyze: (id, brief) => analysis.analyze(id, brief),
+          request: async (id, request) => analysis.request(id, request),
+          writeup: async (id) => analysis.writeup(id),
+          shorts: async (id, count, seconds) => analysis.shorts(id, count, seconds),
+          exportVideo: async (id, format, path) => {
+            await store.get(id);
+            exporter.export(id, format, path);
+          },
+          importFiles: (files, projectId) => pipeline.import(files, projectId),
+          exportTimeline: (id, format, path) => writeTimeline(store, id, format, path),
+          jobs: (projectId) => jobs.list(projectId),
+        });
+        sessions.track(server);
+        return server;
+      },
       process.platform,
       (open) => {
         agentSessions = open;
@@ -674,7 +686,7 @@ if (!squirrelLaunch && !app.requestSingleInstanceLock()) {
             info: await part(appInfo),
             ai: await part(aiStatus),
             settings: await part(() => settings.get()),
-            agents: await part(() => mcpStatus(installEnv)),
+            agents: await part(agentStatus),
             mcp: await part(() => mcp),
             update: updater.current,
           };
@@ -689,11 +701,12 @@ if (!squirrelLaunch && !app.requestSingleInstanceLock()) {
           await writeFile(path, zip);
           return { path };
         },
-        "mcp:status": () => mcpStatus(installEnv),
+        "mcp:status": agentStatus,
         "mcp:connect": async ({ agent, connect }) => {
           await connectAgent(installEnv, agent, connect);
-          return mcpStatus(installEnv);
+          return agentStatus();
         },
+        "mcp:check": async ({ agent }) => checkAgent(agent, { env: installEnv, host: await hostEnv, platform: process.platform }),
       },
       DEV_URL,
     );

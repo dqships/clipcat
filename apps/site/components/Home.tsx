@@ -116,6 +116,7 @@ export function HomeSection({ s }: { s: Section }) {
             <div className="mcp__text">
               <h3>{s.h3}</h3>
               <p className="section__body">{s.detail}</p>
+              <More s={s} />
             </div>
             <pre className="mcp__session" aria-label="An agent editing a project through ClipCat">
               <code>{s.session!.join("\n")}</code>

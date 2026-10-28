@@ -9,6 +9,8 @@ export type Section = {
   note?: string;
   list?: string[];
   steps?: { title: string; text: string }[];
+  /** Things to type into an agent, shown one per line. */
+  prompts?: string[];
   cards?: Card[];
   shorts?: Short[];
   h3?: string;

@@ -130,11 +130,23 @@ body {
 }
 
 .agents__item {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.agents__row {
   display: flex;
   align-items: center;
   gap: var(--space-4);
-  padding: var(--space-3) 0;
-  border-bottom: 1px solid var(--color-border);
+}
+
+.agents__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
 }
 
 .agents__text {
@@ -157,6 +169,199 @@ body {
   line-height: var(--leading-caption);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Connect asks first: the entry it will write, on a strip of surface. */
+.agents__confirm {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-panel);
+  background: var(--color-surface);
+}
+
+.agents__ask {
+  margin: 0;
+  font-size: var(--text-callout);
+  line-height: var(--leading-callout);
+  font-weight: var(--font-weight-semibold);
+}
+
+.agents__file {
+  font-weight: var(--font-weight-medium);
+  overflow-wrap: anywhere;
+}
+
+.agents__code {
+  margin: 0;
+  padding: var(--space-3);
+  overflow: auto;
+  max-height: calc(var(--space-9) * 2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-background);
+  font: inherit;
+  font-size: var(--text-caption);
+  line-height: var(--leading-caption);
+  font-variant-numeric: tabular-nums;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* The connection check: one line per thing proved, or not. */
+.steps {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.steps__item,
+.steps__running {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.steps__icon {
+  flex: none;
+  margin-top: calc(var(--space-1) / 2);
+}
+
+.steps__item--waiting,
+.steps__item--skipped,
+.steps__running {
+  color: var(--color-text-muted);
+}
+
+.steps__item--failed {
+  color: var(--color-danger);
+}
+
+/* The walkthrough under the agents: one tab per agent, numbered steps like
+   the tracks on a reel, then prompts to copy. */
+.guide__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.guide__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-height);
+  padding: 0 var(--space-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+}
+
+.guide__tab:hover {
+  color: var(--color-text);
+}
+
+.guide__tab--on {
+  border-color: var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.guide__tab:focus-visible,
+.guide__more summary:focus-visible,
+.guide__link:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.guide__steps {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: step;
+}
+
+.guide__steps li {
+  display: grid;
+  grid-template-columns: var(--space-6) 1fr;
+  gap: var(--space-3);
+  counter-increment: step;
+}
+
+.guide__steps li::before {
+  content: counter(step, decimal-leading-zero);
+  border-top: 1px solid var(--color-text-muted);
+  color: var(--color-text-muted);
+  font-size: var(--text-caption);
+  line-height: var(--leading-body);
+  font-variant-numeric: tabular-nums;
+}
+
+.guide__code {
+  font-family: var(--font-mono);
+}
+
+.guide__subtitle {
+  margin: var(--space-3) 0 0;
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+  font-weight: var(--font-weight-semibold);
+}
+
+.guide__prompts {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--color-border);
+}
+
+.guide__prompt {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.guide__prompt-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.guide__more summary {
+  border-radius: var(--radius-control);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+}
+
+.guide__list {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-5);
+}
+
+.guide__list li::marker {
+  color: var(--color-text-muted);
+}
+
+.guide__link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  justify-self: start;
+  border-radius: var(--radius-control);
+  color: var(--color-text);
+  font-weight: var(--font-weight-medium);
 }
 
 /* Recorder: what to record, a preview of it, the devices, then Record. */
@@ -600,24 +805,47 @@ body {
   }
 }
 
-/* Project: preview on the left, transcript on the right. */
+/* Project: the preview stays put in the middle; the transcript and the
+   controls are panels docked left, right or below it (DESIGN.md, Panels). */
 .project {
-  display: grid;
-  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
-  gap: var(--space-5);
+  display: flex;
+  min-height: 0;
   padding: var(--space-5);
   overflow: hidden;
 }
 
-.project > .notice {
-  grid-column: 1 / -1;
+.project__middle {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: var(--panel-min);
+  min-height: 0;
 }
 
-.project__preview {
-  display: grid;
-  align-content: start;
+.project__middle > .notice {
+  flex: none;
+  margin-bottom: var(--space-3);
+}
+
+/* The monitor never scrolls: the picture shrinks to the room it has. */
+.project__monitor {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
   gap: var(--space-3);
-  overflow: auto;
+  min-height: var(--panel-min);
+}
+
+.project__monitor > :not(.project__screen) {
+  flex: none;
+}
+
+.project__screen {
+  display: grid;
+  flex: 1 1 0;
+  place-items: center;
+  min-height: 0;
+  container-type: size;
 }
 
 .project__video {
@@ -632,13 +860,6 @@ body {
   display: block;
   aspect-ratio: 9 / 16;
   object-fit: cover;
-}
-
-.project__transcript {
-  display: grid;
-  align-content: start;
-  gap: var(--space-3);
-  overflow: auto;
 }
 
 .section-title {
@@ -1030,12 +1251,12 @@ body {
 /* Preview stage: the video with the caption overlay sized to it. */
 .stage {
   position: relative;
+  width: min(100cqw, calc(100cqh * 16 / 9));
   container-type: inline-size;
 }
 
 .stage--tall {
-  width: min(100%, calc(70vh * 9 / 16));
-  justify-self: center;
+  width: min(100cqw, calc(100cqh * 9 / 16));
 }
 
 .captions {
@@ -1066,6 +1287,155 @@ body {
 
 .captions__word--now {
   color: var(--color-accent);
+}
+
+/* Docks: a side dock is a column, the bottom dock a row. Two panels in one
+   dock split it, with a hairline between them to resize the split. */
+.dock {
+  display: flex;
+  flex-grow: 0;
+  flex-shrink: 0;
+  min-width: 0;
+  min-height: 0;
+}
+
+.dock--left,
+.dock--right {
+  flex-direction: column;
+  min-width: var(--panel-min);
+}
+
+.dock--bottom {
+  min-height: var(--panel-min);
+}
+
+.dock-panel {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  min-height: 0;
+}
+
+.dock-panel__head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.dock-panel__docks {
+  display: flex;
+  gap: var(--space-1);
+  margin-left: auto;
+}
+
+.dock-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--control-height);
+  height: var(--control-height);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.dock-button:hover {
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.dock-button--on,
+.dock-button--on:hover {
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+.dock-button:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.dock-panel__body {
+  display: grid;
+  flex: 1 1 0;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: var(--space-3);
+  min-height: 0;
+  overflow: auto;
+}
+
+/* The panel's title row already heads the first section. */
+.dock-panel__body > :first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+/* The hairline between areas. It turns to splice tape while it's grabbed. */
+.resizer {
+  position: relative;
+  flex: none;
+  touch-action: none;
+}
+
+.resizer--vertical {
+  width: var(--space-5);
+  cursor: col-resize;
+}
+
+.resizer--horizontal {
+  height: var(--space-5);
+  cursor: row-resize;
+}
+
+.resizer::after {
+  content: "";
+  position: absolute;
+  background: var(--color-border);
+}
+
+.resizer--vertical::after {
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+}
+
+.resizer--horizontal::after {
+  top: 50%;
+  right: 0;
+  left: 0;
+  height: 1px;
+}
+
+.resizer:hover::after,
+.resizer:focus-visible::after,
+.resizer--dragging::after {
+  background: var(--color-accent);
+}
+
+.resizer--vertical:hover::after,
+.resizer--vertical:focus-visible::after,
+.resizer--vertical.resizer--dragging::after {
+  width: var(--space-1);
+  transform: translateX(-50%);
+}
+
+.resizer--horizontal:hover::after,
+.resizer--horizontal:focus-visible::after,
+.resizer--horizontal.resizer--dragging::after {
+  height: var(--space-1);
+  transform: translateY(-50%);
+}
+
+.resizer:focus-visible {
+  outline: none;
 }
 
 /* Settings panels below the preview: captions, export. */
