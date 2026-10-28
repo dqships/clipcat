@@ -2,11 +2,14 @@
 // executable as Node (ELECTRON_RUN_AS_NODE=1) on this script, bundled to
 // dist/mcp.cjs. It pipes the agent's stdin and stdout to the app's socket
 // and looks at nothing passing through. When the app isn't running, a
-// packaged build (CLIPCAT_LAUNCH=1) starts it and waits for the socket.
+// packaged build (CLIPCAT_LAUNCH=1) starts it in the background, with no
+// window, and waits for the socket: the Claude desktop app starts every MCP
+// server as it opens, and that shouldn't put ClipCat on the screen.
 // Stdout belongs to the protocol; anything for a person goes to stderr.
 
 import { spawn } from "node:child_process";
 import { type Socket, connect } from "node:net";
+import { BACKGROUND_ARG } from "./config";
 
 const WAIT_MS = 30_000;
 
@@ -29,7 +32,7 @@ function launchApp(): void {
   delete env.ELECTRON_RUN_AS_NODE;
   delete env.CLIPCAT_SOCKET;
   delete env.CLIPCAT_LAUNCH;
-  spawn(process.execPath, [], { detached: true, stdio: "ignore", env }).unref();
+  spawn(process.execPath, [BACKGROUND_ARG], { detached: true, stdio: "ignore", env }).unref();
 }
 
 async function open(path: string, launch: boolean): Promise<Socket> {

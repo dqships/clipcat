@@ -22,6 +22,7 @@ import { type Binary, binaryPath, probeVersion } from "./tools";
 import { broadcast, registerIpc } from "./ipc";
 import { JobLog } from "./jobs/log";
 import { JobQueue } from "./jobs/queue";
+import { BACKGROUND_ARG } from "./mcp/config";
 import { type InstallEnv, connectAgent, healRegistrations, mcpStatus, serverSpec } from "./mcp/install";
 import { checkAgent } from "./mcp/check";
 import { createMcpServer } from "./mcp/server";
@@ -282,6 +283,28 @@ const articleFile = (a: Article) => `${a.title.trim() ? `# ${a.title.trim()}\n\n
 /** The app's window; the face detector's hidden window is never it. */
 let mainWindow: BrowserWindow | null = null;
 
+/**
+ * Started by the MCP bridge for an agent (the Claude desktop app starts its
+ * servers as it opens), not by the person: no window and no Dock icon until
+ * they open ClipCat, and gone when the last agent session ends.
+ */
+let background = process.argv.includes(BACKGROUND_ARG);
+
+/** The person opened ClipCat: from here on it's an ordinary app with its window. */
+function showWindow(): void {
+  if (background) {
+    background = false;
+    void app.dock?.show();
+  }
+  const win = mainWindow;
+  if (!win) {
+    createWindow();
+    return;
+  }
+  if (win.isMinimized()) win.restore();
+  win.focus();
+}
+
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
     width: 1280,
@@ -330,6 +353,7 @@ if (!squirrelLaunch && !app.requestSingleInstanceLock()) {
   // leaves before starting anything, so it can't take over the MCP socket or rerun jobs.
   app.quit();
 } else if (!squirrelLaunch) {
+  if (background) app.dock?.hide();
   app.whenReady().then(() => {
     const { store, settings, keys, queue, jobs, pipeline, media, music, thumbnail, analysis, exporter, edit, recordings } = startPipeline();
     app.on("will-quit", () => void recordings.discardAll());
@@ -369,34 +393,55 @@ if (!squirrelLaunch && !app.requestSingleInstanceLock()) {
     });
     const socket = socketPath(app.getPath("userData"), process.platform);
     const installEnv = mcpEnv(socket);
+    let agentSessions = 0;
+    // In the background, ClipCat leaves once no agent is connected and the jobs they started have finished.
+    const leaveWhenDone = () => {
+      if (!background || agentSessions > 0) return;
+      if (jobs.list(null).some((j) => j.state === "queued" || j.state === "running")) setTimeout(leaveWhenDone, 5_000);
+      else app.quit();
+    };
+    // In case the bridge that started it gave up before connecting.
+    if (background) setTimeout(leaveWhenDone, 60_000);
     // Which agents really opened a session, so Settings shows what happened rather than what a file says.
     const agentStatus = () => mcpStatus(installEnv, (id) => sessions.seen(id));
     const sessions = new SessionLog(join(app.getPath("userData"), "agent-sessions.json"), () => {
       void agentStatus().then((agents) => broadcast("mcp:agents", agents), () => {});
     });
-    const mcp = listen(socket, () => {
-      const server = createMcpServer({
-        version: app.getVersion(),
-        list: () => store.list(),
-        get: (id) => store.get(id),
-        edit,
-        analyze: (id, brief) => analysis.analyze(id, brief),
-        request: async (id, request) => analysis.request(id, request),
-        writeup: async (id) => analysis.writeup(id),
-        shorts: async (id, count, seconds) => analysis.shorts(id, count, seconds),
-        exportVideo: async (id, format, path) => {
-          await store.get(id);
-          exporter.export(id, format, path);
-        },
-        importFiles: (files, projectId) => pipeline.import(files, projectId),
-        exportTimeline: (id, format, path) => writeTimeline(store, id, format, path),
-        jobs: (projectId) => jobs.list(projectId),
-      });
-      sessions.track(server);
-      return server;
-    }).then(
+    const mcp = listen(
+      socket,
+      () => {
+        const server = createMcpServer({
+          version: app.getVersion(),
+          list: () => store.list(),
+          get: (id) => store.get(id),
+          edit,
+          analyze: (id, brief) => analysis.analyze(id, brief),
+          request: async (id, request) => analysis.request(id, request),
+          writeup: async (id) => analysis.writeup(id),
+          shorts: async (id, count, seconds) => analysis.shorts(id, count, seconds),
+          exportVideo: async (id, format, path) => {
+            await store.get(id);
+            exporter.export(id, format, path);
+          },
+          importFiles: (files, projectId) => pipeline.import(files, projectId),
+          exportTimeline: (id, format, path) => writeTimeline(store, id, format, path),
+          jobs: (projectId) => jobs.list(projectId),
+        });
+        sessions.track(server);
+        return server;
+      },
+      process.platform,
+      (open) => {
+        agentSessions = open;
+        if (open === 0) leaveWhenDone();
+      },
+    ).then(
       () => null,
-      (e: unknown) => `The MCP socket didn't open: ${e instanceof Error ? e.message : String(e)}`,
+      (e: unknown) => {
+        // Nothing to serve and nothing on screen.
+        if (background) app.quit();
+        return `The MCP socket didn't open: ${e instanceof Error ? e.message : String(e)}`;
+      },
     );
     if (!isSmokeRun()) void healRegistrations(installEnv);
     const aiStatus = async () => {
@@ -699,22 +744,17 @@ if (!squirrelLaunch && !app.requestSingleInstanceLock()) {
         .then(() => resume("b-roll", () => media.resume()))
         .then(() => resume("music", () => music.resume()));
     }
-    createWindow();
+    if (!background) createWindow();
   });
 
-  app.on("second-instance", () => {
-    const win = mainWindow;
-    if (win) {
-      if (win.isMinimized()) win.restore();
-      win.focus();
-    }
-  });
+  app.on("second-instance", () => showWindow());
 
   app.on("activate", () => {
-    if (!mainWindow) createWindow();
+    if (!mainWindow) showWindow();
   });
 
   app.on("window-all-closed", () => {
-    if (process.platform !== "darwin") app.quit();
+    // In the background the only windows are hidden helpers, and closing them leaves the agent's session running.
+    if (process.platform !== "darwin" && !background) app.quit();
   });
 }
