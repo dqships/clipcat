@@ -16,6 +16,7 @@ const { join } = require("node:path");
 
 const ICON = join(__dirname, "..", "..", "brand", "icon", "icon");
 const STAGE = join(__dirname, ".stage");
+const DMG = join(__dirname, "resources", "dmg");
 
 const sign = windowsSign();
 
@@ -60,7 +61,7 @@ const config = {
   },
   makers: [
     new MakerZIP(UPDATE_FEED ? { macUpdateManifestBaseUrl: UPDATE_FEED } : {}, ["darwin"]),
-    new MakerDMG({ name: `ClipCat-${process.arch}`, icon: `${ICON}.icns` }),
+    new MakerDMG(dmgConfig()),
     new MakerSquirrel({
       name: "ClipCat",
       authors: "ClipCat",
@@ -111,6 +112,28 @@ const config = {
     },
   },
 };
+
+/**
+ * The Mac installer window: ClipCat and Applications on the tape background (rendered by
+ * brand/scripts/render-dmg.mjs; the window takes its size). The volume's own files are hidden, but
+ * Finder still shows them when hidden files are on, so they sit below the window, out of view.
+ * scripts/check-dmg.mjs checks the built image against this.
+ */
+function dmgConfig() {
+  const layout = require("./resources/dmg/layout.json");
+  const hidden = [".background", ".VolumeIcon.icns", ".DS_Store", ".fseventsd", ".Trashes"];
+  return {
+    name: `ClipCat-${process.arch}`,
+    icon: `${ICON}.icns`,
+    background: join(DMG, "background.png"),
+    iconSize: layout.iconSize,
+    contents: (/** @type {{ appPath: string }} */ opts) => [
+      { type: "file", path: opts.appPath, ...layout.app },
+      { type: "link", path: "/Applications", ...layout.applications },
+      ...hidden.map((name, i) => ({ type: "position", path: name, x: Math.round(((i + 1) * layout.width) / (hidden.length + 1)), y: layout.hiddenY })),
+    ],
+  };
+}
 
 function windowsSign() {
   if (process.platform !== "win32" || process.env.SKIP_SIGN) return undefined;
