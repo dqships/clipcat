@@ -10,7 +10,7 @@
 // user's PATH. Children never see Electron's own variables.
 
 import { execFile, spawn } from "node:child_process";
-import { accessSync, constants, existsSync, readFileSync, statSync } from "node:fs";
+import { accessSync, constants, existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { homedir, userInfo } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
 
@@ -121,31 +121,49 @@ function isExecutable(path: string): boolean {
 }
 
 /**
- * `which`, over the hydrated PATH and then the known install dirs. On Windows
+ * Every executable called `name`, over the hydrated PATH and then the known
+ * install dirs, in that order; two links to one file count once. On Windows
  * the PATHEXT variants are tried, so `claude.cmd` and `codex.exe` are found.
  */
-export function which(name: string, host: HostEnv): string | null {
+export function whichAll(name: string, host: HostEnv): string[] {
   const dirs = [...(host.env.PATH ?? "").split(delimiter).filter(Boolean), ...host.extraDirs];
   const names = IS_WINDOWS
     ? [name, ...(host.env.PATHEXT ?? ".EXE;.CMD;.BAT").split(";").map((ext) => name + ext.toLowerCase())]
     : [name];
+  const found: string[] = [];
+  const seen = new Set<string>();
   for (const dir of dirs) {
     for (const candidate of names) {
       const path = join(dir, candidate);
-      if (isExecutable(path)) return path;
+      if (!isExecutable(path)) continue;
+      let real = path;
+      try {
+        real = realpathSync(path);
+      } catch {
+        // Counted by its own path.
+      }
+      if (seen.has(real)) continue;
+      seen.add(real);
+      found.push(path);
     }
   }
-  return null;
+  return found;
 }
 
-/**
- * Where an agent CLI is: an explicit override (`CLIPCAT_CLAUDE_PATH`,
- * `CLIPCAT_CODEX_PATH`), else `which`.
- */
-export function resolveBinary(name: "claude" | "codex", host: HostEnv): string | null {
+/** The first of `whichAll`. */
+export function which(name: string, host: HostEnv): string | null {
+  return whichAll(name, host)[0] ?? null;
+}
+
+/** An explicit override (`CLIPCAT_CLAUDE_PATH`, `CLIPCAT_CODEX_PATH`), when it points at an executable. */
+export function overrideBinary(name: "claude" | "codex", host: HostEnv): string | null {
   const override = host.env[`CLIPCAT_${name.toUpperCase()}_PATH`] ?? process.env[`CLIPCAT_${name.toUpperCase()}_PATH`];
-  if (override && isExecutable(override)) return override;
-  return which(name, host);
+  return override && isExecutable(override) ? override : null;
+}
+
+/** Where an agent CLI is: the override, else `which`. */
+export function resolveBinary(name: "claude" | "codex", host: HostEnv): string | null {
+  return overrideBinary(name, host) ?? which(name, host);
 }
 
 /**

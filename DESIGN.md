@@ -69,7 +69,7 @@ Fallback: `"Jost", "Futura", "Century Gothic", system-ui, sans-serif`.
 Weights: 400 regular, 500 medium, 600 semibold.
 
 Command names, file paths and agent sessions (on the site, and in the
-app's agent guide) are set in the system monospace, `--font-mono` (`ui-monospace, "SF Mono", Menlo, Consolas,
+app's agent guide and agent CLI rows) are set in the system monospace, `--font-mono` (`ui-monospace, "SF Mono", Menlo, Consolas,
 monospace`), at the size of the text around them. Nothing else uses it.
 
 | Token | Size / line height | Use |

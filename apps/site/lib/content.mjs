@@ -13,7 +13,7 @@ export const SITE = {
   mac: `${DOWNLOAD}/ClipCat-arm64.dmg`,
   macIntel: `${DOWNLOAD}/ClipCat-x64.dmg`,
   windows: `${DOWNLOAD}/ClipCat-x64-Setup.exe`,
-  tagline: "Raw takes in, finished video out: a free AI video editor for talking-head videos.",
+  tagline: "A free AI video editor for talking-head videos. Your Claude or Codex suggests the edit, and you approve each change.",
 };
 
 /** When the pages last changed in substance, for the sitemap. */
@@ -23,61 +23,60 @@ export const PAGES = [
   {
     path: "/",
     nav: "Home",
-    title: "ClipCat: a free AI video editor for Mac and Windows",
+    title: "ClipCat: free AI video editor for talking-head videos",
     description:
-      "ClipCat turns raw talking-head recordings into an edited video, shorts and a write-up, on your computer, with the Claude or Codex plan you already have.",
-    kicker: "AI video editor for Mac and Windows. Free.",
-    h1: "Raw takes in. Finished video out.",
+      "ClipCat turns your raw talking-head takes into an edited video. Your Claude or Codex suggests every cut, and you approve each one. Free for Mac and Windows.",
+    h1: "Turn your raw takes into a video you can post.",
     lede:
-      "Drop in your recordings. ClipCat makes the first edit with your own Claude or Codex: retakes and pauses out, punch-ins, b-roll, motion slides, sound and captions. Then it cuts the shorts and writes the chapters. You review every change, and it all runs on your computer.",
+      "ClipCat transcribes your recordings, then your Claude or Codex suggests the cuts, zooms, b-roll and captions. You accept or reject each change and export the video, the shorts and the description. There's no account, and your videos are saved on your computer.",
     hero: true,
     updated: UPDATED,
     sections: [
       {
         kind: "timeline",
         caption:
-          "An example of the first edit ClipCat proposes for seven takes. Yellow marks are cuts. Every change comes with a reason, and you can undo any of them.",
+          "Example: seven takes after the first edit. Yellow marks are suggested cuts. Each one shows why, and you can undo any of them.",
       },
       {
-        h2: "From raw takes to posted in three steps",
+        h2: "How it works",
         steps: [
           {
-            title: "Record or import",
-            text: "Drag in the files from your camera or phone, or record your camera, your screen or just your voice straight into a project.",
+            title: "Import or record your takes",
+            text: "Drag in files from your camera or phone, or record your camera, your screen or just your voice into a new project.",
           },
           {
-            title: "Get a first edit",
-            text: "ClipCat transcribes on your computer. Then your Claude or Codex proposes the cuts, zooms, b-roll, slides and sounds, each with a reason.",
+            title: "Review the suggested edit",
+            text: "ClipCat transcribes the recording on your computer. Your Claude or Codex suggests cuts, zooms, b-roll, slides and sounds, each with a reason. Accept or reject each one, or cut words straight from the transcript.",
           },
           {
-            title: "Review and export",
-            text: "Accept or reject each change, or edit the transcript like a document. Export the long video, the shorts and the write-up.",
+            title: "Export the video and shorts",
+            text: "Export the long video, the shorts and an .srt caption file. ClipCat also writes the chapters and a YouTube description.",
           },
         ],
       },
       {
         kind: "features",
-        h2: "Everything in the first edit",
-        body: ["Each change lands on its own track, so you can see it, adjust it or turn it off."],
+        h2: "What your AI suggests",
+        body: ["Each kind of change gets its own track. Turn any of them off before you export."],
         cards: [
-          { track: "A1", title: "Retakes and pauses out", text: "Repeated lines, stumbles and dead air are marked with a reason. Nothing is cut until you accept it." },
-          { track: "V1", title: "Punch-ins", text: "A snap, a quick push or a slow creep toward you, to land the lines that matter." },
+          { track: "A1", title: "Cuts for retakes and pauses", text: "Repeated lines, stumbles, filler words and long pauses, each with a reason. Nothing is cut until you accept it." },
+          { track: "V1", title: "Punch-ins", text: "Zooms toward your face on the lines that matter, as a snap, a quick push or a slow creep." },
           { track: "V2", title: "B-roll from your files", text: "Your own screenshots and clips, placed where you talk about them, full frame or picture in picture." },
-          { track: "V3", title: "Motion slides", text: "Animated title, list and number cards, designed for the moment and timed to your words." },
-          { track: "A2", title: "Sound and music", text: "Effects on the right word, and a music bed that ducks while you talk." },
-          { track: "T1", title: "Captions", text: "Burned in a word or a sentence at a time, plus an .srt file beside every export." },
-          { track: "9:16", title: "Shorts", text: "Clips that open on a hook and stand on their own, framed on your face." },
-          { track: "TXT", title: "The write-up", text: "Chapters, a YouTube description, an article and a thumbnail with you cut out in front of the title." },
+          { track: "V3", title: "Motion slides", text: "Short animated title, list and number cards, timed to your words." },
+          { track: "A2", title: "Sound and music", text: "Sound effects on the right word, and a music bed that gets quieter while you talk." },
+          { track: "T1", title: "Captions", text: "Burned-in captions, a word or a sentence at a time, plus an .srt file with every export." },
+          { track: "9:16", title: "Shorts", text: "Vertical clips that start on a strong line and make sense on their own, framed on your face." },
+          { track: "TXT", title: "Chapters and description", text: "Chapters, a YouTube description, an article and a thumbnail with you cut out in front of the title." },
         ],
         more: "[See every feature](/features)",
       },
       {
         kind: "shorts",
-        h2: "One recording, a week of shorts",
+        h2: "Make shorts from the same recording",
         body: [
-          "Pick how many and how long. ClipCat finds the moments that work on their own, opens each one on a hook and keeps the long edit's cuts. A face tracker that runs on your computer keeps you in the 9:16 frame.",
+          "Choose how many shorts you want and how long. ClipCat picks moments that make sense on their own, starts each one on a strong line and keeps the cuts from your long edit. A face tracker on your computer keeps you in the 9:16 frame.",
         ],
-        note: "Up to 30, 60 or 90 seconds each, at 1080×1920.",
+        note: "Each short is up to 30, 60 or 90 seconds long, at 1080×1920.",
         shorts: [
           { length: "0:41", caption: "Nobody reads your", key: "App Store", rest: "page" },
           { length: "0:58", caption: "Launch", key: "twice.", rest: "Here's why" },
@@ -86,18 +85,18 @@ export const PAGES = [
       },
       {
         kind: "agents",
-        h2: "Uses the AI you already pay for",
+        h2: "Use the Claude or Codex plan you already have",
         body: [
-          "ClipCat runs no AI service of its own and has no account. It hands the transcript to the agent you're signed in to, and checks every suggestion it gets back against your words.",
+          "ClipCat doesn't run its own AI or ask you to sign up. It sends the transcript to Claude Code, Codex or the Claude API with your own key, and checks each suggestion against your words.",
         ],
         cards: [
-          { title: "Claude Code", text: "Counts against your Claude plan. This is the default." },
-          { title: "Codex", text: "Counts against your ChatGPT plan." },
+          { title: "Claude Code", text: "Uses your Claude plan. This is the default." },
+          { title: "Codex", text: "Uses your ChatGPT plan." },
           { title: "Claude API key", text: "Billed per use to your own Anthropic account." },
         ],
-        h3: "Or let your agent drive",
+        h3: "Let Claude Code or Codex make the edits",
         detail:
-          "ClipCat's MCP server lets Claude Code, Codex and the Claude app open your projects, cut words, accept suggestions, make shorts and start exports while ClipCat is open. Every change goes through the same undo history as the editor.",
+          "ClipCat includes an MCP server. Connect it in Settings, and Claude Code, Codex or the Claude app can open your projects, cut words, accept suggestions, make shorts and start exports while ClipCat is open. Each change is one step in ClipCat's undo history.",
         session: [
           "> cut the part about pricing, then make three shorts",
           "clipcat  get_transcript  launch-video",
@@ -109,18 +108,18 @@ export const PAGES = [
       },
       {
         kind: "facts",
-        h2: "Your footage never leaves your computer",
+        h2: "What leaves your computer",
         cards: [
-          { title: "Transcribed on your computer", text: "NVIDIA's Parakeet on the Neural Engine on Apple Silicon, and whisper.cpp everywhere else." },
-          { title: "Only text goes out", text: "The transcript goes to the AI you chose, and only when you ask it for something." },
-          { title: "No account, no tracking", text: "No ClipCat server, no analytics, no watermark and no export limit." },
+          { title: "Your video stays here", text: "ClipCat transcribes speech on your computer and never uploads your recordings. Projects and exports are saved on your computer too." },
+          { title: "The transcript goes to your AI", text: "Only when you ask it for suggestions. For b-roll and thumbnails, a few still frames go with it." },
+          { title: "No account and no tracking", text: "ClipCat has no server of its own, no analytics, no watermark and no export limit." },
         ],
         more: "[Read the privacy page](/privacy)",
       },
       {
         kind: "end",
-        h2: "Your next video, mostly edited",
-        body: ["ClipCat is free. It runs on Macs with macOS 14 or newer, Apple Silicon or Intel, and on 64-bit Windows 10 and 11."],
+        h2: "Download ClipCat",
+        body: ["ClipCat is free and needs no account. Install it, drop in a recording and review the first edit."],
         download: true,
       },
     ],
@@ -132,11 +131,11 @@ export const PAGES = [
     description:
       "Everything ClipCat does: transcript editing, AI cut suggestions, captions, vertical shorts, punch-ins, b-roll, sound, recording and Final Cut timelines.",
     h1: "Everything ClipCat does",
-    lede: "ClipCat is built for one kind of video: someone talking to the camera. Every feature is there to get that video from raw takes to posted with less fiddling.",
+    lede: "ClipCat edits videos of one person talking to the camera. This page lists everything it does today.",
     updated: UPDATED,
     sections: [
       {
-        h2: "Editing in the transcript",
+        h2: "Edit the transcript to edit the video",
         list: [
           "Click a word to jump the preview there. Shift-click to select a run of words, and press Delete to cut it. Press it again to bring it back.",
           "Suggested cuts for retakes, stumbles, filler and long pauses wait under the preview with a reason and a confidence. Accept or reject each one.",
@@ -146,7 +145,7 @@ export const PAGES = [
         ],
       },
       {
-        h2: "Your AI, your choice",
+        h2: "Choose which AI makes suggestions",
         body: [
           "ClipCat doesn't run its own AI service. It uses the [Claude Code](https://claude.com/claude-code) or Codex subscription you already have, or your own Claude API key. The AI gets one tool, for handing back its suggestions, and no access to your files, shell or the web.",
         ],
@@ -169,26 +168,26 @@ export const PAGES = [
         ],
       },
       {
-        h2: "Recording",
+        h2: "Record into a project",
         body: [
           "Record straight into a project: your camera, a screen with your voice and optionally the computer's sound, or a voice-only take. On macOS 15 the screen is recorded with ScreenCaptureKit and ClipCat's own window stays out of the picture.",
         ],
       },
       {
-        h2: "Writing it up",
+        h2: "Write the chapters, description and thumbnail",
         body: [
           "ClipCat writes chapters, a description and an article from the edited transcript in your voice. Copy the description and chapters for YouTube in one click, and design a thumbnail from your best frame with you cut out in front of the title.",
         ],
       },
       {
-        h2: "Export, or finish elsewhere",
+        h2: "Export a video or a timeline",
         list: [
           "Export H.264 video with your computer's own hardware encoder: 16:9 at up to 1440p, or 9:16 at 1080×1920, at speeds from 0.5× to 2×.",
           "Save the edit as a timeline for Final Cut Pro (FCPXML, which DaVinci Resolve opens too), Premiere Pro (Final Cut 7 XML) or any editor that reads a CMX 3600 EDL.",
         ],
       },
       {
-        h2: "Drive it from your coding agent",
+        h2: "Let your coding agent make the edits",
         body: [
           "Connect Claude Code, Codex or the Claude desktop app from ClipCat's settings, and the agent can read your projects, cut words, accept suggestions, start exports and import recordings while ClipCat is open. Every change goes through the same undo history as the editor.",
           "The [agent guide](/agents) shows how to set it up and what to ask.",
@@ -204,7 +203,7 @@ export const PAGES = [
       "How to connect ClipCat to Claude Code, Codex or the Claude desktop app, check it worked, and what to ask so the agent edits your videos for you.",
     h1: "Edit from Claude or Codex",
     lede:
-      "ClipCat comes with an MCP server, so the agent you already use can open your projects, read the transcripts and make the edit while you watch it land in ClipCat.",
+      "ClipCat includes an MCP server. Connect it once, and Claude Code, Codex or the Claude app can open your projects, read the transcripts and make edits while you watch them appear in ClipCat.",
     updated: UPDATED,
     sections: [
       {
@@ -278,7 +277,7 @@ export const PAGES = [
     description:
       "Download ClipCat, the free talking-head video editor, for Macs on macOS 14 or newer, Apple Silicon or Intel, and 64-bit Windows 10 and 11.",
     h1: "Download ClipCat",
-    lede: "ClipCat is free and needs no account. Pick your computer.",
+    lede: "ClipCat is free and needs no account. Choose the installer for your computer.",
     updated: UPDATED,
     sections: [
       {
@@ -309,12 +308,12 @@ export const PAGES = [
     description:
       "ClipCat is free to download and use, with no account and no limits. AI cuts run on the Claude Code or Codex plan you already have, or your own Claude API key.",
     h1: "Pricing",
-    lede: "ClipCat costs nothing. There's no account, no trial, no watermark and no export limit.",
+    lede: "ClipCat is free. There's no account, trial, watermark or export limit. AI suggestions use the Claude or Codex plan you already pay for.",
     updated: UPDATED,
     sections: [
       {
         h2: "What you pay for",
-        body: ["Only the AI you already use, and only if you use it. ClipCat works without AI too: transcription, editing, captions and export all run on your computer for free."],
+        body: ["Only the AI, and only when you use it. Transcription, editing, captions and export run on your computer and cost nothing."],
         list: [
           "**Claude Code or Codex**: AI cuts, shorts, slides and write-ups count against the plan you already have.",
           "**Claude API key**: billed by Anthropic to your own account, per use. You pick the model in ClipCat.",
@@ -322,7 +321,7 @@ export const PAGES = [
       },
       {
         h2: "Why it's free",
-        body: ["ClipCat is a personal project, built for one person's videos and shared as is. It has no servers to pay for, because everything runs on your computer."],
+        body: ["ClipCat is a personal project, shared as is. It has no servers to pay for, because everything except the AI runs on your computer."],
       },
     ],
   },
@@ -333,7 +332,7 @@ export const PAGES = [
     description:
       "ClipCat is a personal desktop video editor for people who talk to the camera. Here is why it exists, how it's built, and the open source work it stands on.",
     h1: "About ClipCat",
-    lede: "ClipCat started as one person's tool for turning long, messy takes into tight videos without spending an evening in a timeline.",
+    lede: "ClipCat is a desktop editor for talking-head videos. Your own AI does the first pass of the edit, and you make every final call.",
     updated: UPDATED,
     sections: [
       {
@@ -361,7 +360,7 @@ export const PAGES = [
     description:
       "How to reach ClipCat: report a bug or suggest a feature on GitHub, and attach a diagnostics file from the app so the problem can be found without guesswork.",
     h1: "Contact",
-    lede: "ClipCat is run in the open on GitHub, and that's the place to get in touch.",
+    lede: "Report bugs and ask questions in ClipCat's GitHub issues.",
     updated: UPDATED,
     sections: [
       {
@@ -383,7 +382,7 @@ export const PAGES = [
     description:
       "ClipCat keeps your videos, audio and projects on your computer. It has no account, no analytics and no servers. Here is what leaves your machine, and when.",
     h1: "Privacy",
-    lede: "ClipCat has no account, no analytics and no servers of its own. Your recordings and projects never leave your computer.",
+    lede: "Your videos and projects are saved on your computer. ClipCat has no account, no analytics and no server of its own.",
     updated: UPDATED,
     sections: [
       {
