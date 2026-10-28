@@ -16,7 +16,6 @@ const { join } = require("node:path");
 
 const ICON = join(__dirname, "..", "..", "brand", "icon", "icon");
 const STAGE = join(__dirname, ".stage");
-const DMG = join(__dirname, "resources", "dmg");
 
 const sign = windowsSign();
 
@@ -114,23 +113,20 @@ const config = {
 };
 
 /**
- * The Mac installer window: ClipCat and Applications on the tape background (rendered by
- * brand/scripts/render-dmg.mjs; the window takes its size). The volume's own files are hidden, but
- * Finder still shows them when hidden files are on, so they sit below the window, out of view.
+ * The Mac installer window: electron-installer-dmg's stock background (white, black arrow) with
+ * ClipCat and Applications at its stock spots. The volume's own files are hidden, but Finder still
+ * shows them when hidden files are on, so they sit below the 658 x 498 window, out of view.
  * scripts/check-dmg.mjs checks the built image against this.
  */
 function dmgConfig() {
-  const layout = require("./resources/dmg/layout.json");
   const hidden = [".background", ".VolumeIcon.icns", ".DS_Store", ".fseventsd", ".Trashes"];
   return {
     name: `ClipCat-${process.arch}`,
     icon: `${ICON}.icns`,
-    background: join(DMG, "background.png"),
-    iconSize: layout.iconSize,
     contents: (/** @type {{ appPath: string }} */ opts) => [
-      { type: "file", path: opts.appPath, ...layout.app },
-      { type: "link", path: "/Applications", ...layout.applications },
-      ...hidden.map((name, i) => ({ type: "position", path: name, x: Math.round(((i + 1) * layout.width) / (hidden.length + 1)), y: layout.hiddenY })),
+      { type: "file", path: opts.appPath, x: 192, y: 344 },
+      { type: "link", path: "/Applications", x: 448, y: 344 },
+      ...hidden.map((name, i) => ({ type: "position", path: name, x: 110 * (i + 1), y: 700 })),
     ],
   };
 }
