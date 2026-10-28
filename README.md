@@ -61,9 +61,17 @@ file, shell or web access. Proposals are checked against the transcript and
 nothing is cut until you accept it.
 
 Codex works too: install the Codex CLI, run `codex login`, and pick Codex under
-"Find cuts with" (or set `CLIPCAT_CODEX_PATH`). ClipCat runs `codex exec` in a
-read-only sandbox in an empty temporary folder, with the prompt on stdin and
-the answer held to a JSON schema; it is checked exactly like Claude's.
+"Find cuts with". ClipCat runs the newest `codex` it finds (on PATH, in the
+usual install folders, or inside the ChatGPT app), unless `CLIPCAT_CODEX_PATH`
+names one: an old CLI can be refused the model a newer one set in
+`~/.codex/config.toml`. It runs `codex exec` in a read-only sandbox in an empty
+temporary folder, with the prompt on stdin and the answer held to a JSON
+schema; it is checked exactly like Claude's.
+
+For Claude Code and Codex, "Model" picks the model per agent. Left on the
+default, each runs its own: Claude Code's built-in default, and Codex the
+`model` in `~/.codex/config.toml`. Codex's list is the one it caches for your
+login in `~/.codex/models_cache.json`.
 
 Or use the Claude API with your own key: pick "Claude API (your key)", paste a
 key from console.anthropic.com (it is checked with one call, then stored

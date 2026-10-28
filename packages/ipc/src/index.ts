@@ -43,8 +43,23 @@ export const ApiModel = z.enum(["claude-opus-5-5", "claude-sonnet-5-5", "claude-
 /** The Claude API's state: whether a key is saved, and which model it uses. */
 export const ApiStatus = z.object({ hasKey: z.boolean(), model: ApiModel });
 
-/** Each agent's state, and which one finds cuts. */
-export const AiStatus = z.object({ claude: AgentStatus, codex: AgentStatus, api: ApiStatus, agent: AgentName });
+/** A model picked for Claude Code or Codex; null runs the CLI's own default. */
+export const AgentModel = z.string().trim().min(1).max(100).regex(/^[\w.:/[\]-]+$/).nullable();
+
+/** A model the user can pick for an agent CLI. */
+export const ModelChoice = z.object({ id: z.string(), label: z.string() });
+
+/** The models an agent CLI offers, the one it runs when none is picked (null when it doesn't say), and the pick. */
+export const AgentModels = z.object({ choices: z.array(ModelChoice), fallback: z.string().nullable(), selected: AgentModel });
+
+/** Each agent's state, its models, and which one finds cuts. */
+export const AiStatus = z.object({
+  claude: AgentStatus,
+  codex: AgentStatus,
+  api: ApiStatus,
+  agent: AgentName,
+  models: z.object({ claude: AgentModels, codex: AgentModels }),
+});
 
 /** App-wide settings. */
 const Term = z.string().trim().min(1).max(60);
@@ -56,6 +71,10 @@ export const Settings = z.object({
   dictionary: z.array(Term).max(200).default([]),
   /** The model the Claude API runs; the key itself is kept apart, encrypted. */
   apiModel: ApiModel.default("claude-opus-5-5"),
+  /** The model Claude Code runs; null is Claude Code's own default. */
+  claudeModel: AgentModel.default(null),
+  /** The model Codex runs; null is the default in the user's ~/.codex/config.toml. */
+  codexModel: AgentModel.default(null),
 });
 
 export const ProjectSummary = z.object({
@@ -158,7 +177,10 @@ export const methods = {
   "ai:status": { input: z.void(), output: AiStatus },
   /** Changes app-wide settings; resolves with all of them. */
   "settings:get": { input: z.void(), output: Settings },
-  "settings:set": { input: z.object({ agent: AgentName, dictionary: z.array(Term).max(200), apiModel: ApiModel }).partial(), output: Settings },
+  "settings:set": {
+    input: z.object({ agent: AgentName, dictionary: z.array(Term).max(200), apiModel: ApiModel, claudeModel: AgentModel, codexModel: AgentModel }).partial(),
+    output: Settings,
+  },
   /** Checks and saves a Claude API key (encrypted), or removes it with null. */
   "settings:api-key": { input: z.object({ key: z.string().trim().min(10).max(500).nullable() }), output: ApiStatus },
   /** Saves the brief and queues an AI pass that proposes retake, cleanup and tighten cuts. */
@@ -283,6 +305,7 @@ export type AiStatusValue = z.output<typeof AiStatus>;
 export type AgentNameValue = z.output<typeof AgentName>;
 export type ApiModelValue = z.output<typeof ApiModel>;
 export type ApiStatusValue = z.output<typeof ApiStatus>;
+export type AgentModelsValue = z.output<typeof AgentModels>;
 export type SettingsValue = z.output<typeof Settings>;
 export type UpdateStatusValue = z.output<typeof UpdateStatus>;
 export type RecordSetupValue = z.output<typeof RecordSetup>;
