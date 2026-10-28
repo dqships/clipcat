@@ -10,11 +10,13 @@ import {
   PUNCH,
   type Project,
   type Source,
+  type TimedOverlay,
   type Timeline,
   type TimelineItem,
   type TimedPunch,
   cropOffset,
   framingAt,
+  overlayBox,
   punchFocus,
 } from "@clipcat/core";
 import { type Encoder, encoderArgs } from "./encoders";
@@ -112,6 +114,9 @@ type Shape = {
   project: Pick<Project, "sources" | "speed">;
   /** The punch-ins in effect, timed on the framed timeline (see timedPunches). */
   punches?: TimedPunch[];
+  /** The b-roll in effect, timed the same way (see timedOverlays), and the file each one's media is read from. */
+  overlays?: TimedOverlay[];
+  overlayInputs?: Map<string, string>;
   format: ExportFormat;
   fps: number;
   /** The file each source is read from: the original, or the proxy for audio-only sources. */
@@ -196,6 +201,38 @@ export function punchFilter(s: Source, piece: Piece, punch: TimedPunch, size: Si
   return `${up}zoompan=z='${z}':x='(iw-iw/zoom)*${fx}':y='(ih-ih/zoom)*${fy}':d=1:s=${W}x${H}:fps=${rate}`;
 }
 
+/** B-roll in one chunk: from frame `from` of the chunk for `frames` frames, starting `at` seconds into its media. */
+export type ChunkOverlay = { overlay: TimedOverlay; from: number; frames: number; at: number };
+
+/** The b-roll a chunk shows, cut to the chunk. A video that runs out holds its last frame. */
+export function chunkOverlays(chunk: Pick<Chunk, "start" | "frames">, overlays: TimedOverlay[], fps: number): ChunkOverlay[] {
+  const out: ChunkOverlay[] = [];
+  for (const o of overlays) {
+    const a = Math.round(o.start * fps);
+    const lo = Math.max(a, chunk.start);
+    const hi = Math.min(Math.round(o.end * fps), chunk.start + chunk.frames);
+    if (hi <= lo) continue;
+    // Seeking right to the end finds no frame to hold, so the last half second is as far as it goes.
+    const at = o.asset.kind === "video" ? Math.max(0, Math.min(o.offset + (lo - a) / fps, o.asset.media.duration - 0.5)) : 0;
+    out.push({ overlay: o, from: lo - chunk.start, frames: hi - lo, at });
+  }
+  return out;
+}
+
+/**
+ * Fits b-roll to its place: covering the whole frame, or cropped to fill its
+ * window, with the window's corners (or the whole circle) cut by an alpha
+ * mask, anti-aliased by a pixel.
+ */
+export function overlayFit(o: TimedOverlay, size: Size): { filter: string; x: number; y: number } {
+  const box = overlayBox(o, size);
+  const cover = `scale=${box.width}:${box.height}:force_original_aspect_ratio=increase:flags=lanczos,crop=${box.width}:${box.height},setsar=1`;
+  if (o.placement === "full") return { filter: `${cover},format=yuv420p`, x: 0, y: 0 };
+  const [hw, hh, r] = [box.width / 2, box.height / 2, box.radius];
+  const inside = `${r}-hypot(max(abs(X+0.5-${hw})-${hw - r},0),max(abs(Y+0.5-${hh})-${hh - r},0))+0.5`;
+  return { filter: `${cover},format=yuva420p,geq=lum='p(X,Y)':a='255*clip(${inside},0,1)'`, x: box.x, y: box.y };
+}
+
 export type ChunkPlan = Shape & {
   chunk: Chunk;
   /** An ASS file and its fonts directory, relative to ffmpeg's working directory; null for no captions. */
@@ -246,12 +283,36 @@ export function chunkCommand(plan: ChunkPlan): { graph: string; args: string[] }
     parts.push(`[v${k}]`);
   });
   lines.push(`${parts.join("")}concat=n=${parts.length}:v=1:a=0[cv]`);
-  // Renumber the frames at the output rate; the speed change happens here.
+
+  // B-roll goes over the picture, under the captions. Each is read for just its part of the chunk.
+  const broll = chunkOverlays(chunk, plan.overlays ?? [], fps);
+  let picture = "[cv]";
+  if (broll.length > 0) {
+    lines.push(`[cv]settb=1/${fps},setpts=N[b0]`);
+    broll.forEach(({ overlay, from, frames, at }, k) => {
+      const input = used.length + k;
+      const file = plan.overlayInputs?.get(overlay.assetId);
+      if (!file) throw new Error(`No file for b-roll ${overlay.asset.name}`);
+      const seconds = sec(frames / fps + 1);
+      if (overlay.asset.kind === "video") args.push("-ss", sec(at), "-t", seconds, "-i", file);
+      else args.push("-loop", "1", "-framerate", String(fps), "-t", seconds, "-i", file);
+      const fit = overlayFit(overlay, size);
+      // Numbered from its first frame in the chunk, so the overlay waits for it and lets the picture through after.
+      lines.push(
+        `[${input}:v:0]fps=fps=${fps},tpad=stop_mode=clone:stop=-1,trim=end_frame=${frames},setpts=PTS-STARTPTS,${fit.filter},settb=1/${fps},setpts=N+${from}[o${k}]`,
+      );
+      lines.push(`[b${k}][o${k}]overlay=x=${fit.x}:y=${fit.y}:eof_action=pass:format=auto[b${k + 1}]`);
+    });
+    picture = `[b${broll.length}]`;
+  }
+
+  // Renumber the frames at the output rate (the speed change happens here), unless the b-roll pass did.
+  const retime = broll.length > 0 ? "" : `settb=1/${fps},`;
   if (plan.captions) {
     // libass times each frame by its place in the whole video, so number from the chunk's start.
-    lines.push(`[cv]settb=1/${fps},setpts=N+${chunk.start},ass=filename=${plan.captions.ass}:fontsdir=${plan.captions.fontsDir},setpts=N[outv]`);
+    lines.push(`${picture}${retime}setpts=N+${chunk.start},ass=filename=${plan.captions.ass}:fontsdir=${plan.captions.fontsDir},setpts=N[outv]`);
   } else {
-    lines.push(`[cv]settb=1/${fps},setpts=N[outv]`);
+    lines.push(`${picture}${retime}setpts=N[outv]`);
   }
 
   args.push(

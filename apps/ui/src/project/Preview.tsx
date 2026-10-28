@@ -1,18 +1,24 @@
 import {
   type Project,
   type Source,
+  type TimedOverlay,
   type TimedPunch,
   type Timeline,
   buildTimeline,
   cropOffset,
   framingAt,
+  overlayAt,
+  overlayBox,
+  overlayTime,
   punchFocus,
   punchZoom,
   sourceToOutput,
+  timedOverlays,
   timedPunches,
 } from "@clipcat/core";
-import { type Ref, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { type CSSProperties, type Ref, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { mediaUrl } from "../format";
+import { previewFrame } from "./CaptionOverlay";
 
 /** A moment in one recording. */
 export type Playhead = { sourceId: string; time: number };
@@ -63,6 +69,16 @@ export function punchViewBox(source: Source, item: [number, number], punch: Pick
   return `inset(${pct(y)} ${pct(1 - x - w)} ${pct(1 - y - h)} ${pct(x)})`;
 }
 
+/** Where b-roll sits over the preview: the export's box, as shares of the stage's width (the stage is the frame's shape). */
+export function brollStyle(o: TimedOverlay, frame: { width: number; height: number }): CSSProperties {
+  const box = overlayBox(o, frame);
+  const at = (n: number) => `calc(${n} / ${frame.width} * 100cqw)`;
+  return { left: at(box.x), top: at(box.y), width: at(box.width), height: at(box.height), borderRadius: at(box.radius) };
+}
+
+/** Seconds b-roll video may drift from where it should be while playing before it is set right. */
+const DRIFT = 0.3;
+
 /** The kept stretch to play after `time` in `sourceId`, in timeline order, or null at the end. */
 export function nextKept(timeline: Timeline, sourceId: string, time: number, order: Map<string, number>) {
   const here = order.get(sourceId) ?? 0;
@@ -76,8 +92,9 @@ export function nextKept(timeline: Timeline, sourceId: string, time: number, ord
 
 /**
  * Plays the edit: the proxies of the recordings in order, jumping over every
- * cut. A paused seek may land inside a cut, so struck words can still be
- * looked at; playback leaves it at the next kept frame.
+ * cut, with punch-ins zooming and b-roll showing over it as the export will.
+ * A paused seek may land inside a cut, so struck words can still be looked
+ * at; playback leaves it at the next kept frame.
  */
 export function Preview({ project, onTime, ref }: Props) {
   const video = useRef<HTMLVideoElement>(null);
@@ -90,8 +107,12 @@ export function Preview({ project, onTime, ref }: Props) {
   const tall = project.aspectRatio === "9:16";
   const [offset, setOffset] = useState(0.5);
   const punches = useMemo(() => timedPunches(project, timeline), [project, timeline]);
-  const live = useRef({ timeline, order, sourceId, onTime, sources, tall, punches });
-  live.current = { timeline, order, sourceId, onTime, sources, tall, punches };
+  const overlays = useMemo(() => timedOverlays(project, timeline), [project, timeline]);
+  const broll = useRef<HTMLVideoElement>(null);
+  const [shown, setShown] = useState<TimedOverlay | null>(null);
+  const showing = useRef<TimedOverlay | null>(null);
+  const live = useRef({ timeline, order, sourceId, onTime, sources, tall, punches, overlays });
+  live.current = { timeline, order, sourceId, onTime, sources, tall, punches, overlays };
 
   useEffect(() => {
     if (!sourceId && sources[0]) setSourceId(sources[0].id);
@@ -116,7 +137,7 @@ export function Preview({ project, onTime, ref }: Props) {
     let handle = 0;
     let reported = Number.NaN;
     const check = () => {
-      const { timeline: tl, order: ord, sourceId: sid, onTime: report, sources: all, tall: narrow, punches: zooms } = live.current;
+      const { timeline: tl, order: ord, sourceId: sid, onTime: report, sources: all, tall: narrow, punches: zooms, overlays: rolls } = live.current;
       if (!sid) return;
       const t = v.currentTime;
       const here = all.find((s) => s.id === sid);
@@ -127,6 +148,23 @@ export function Preview({ project, onTime, ref }: Props) {
       const item = tl.items.find((i) => i.sourceId === sid && t >= i.sourceStart && t < i.sourceEnd);
       const box = here && punch && item && out !== null ? punchViewBox(here, [item.sourceStart, item.sourceEnd], punch, punchZoom(punch, out), narrow) : "";
       if (v.style.getPropertyValue("object-view-box") !== box) v.style.setProperty("object-view-box", box);
+      // B-roll shows over it, a video kept in step with the edit.
+      const roll = out === null ? null : overlayAt(rolls, out);
+      if (roll?.id !== showing.current?.id || roll?.asset.id !== showing.current?.asset.id) {
+        showing.current = roll;
+        setShown(roll);
+      }
+      const b = broll.current;
+      if (roll && out !== null && b && roll.asset.kind === "video") {
+        const want = overlayTime(roll, out);
+        if (v.paused) {
+          if (!b.paused) b.pause();
+          if (Math.abs(b.currentTime - want) > 0.04) b.currentTime = want;
+        } else {
+          if (Math.abs(b.currentTime - want) > DRIFT) b.currentTime = want;
+          if (b.paused) void b.play().catch(() => {});
+        }
+      }
       if (v.paused || !(Math.abs(t - reported) < REPORT_STEP)) {
         reported = t;
         report({ sourceId: sid, time: t });
@@ -163,6 +201,16 @@ export function Preview({ project, onTime, ref }: Props) {
     if (tall && v && here) setOffset(previewOffset(timeline, here, v.currentTime));
   }, [tall, timeline, sources, sourceId]);
 
+  // Accepting, moving or removing b-roll shows at once, even while paused.
+  useEffect(() => {
+    const v = video.current;
+    if (!v || !sourceId) return;
+    const out = sourceToOutput(timeline, sourceId, v.currentTime);
+    const roll = out === null ? null : overlayAt(overlays, out);
+    showing.current = roll;
+    setShown(roll);
+  }, [overlays, timeline, sourceId]);
+
   // The preview plays at the export's speed; loading another recording resets the rate, so it is set again then.
   const speed = project.speed;
   useEffect(() => {
@@ -175,23 +223,35 @@ export function Preview({ project, onTime, ref }: Props) {
   const source = sources.find((s) => s.id === sourceId);
   const shape = tall ? " project__video--tall" : "";
   if (!source?.prep) return <div className={`project__video project__video--pending${shape}`} />;
+  const shownPrep = shown?.asset.prep;
   return (
-    <video
-      ref={video}
-      className={`project__video${shape}`}
-      // The vertical export's crop, shown by covering a 9:16 box and sliding the picture.
-      style={tall ? { objectPosition: `${offset * 100}% 50%` } : undefined}
-      src={mediaUrl(project.id, source.prep.proxy)}
-      controls
-      preload="auto"
-      onLoadedMetadata={(e) => {
-        e.currentTarget.playbackRate = speed;
-        const next = pending.current;
-        pending.current = null;
-        if (!next) return;
-        e.currentTarget.currentTime = next.time;
-        if (next.play) void e.currentTarget.play().catch(() => {});
-      }}
-    />
+    <>
+      <video
+        ref={video}
+        className={`project__video${shape}`}
+        // The vertical export's crop, shown by covering a 9:16 box and sliding the picture.
+        style={tall ? { objectPosition: `${offset * 100}% 50%` } : undefined}
+        src={mediaUrl(project.id, source.prep.proxy)}
+        controls
+        preload="auto"
+        onLoadedMetadata={(e) => {
+          e.currentTarget.playbackRate = speed;
+          const next = pending.current;
+          pending.current = null;
+          if (!next) return;
+          e.currentTarget.currentTime = next.time;
+          if (next.play) void e.currentTarget.play().catch(() => {});
+        }}
+      />
+      {shown && shownPrep && (
+        <div className="broll" style={brollStyle(shown, previewFrame(project))} aria-hidden>
+          {shown.asset.kind === "video" ? (
+            <video ref={broll} key={shown.id} className="broll__media" src={mediaUrl(project.id, shownPrep.preview)} muted playsInline preload="auto" />
+          ) : (
+            <img className="broll__media" src={mediaUrl(project.id, shownPrep.preview)} alt="" />
+          )}
+        </div>
+      )}
+    </>
   );
 }

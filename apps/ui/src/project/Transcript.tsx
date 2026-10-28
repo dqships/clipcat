@@ -1,5 +1,5 @@
 import { type EditOp, type Project, type Word, isWordKept } from "@clipcat/core";
-import { Scissors, Undo2, ZoomIn } from "lucide-react";
+import { Image, Scissors, Undo2, ZoomIn } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ICON_STROKE } from "../icons";
 import type { Playhead } from "./Preview";
@@ -20,21 +20,26 @@ export function orderedWords(project: Project): Word[] {
 /**
  * The transcript as the edit: struck words are cut, and cutting words cuts
  * the video. Click a word to jump there, shift-click to select a run, then
- * Delete to cut it (or to restore it, when it is all cut already), or punch in
- * on it so the picture zooms there.
+ * Delete to cut it (or to restore it, when it is all cut already), punch in on
+ * it so the picture zooms there, or show b-roll over it.
  */
 export function Transcript({ project, playhead, onSeek, onEdit }: Props) {
   const words = useMemo(() => orderedWords(project), [project]);
   const [anchor, setAnchor] = useState<number | null>(null);
   const [focus, setFocus] = useState<number | null>(null);
   const proposed = useMemo(
-    () => new Set(project.proposals.filter((p) => p.type !== "silence" && !p.punch && p.status === "pending").flatMap((p) => p.wordIds)),
+    () => new Set(project.proposals.filter((p) => p.type !== "silence" && !p.punch && !p.overlay && p.status === "pending").flatMap((p) => p.wordIds)),
     [project.proposals],
   );
   const punched = useMemo(
     () => new Set(project.proposals.filter((p) => p.punch && p.status === "accepted").flatMap((p) => p.wordIds)),
     [project.proposals],
   );
+  const covered = useMemo(
+    () => new Set(project.proposals.filter((p) => p.overlay && p.status === "accepted").flatMap((p) => p.wordIds)),
+    [project.proposals],
+  );
+  const media = project.assets.filter((a) => a.prep);
   const kept = useMemo(() => words.map((w) => isWordKept(project.segments, w)), [words, project.segments]);
   const names = new Map(project.sources.map((s) => [s.id, s.name]));
   const several = project.sources.length > 1;
@@ -95,6 +100,26 @@ export function Transcript({ project, playhead, onSeek, onEdit }: Props) {
                     Punch in
                   </button>
                 )}
+                {oneRecording && media.length > 0 && (
+                  <label className="editor__broll">
+                    <Image className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
+                    <select
+                      className="field__control"
+                      aria-label="Show b-roll over the selection"
+                      value=""
+                      onChange={(e) => {
+                        if (e.target.value) onEdit({ type: "overlay", wordIds: selected.map((w) => w.id), assetId: e.target.value, placement: "full" });
+                      }}
+                    >
+                      <option value="">B-roll…</option>
+                      {media.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
               </>
             )}
           </>
@@ -109,6 +134,7 @@ export function Transcript({ project, playhead, onSeek, onEdit }: Props) {
           if (!kept[i]) classes.push("word--cut");
           else if (proposed.has(w.id)) classes.push("word--proposed");
           if (kept[i] && punched.has(w.id)) classes.push("word--punched");
+          if (kept[i] && covered.has(w.id)) classes.push("word--broll");
           if (i === current) classes.push("word--current");
           if (i >= from && i <= to) classes.push("word--selected");
           return (

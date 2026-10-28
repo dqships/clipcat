@@ -100,6 +100,16 @@ seconds of no zoom between them. They follow their words through later edits.
 The export zooms with crop/scale and zoompan, aimed at the face inside the
 frame's crop, and the preview shows the same zoom.
 
+B-roll shows your own pictures and clips over the speaker while they keep
+talking, full frame or picture in picture (a rectangle, square or circle in
+any corner). Add them in the B-roll panel: ClipCat makes a light preview copy
+and a few frames of each, and the AI editor looks at the frames and writes
+what each one shows (you can correct it). From then on it suggests b-roll
+where a line matches, or you can select words and pick one from "B-roll…".
+The export overlays the original clip (or the picture) for its stretch, with
+the window's corners masked, under the captions; the preview places it with
+the same layout.
+
 Editing happens in the transcript: click a word to jump there, shift-click to
 select a run, and press Delete to cut it (again to restore). Suggested cuts,
 from the pause finder and from Claude, are accepted or rejected under the

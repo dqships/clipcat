@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { initialSegments, setRange } from "@clipcat/core";
-import { counter, source, words } from "@clipcat/core/fixtures";
+import { asset, counter, source, words } from "@clipcat/core/fixtures";
 import { JobQueue, type JobEvent } from "../jobs/queue";
 import { ProjectStore } from "../store/projects";
 import { type Agent, type AgentRun, AnalysisRunner } from "./analyze";
@@ -225,5 +225,40 @@ describe("AnalysisRunner shorts", () => {
     // A hard link where the disk allows it: the same file, not a copy.
     if (process.platform !== "win32") expect((await stat(proxy)).ino).toBe((await stat(join(store.mediaDir(id, "a"), "proxy.mp4"))).ino);
     expect((await store.list()).find((x) => x.id === short.id)?.origin).toBe("Long talk");
+  });
+});
+
+describe("AnalysisRunner media", () => {
+  it("shows the agent each item's frames and saves what it says, keeping what the user wrote", async () => {
+    const { agent, runs, replies } = scripted([
+      { descriptions: [{ media: 0, description: "A drone over a city" }] },
+      { descriptions: [{ media: 0, description: "A drone over a city" }, { media: 1, description: "A bar chart" }] },
+    ]);
+    const { store, queue, runner, id } = await setup(agent);
+    await store.update(id, null, (p) => {
+      p.assets = [asset("m1", "video"), { ...asset("m2", "image") }, { ...asset("m3", "image"), description: "Mine" }, { ...asset("m4"), prep: null }];
+    });
+    runner.describe(id);
+    await queue.idle(id);
+
+    expect(runs[0]!.images).toEqual([join(store.dir(id), "media/assets/m1/frame-1.jpg"), join(store.dir(id), "media/assets/m2/frame-1.jpg")]);
+    expect(runs[0]!.prompt).toContain("[1] m2.png: picture, 1 frame");
+    expect(replies[0]).toContain("media 1: not described");
+    const p = await store.get(id);
+    expect(p.assets.map((a) => a.description)).toEqual(["A drone over a city", "A bar chart", "Mine", ""]);
+  });
+
+  it("offers prepared media to the editor and turns its b-roll into proposals", async () => {
+    const broll = { type: "visual", from: 4, to: 7, media: 0, placement: "pip", reason: "Shows it", confidence: 0.6 };
+    const { agent, runs } = scripted([{ proposals: [broll] }]);
+    const { store, queue, runner, id } = await setup(agent);
+    await store.update(id, null, (p) => {
+      p.assets = [{ ...asset("m1"), description: "A drone over a city" }];
+    });
+    await runner.analyze(id, "");
+    await queue.idle(id);
+
+    expect(runs[0]!.prompt).toContain("## Media for b-roll\n[0] m1.mp4 (video, 10.0s): A drone over a city");
+    expect((await store.get(id)).proposals[0]).toMatchObject({ type: "visual", status: "pending", overlay: { assetId: "m1", placement: "pip" } });
   });
 });

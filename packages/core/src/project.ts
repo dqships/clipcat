@@ -70,6 +70,25 @@ export const Punch = z.object({
   scale: z.number().min(1.05).max(1.6),
 });
 
+/** How b-roll covers the speaker: the whole frame, or a window in one corner. */
+export const OverlayPlacement = z.enum(["full", "pip"]);
+/** The window's shape for picture in picture. */
+export const PipShape = z.enum(["rectangle", "square", "circle"]);
+export const PipCorner = z.enum(["top-left", "top-right", "bottom-left", "bottom-right"]);
+
+/** B-roll: one of the project's media shown over a source range, while the speaker's sound plays on. */
+export const Overlay = z.object({
+  range: z.tuple([z.number(), z.number()]),
+  assetId: z.string(),
+  placement: OverlayPlacement,
+  shape: PipShape.default("rectangle"),
+  corner: PipCorner.default("top-right"),
+  /** The window's width as a share of the frame's (its shorter side, for a square or circle). */
+  size: z.number().min(0.2).max(0.6).default(0.35),
+  /** Seconds into a video where it starts playing. */
+  offset: z.number().nonnegative().default(0),
+});
+
 export const Proposal = z.object({
   id: z.string(),
   type: ProposalType,
@@ -83,6 +102,34 @@ export const Proposal = z.object({
   status: ProposalStatus,
   /** Set on a punch-in, which cuts nothing; accepted, it zooms. */
   punch: Punch.nullable().default(null),
+  /** Set on b-roll ("visual"), which cuts nothing either; accepted, it shows. */
+  overlay: Overlay.nullable().default(null),
+});
+
+/**
+ * A picture or a video the user added for b-roll. It is read from where it
+ * is; what the preview and the AI editor look at is prepared beside the
+ * project.
+ */
+export const Asset = z.object({
+  id: z.string(),
+  name: z.string(),
+  path: z.string(),
+  kind: z.enum(["video", "image"]),
+  media: z.object({
+    /** 0 for a picture. */
+    duration: z.number().nonnegative(),
+    width: z.number().int().nonnegative(),
+    height: z.number().int().nonnegative(),
+  }),
+  /**
+   * Relative to the project folder: what the preview shows (a light H.264
+   * copy of a video, a PNG of a picture, which the export also uses) and a
+   * few small frames for the AI editor to look at. Null until prepared.
+   */
+  prep: z.object({ preview: z.string(), frames: z.array(z.string()) }).nullable().default(null),
+  /** What it shows, in a sentence or two: written by the AI editor or the user, read when placing b-roll. */
+  description: z.string().max(1000).default(""),
 });
 
 const captionFields = {
@@ -155,6 +202,8 @@ export const Project = z.object({
   /** The AI editor's title for the video; empty until it has run. */
   suggestedTitle: z.string().default(""),
   sources: z.array(Source),
+  /** Pictures and videos for b-roll. */
+  assets: z.array(Asset).default([]),
   transcript: z.array(Word),
   segments: z.array(Segment),
   proposals: z.array(Proposal),
@@ -177,6 +226,11 @@ export type Segment = z.infer<typeof Segment>;
 export type Proposal = z.infer<typeof Proposal>;
 export type PunchStyle = z.infer<typeof PunchStyle>;
 export type Punch = z.infer<typeof Punch>;
+export type OverlayPlacement = z.infer<typeof OverlayPlacement>;
+export type PipShape = z.infer<typeof PipShape>;
+export type PipCorner = z.infer<typeof PipCorner>;
+export type Overlay = z.infer<typeof Overlay>;
+export type Asset = z.infer<typeof Asset>;
 export type Captions = z.infer<typeof Captions>;
 export type Snapshot = z.infer<typeof Snapshot>;
 export type LastExport = z.infer<typeof LastExport>;

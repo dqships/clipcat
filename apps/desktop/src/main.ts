@@ -17,10 +17,12 @@ import { hydrateEnv } from "./ai/env";
 import { type Binary, binaryPath, probeVersion } from "./tools";
 import { broadcast, registerIpc } from "./ipc";
 import { JobQueue } from "./jobs/queue";
+import { IMAGE_EXTENSIONS, VIDEO_EXTENSIONS } from "./media/assets";
 import { encoderTestArgs, lazyEncoder, pickEncoder } from "./media/encoders";
 import { runFfmpeg } from "./media/run";
 import { closeFaceDetector, faceDetector, faceDetectorProblem, setFacePage } from "./faceDetector";
-import { realDeps } from "./pipeline/deps";
+import { AssetPipeline } from "./pipeline/assets";
+import { realAssetDeps, realDeps } from "./pipeline/deps";
 import { ExportRunner } from "./pipeline/export";
 import { ImportPipeline } from "./pipeline/import";
 import { APP_ORIGIN, registerSchemes, serveMedia, serveUi } from "./protocol";
@@ -133,6 +135,13 @@ function startPipeline() {
     queue,
     changed,
   });
+  const media = new AssetPipeline({
+    ...realAssetDeps({ ffmpeg: tool("ffmpeg"), ffprobe: tool("ffprobe"), encoder }),
+    store,
+    queue,
+    changed,
+    describe: (id) => analysis.describe(id),
+  });
   const exporter = new ExportRunner({
     store,
     queue,
@@ -142,7 +151,7 @@ function startPipeline() {
     encoder,
     fontsDir: app.isPackaged ? join(process.resourcesPath, "fonts") : join(REPO_ROOT, "apps", "desktop", "resources", "fonts"),
   });
-  return { store, settings, keys, queue, pipeline, analysis, exporter };
+  return { store, settings, keys, queue, pipeline, media, analysis, exporter };
 }
 
 /** A file name from the video's title: no characters Windows or macOS refuse. */
@@ -197,7 +206,7 @@ if (!squirrelLaunch) {
   if (!app.requestSingleInstanceLock()) app.quit();
 
   app.whenReady().then(() => {
-    const { store, settings, keys, queue, pipeline, analysis, exporter } = startPipeline();
+    const { store, settings, keys, queue, pipeline, media, analysis, exporter } = startPipeline();
     const aiStatus = async () => {
       const host = await hostEnv;
       const [claude, codex, current, key] = await Promise.all([probeClaude(host), probeCodex(host), settings.get(), keys.get()]);
@@ -231,7 +240,21 @@ if (!squirrelLaunch) {
           const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);
           return result.canceled ? [] : result.filePaths;
         },
+        "media:pick": async (_, event) => {
+          const win = BrowserWindow.fromWebContents(event.sender);
+          const options: Electron.OpenDialogOptions = {
+            title: "Add b-roll",
+            properties: ["openFile", "multiSelections"],
+            filters: [
+              { name: "Pictures and videos", extensions: [...IMAGE_EXTENSIONS, ...VIDEO_EXTENSIONS] },
+              { name: "All files", extensions: ["*"] },
+            ],
+          };
+          const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);
+          return result.canceled ? [] : result.filePaths;
+        },
         "project:import": ({ projectId, files }) => pipeline.import(files, projectId),
+        "project:add-media": ({ id, files }) => media.add(id, files),
         "project:get": ({ id }) => store.get(id),
         "project:remove": async ({ id }) => {
           queue.cancel(id);
@@ -264,6 +287,7 @@ if (!squirrelLaunch) {
         "project:edit": async ({ id, revision, op }) => {
           const next = await store.update(id, revision, (p) => applyEdit(p, op, () => `g${randomUUID().slice(0, 8)}`));
           broadcast("project:changed", { id, revision: next.revision });
+          if (op.type === "remove-asset") void media.forget(id, op.assetId);
           return next;
         },
         "project:export": async ({ id, format }, event) => {
@@ -290,7 +314,7 @@ if (!squirrelLaunch) {
       DEV_URL,
     );
     if (isSmokeRun()) startSmokeTimer();
-    else void pipeline.resume();
+    else void pipeline.resume().then(() => media.resume());
     createWindow();
   });
 

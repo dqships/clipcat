@@ -11,12 +11,16 @@ import {
   CaptionsPatch,
   type Project,
   type Proposal,
+  OverlayPlacement,
+  PipCorner,
+  PipShape,
   ProposalStatus,
   PunchStyle,
   type Range,
   type Snapshot,
   type Word,
 } from "./project";
+import { defaultOverlay, overlayProposal } from "./overlays";
 import { PUNCH_SCALE, punchProposal, punchRange } from "./punchins";
 
 export const EditOp = z.discriminatedUnion("type", [
@@ -36,6 +40,21 @@ export const EditOp = z.discriminatedUnion("type", [
   z.object({ type: z.literal("punch"), wordIds: z.array(z.string()).min(1).max(10_000), style: PunchStyle }),
   /** Another style for a punch-in. Not an undo step: the list shows it. */
   z.object({ type: z.literal("punch-style"), id: z.string(), style: PunchStyle }),
+  /** Show b-roll over these words (one recording's). An undo step, like a punch-in. */
+  z.object({ type: z.literal("overlay"), wordIds: z.array(z.string()).min(1).max(10_000), assetId: z.string(), placement: OverlayPlacement }),
+  /** Where and how b-roll shows. Not an undo step: the list shows it. */
+  z.object({
+    type: z.literal("overlay-style"),
+    id: z.string(),
+    placement: OverlayPlacement.optional(),
+    shape: PipShape.optional(),
+    corner: PipCorner.optional(),
+    size: z.number().min(0.2).max(0.6).optional(),
+  }),
+  /** What a picture or video shows, for the AI editor. Not an undo step. */
+  z.object({ type: z.literal("describe"), assetId: z.string(), description: z.string().max(1000) }),
+  /** Takes a picture or video out of the project, with the b-roll that used it. Not an undo step. */
+  z.object({ type: z.literal("remove-asset"), assetId: z.string() }),
   z.object({ type: z.literal("undo") }),
   z.object({ type: z.literal("redo") }),
 ]);
@@ -75,8 +94,8 @@ function wordRanges(project: Project, ids: Set<string>): { sourceId: string; ran
 
 /**
  * Applies `op` to a copy of `project` and returns it. Cuts and decisions
- * record an undo step, and so does a new punch-in; caption style, speed, shape,
- * framing, punch-in style, undo and redo don't. Unknown word or proposal ids are an error,
+ * record an undo step, and so does a new punch-in or b-roll; caption style,
+ * speed, shape, framing, punch-in and b-roll style, media, undo and redo don't. Unknown word or proposal ids are an error,
  * not a silent no-op, so a stale UI finds out.
  */
 export function applyEdit(project: Project, op: EditOp, id: IdFactory): Project {
@@ -122,19 +141,44 @@ export function applyEdit(project: Project, op: EditOp, id: IdFactory): Project 
     return p;
   }
 
-  // A new punch-in joins as rejected before the undo step is taken, so undoing it takes it away again.
+  if (op.type === "overlay-style") {
+    const proposal = p.proposals.find((x) => x.id === op.id);
+    if (!proposal?.overlay) throw new Error(`Unknown b-roll: ${op.id}`);
+    const { type: _, id: __, ...style } = op;
+    proposal.overlay = { ...proposal.overlay, ...Object.fromEntries(Object.entries(style).filter(([, v]) => v !== undefined)) };
+    return p;
+  }
+
+  if (op.type === "describe") {
+    const asset = p.assets.find((a) => a.id === op.assetId);
+    if (!asset) throw new Error(`Unknown media: ${op.assetId}`);
+    asset.description = op.description.trim();
+    return p;
+  }
+
+  if (op.type === "remove-asset") {
+    if (!p.assets.some((a) => a.id === op.assetId)) throw new Error(`Unknown media: ${op.assetId}`);
+    p.assets = p.assets.filter((a) => a.id !== op.assetId);
+    p.proposals = p.proposals.filter((x) => x.overlay?.assetId !== op.assetId);
+    return p;
+  }
+
+  // A new punch-in or b-roll joins as rejected before the undo step is taken, so undoing it takes it away again.
   let added: Proposal | null = null;
-  if (op.type === "punch") {
+  if (op.type === "punch" || op.type === "overlay") {
     const ids = new Set(op.wordIds);
     const words = p.transcript.filter((w) => ids.has(w.id));
     if (words.length !== ids.size) throw new Error(`Unknown words: ${op.wordIds.filter((w) => !p.transcript.some((x) => x.id === w)).slice(0, 5).join(", ")}`);
     const sourceId = words[0]!.sourceId;
-    if (words.some((w) => w.sourceId !== sourceId)) throw new Error("A punch-in stays inside one recording");
-    added = punchProposal(
-      { id: id(), sourceId, wordIds: words.sort((a, b) => a.start - b.start).map((w) => w.id), reason: "", confidence: 1, status: "rejected" },
-      punchRange(words),
-      op.style,
-    );
+    const what = op.type === "punch" ? "A punch-in" : "B-roll";
+    if (words.some((w) => w.sourceId !== sourceId)) throw new Error(`${what} stays inside one recording`);
+    const fields = { id: id(), sourceId, wordIds: words.sort((a, b) => a.start - b.start).map((w) => w.id), reason: "", confidence: 1, status: "rejected" as const };
+    if (op.type === "punch") {
+      added = punchProposal(fields, punchRange(words), op.style);
+    } else {
+      if (!p.assets.some((a) => a.id === op.assetId)) throw new Error(`Unknown media: ${op.assetId}`);
+      added = overlayProposal(fields, defaultOverlay(punchRange(words), op.assetId, op.placement));
+    }
     p.proposals.push(added);
   }
 

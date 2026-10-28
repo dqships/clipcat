@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { initialSegments, isWordKept } from "./edits";
 import { EditOp, HISTORY_LIMIT, applyEdit } from "./editor";
-import { counter, source, words } from "./fixtures";
+import { asset, counter, source, words } from "./fixtures";
 import { Project } from "./project";
 
 function project() {
@@ -131,5 +131,38 @@ describe("applyEdit punch-ins", () => {
     const p = project();
     expect(() => applyEdit(p, { type: "punch", wordIds: ["nope"], style: "cut" }, counter("n"))).toThrow("Unknown words: nope");
     expect(() => applyEdit(p, { type: "punch-style", id: "x1", style: "cut" }, counter("n"))).toThrow("Unknown punch-in");
+  });
+});
+
+describe("applyEdit b-roll", () => {
+  const withMedia = () => Project.parse({ ...project(), assets: [asset("m1")] });
+
+  it("adds b-roll on words as one undo step, and restyles it without one", () => {
+    const p = withMedia();
+    const added = applyEdit(p, { type: "overlay", wordIds: ["a-w2", "a-w3"], assetId: "m1", placement: "full" }, counter("n"));
+    const o = added.proposals.at(-1)!;
+    expect(o).toMatchObject({ type: "visual", status: "accepted", cuts: [], overlay: { assetId: "m1", placement: "full", corner: "top-right" } });
+    expect(added.history.past).toHaveLength(1);
+    expect(kept(added)).toEqual(kept(p));
+
+    const styled = applyEdit(added, { type: "overlay-style", id: o.id, placement: "pip", shape: "circle" }, counter("n"));
+    expect(styled.proposals.at(-1)!.overlay).toMatchObject({ placement: "pip", shape: "circle", size: 0.35 });
+    expect(styled.history.past).toHaveLength(1);
+    expect(applyEdit(styled, { type: "undo" }, counter("n")).proposals.at(-1)!.status).toBe("rejected");
+  });
+
+  it("describes and removes media, and the b-roll that used it goes too", () => {
+    const p = applyEdit(withMedia(), { type: "overlay", wordIds: ["a-w2"], assetId: "m1", placement: "pip" }, counter("n"));
+    expect(applyEdit(p, { type: "describe", assetId: "m1", description: " Stock footage " }, counter("n")).assets[0]!.description).toBe("Stock footage");
+    const removed = applyEdit(p, { type: "remove-asset", assetId: "m1" }, counter("n"));
+    expect(removed.assets).toEqual([]);
+    expect(removed.proposals.some((x) => x.overlay)).toBe(false);
+  });
+
+  it("refuses unknown media and b-roll", () => {
+    const p = withMedia();
+    expect(() => applyEdit(p, { type: "overlay", wordIds: ["a-w2"], assetId: "nope", placement: "full" }, counter("n"))).toThrow("Unknown media");
+    expect(() => applyEdit(p, { type: "overlay-style", id: "x1", size: 0.3 }, counter("n"))).toThrow("Unknown b-roll");
+    expect(() => applyEdit(p, { type: "describe", assetId: "nope", description: "" }, counter("n"))).toThrow("Unknown media");
   });
 });

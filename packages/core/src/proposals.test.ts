@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { counter, source, words } from "./fixtures";
+import { asset, counter, source, words } from "./fixtures";
 import { validateProposals } from "./proposals";
 
 const ws = [...words("a", "hi I am I am Dan and today"), ...words("b", "we start now", 0)];
@@ -102,5 +102,48 @@ describe("validateProposals punch-ins", () => {
     expect(proposals.map((p) => p.type)).toEqual(["tighten"]);
     expect(errors).toHaveLength(4);
     expect(errors.at(-1)).toContain("sits on words another proposal cuts");
+  });
+});
+
+describe("validateProposals b-roll", () => {
+  const long = [...words("a", "this is the one thing you need to remember about it", 0)];
+  const one = [source("a", 8)];
+  const assets = [asset("m1"), asset("m2")];
+
+  it("turns b-roll into a range to cover that cuts nothing", () => {
+    const { proposals, errors } = validateProposals(
+      { proposals: [{ type: "visual", from: 2, to: 5, media: 1, placement: "pip", reason: "Shows the thing", confidence: 0.7 }] },
+      long,
+      one,
+      counter("p"),
+      assets,
+    );
+    expect(errors).toEqual([]);
+    expect(proposals[0]).toMatchObject({ type: "visual", cuts: [], wordIds: ["a-w2", "a-w3", "a-w4", "a-w5"], overlay: { assetId: "m2", placement: "pip" } });
+    expect(proposals[0]!.overlay!.range).toEqual([long[2]!.start, long[5]!.end]);
+  });
+
+  it("needs real media, a placement and a sensible length, only on b-roll, and gives way to a cut", () => {
+    const { proposals, errors } = validateProposals(
+      {
+        proposals: [
+          { type: "visual", from: 0, to: 4, media: 7, placement: "full", reason: "x", confidence: 0.5 },
+          { type: "visual", from: 0, to: 4, media: 0, reason: "x", confidence: 0.5 },
+          { type: "visual", from: 2, to: 2, media: 0, placement: "full", reason: "x", confidence: 0.5 },
+          { type: "cleanup", from: 1, to: 1, media: 0, reason: "x", confidence: 0.5 },
+          { type: "visual", from: 5, to: 9, media: 0, placement: "full", reason: "x", confidence: 0.5 },
+          { type: "punch-in", from: 5, to: 9, punchStyle: "cut", reason: "x", confidence: 0.4 },
+          { type: "tighten", from: 9, to: 9, reason: "x", confidence: 0.9 },
+        ],
+      },
+      long,
+      one,
+      counter("p"),
+      assets,
+    );
+    expect(proposals.map((p) => p.type)).toEqual(["tighten"]);
+    expect(errors).toHaveLength(6);
+    expect(errors[0]).toContain("media to a number from the media list (0..1)");
+    expect(errors.at(-1)).toContain("b-roll at word 5: it sits on words another proposal cuts");
   });
 });

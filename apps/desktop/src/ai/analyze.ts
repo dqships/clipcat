@@ -1,16 +1,19 @@
 // The AI jobs: cut proposals for the whole video, cuts for one request ("cut
-// the part about pricing"), transcript corrections, and shorts (each saved as
-// its own vertical project). The agent reads the
-// numbered transcript and answers through its task's submit tool (or JSON).
+// the part about pricing"), transcript corrections, shorts (each saved as its
+// own vertical project), and descriptions of the user's b-roll media. The
+// agent reads the numbered transcript (or looks at the media's frames) and
+// answers through its task's submit tool (or JSON).
 // Every answer is checked against the real words: a first answer with
 // problems goes back once with the list, after which whatever checked out is
 // saved. Cuts arrive as pending proposals for the user to decide.
 
 import { randomUUID } from "node:crypto";
+import { join } from "node:path";
 import {
   AI_TYPES,
   AgentAnalysis,
   AgentCorrections,
+  AgentDescriptions,
   AgentShorts,
   type Project,
   type Proposal,
@@ -21,6 +24,7 @@ import {
   shortProject,
   spaceProposedPunches,
   validateCorrections,
+  validateDescriptions,
   validateProposals,
   validateShorts,
 } from "@clipcat/core";
@@ -31,12 +35,16 @@ import {
   type AgentTask,
   CORRECTIONS_TASK,
   CORRECTOR_PROMPT,
+  DESCRIBER_PROMPT,
+  DESCRIBE_TASK,
   EDITOR_PROMPT,
   SHORTS_PROMPT,
   SHORTS_TASK,
   analysisPrompt,
   correctionsPrompt,
+  describePrompt,
   orderedWords,
+  placeableAssets,
   shortsPrompt,
 } from "./prompt";
 
@@ -48,6 +56,8 @@ export type AgentRun = {
   /** The system prompt, without the task's answer instructions (each agent adds its own). */
   system: string;
   prompt: string;
+  /** JPEGs to show the agent with the prompt (absolute paths), for tasks that look at pictures. */
+  images?: string[];
   /** Called with the agent's raw answer. */
   submit: (input: unknown) => Promise<SubmitReply>;
   /** A short line for the progress UI ("Claude is reading the transcript"). */
@@ -72,6 +82,9 @@ export type AnalysisDeps = {
 const ATTEMPTS = 2;
 
 const shortId = () => randomUUID().slice(0, 8);
+
+/** Media described per run: three frames each keeps a run well inside what an agent takes in at once. */
+const DESCRIBE_BATCH = 20;
 
 /** What checking one answer found: the result to save, or problems to send back. */
 type Checked<T> = { result: T; problems: string[]; summary: string; saved: string };
@@ -98,6 +111,11 @@ export class AnalysisRunner {
     this.deps.queue.add(projectId, "correct", "Checking the transcript", (ctx) => this.runCorrections(projectId, ctx)).catch(() => {});
   }
 
+  /** Queues a pass that describes the media nobody has described yet, for placing b-roll. */
+  describe(projectId: string): void {
+    this.deps.queue.add(projectId, "describe", "Looking at your media", (ctx) => this.runDescribe(projectId, ctx)).catch(() => {});
+  }
+
   /** Queues a pass that picks up to `count` shorts of about `seconds` each and makes a project of each. */
   shorts(projectId: string, count: number, seconds: number): void {
     this.deps.queue.add(projectId, "shorts", "Finding shorts", (ctx) => this.runShorts(projectId, ctx, { count, seconds })).catch(() => {});
@@ -109,7 +127,7 @@ export class AnalysisRunner {
    */
   private async ask<T>(
     ctx: JobContext,
-    run: { task: AgentTask; system: string; prompt: string },
+    run: { task: AgentTask; system: string; prompt: string; images?: string[] },
     check: (input: unknown) => Checked<T> | { invalid: string[] },
   ): Promise<{ result: T; attempts: number; agent: string }> {
     const agent = await this.deps.agent();
@@ -149,7 +167,7 @@ export class AnalysisRunner {
       (input) => {
         const parsed = AgentAnalysis.safeParse(input);
         if (!parsed.success) return { invalid: parsed.error.issues.map((i) => `${i.path.join(".") || "input"}: ${i.message}`) };
-        const valid = validateProposals(parsed.data, words, project.sources, () => `a${shortId()}`);
+        const valid = validateProposals(parsed.data, words, project.sources, () => `a${shortId()}`, placeableAssets(project));
         // Spaced against the punch-ins already accepted; pending ones are being replaced.
         const spaced = spaceProposedPunches(project, valid.proposals, words);
         const { proposals } = spaced;
@@ -201,6 +219,39 @@ export class AnalysisRunner {
     });
     await this.deps.store.log(projectId, { type: "corrected", agent, corrections: result.size, attempts });
     this.deps.changed(updated);
+  }
+
+  async runDescribe(projectId: string, ctx: JobContext): Promise<void> {
+    const project = await this.deps.store.get(projectId);
+    const assets = project.assets.filter((a) => a.prep && !a.description).slice(0, DESCRIBE_BATCH);
+    if (assets.length === 0) return;
+    const dir = this.deps.store.dir(projectId);
+    const images = assets.flatMap((a) => a.prep!.frames.map((f) => join(dir, f)));
+
+    const { result, attempts, agent } = await this.ask<Map<string, string>>(
+      ctx,
+      { task: DESCRIBE_TASK, system: DESCRIBER_PROMPT, prompt: describePrompt(assets), images },
+      (input) => {
+        const parsed = AgentDescriptions.safeParse(input);
+        if (!parsed.success) return { invalid: parsed.error.issues.map((i) => `${i.path.join(".") || "input"}: ${i.message}`) };
+        const { descriptions, errors } = validateDescriptions(parsed.data, assets);
+        return {
+          result: descriptions,
+          problems: errors,
+          summary: `${errors.length} problems with the descriptions:`,
+          saved: `Saved ${descriptions.size} ${descriptions.size === 1 ? "description" : "descriptions"}.`,
+        };
+      },
+    );
+
+    const updated = await this.deps.store.update(projectId, null, (p) => {
+      // One the user wrote in the meantime stays.
+      for (const a of p.assets) if (!a.description) a.description = result.get(a.id) ?? "";
+    });
+    await this.deps.store.log(projectId, { type: "described", agent, media: result.size, attempts });
+    this.deps.changed(updated);
+    // More than one batch's worth goes on in another run.
+    if (updated.assets.some((a) => a.prep && !a.description && !result.has(a.id)) && assets.length === DESCRIBE_BATCH) this.describe(projectId);
   }
 
   async runShorts(projectId: string, ctx: JobContext, limits: { count: number; seconds: number }): Promise<void> {

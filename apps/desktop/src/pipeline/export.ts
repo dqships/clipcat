@@ -7,7 +7,7 @@
 
 import { copyFile, mkdir, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join } from "node:path";
-import { type Project, buildTimeline, captionCues, outputWords, timedPunches, toAss, toSrt } from "@clipcat/core";
+import { type Project, buildTimeline, captionCues, outputWords, timedOverlays, timedPunches, toAss, toSrt } from "@clipcat/core";
 import type { JobContext, JobQueue } from "../jobs/queue";
 import type { Encoder } from "../media/encoders";
 import {
@@ -81,7 +81,12 @@ export class ExportRunner {
       const inputs = new Map(
         project.sources.map((s) => [s.id, s.media.videoCodec || !s.prep ? s.path : join(store.dir(projectId), s.prep.proxy)]),
       );
-      const shape = { project, punches: timedPunches(project, timeline), format, fps, inputs, graphFile: "graph.txt" };
+      // B-roll video is read from the original; a picture from its prepared PNG, which ffmpeg reads whatever the original was.
+      const overlayInputs = new Map(
+        project.assets.map((a) => [a.id, a.kind === "video" || !a.prep ? a.path : join(store.dir(projectId), a.prep.preview)]),
+      );
+      const overlays = timedOverlays(project, timeline);
+      const shape = { project, punches: timedPunches(project, timeline), overlays, overlayInputs, format, fps, inputs, graphFile: "graph.txt" };
       const ffmpeg = async ({ graph, args }: { graph: string; args: string[] }, duration: number, from: number, to: number) => {
         await writeFile(join(work, "graph.txt"), graph);
         const part = { signal: ctx.signal, progress: (f: number | null, label?: string) => ctx.progress(from + (f ?? 0) * (to - from), label) };

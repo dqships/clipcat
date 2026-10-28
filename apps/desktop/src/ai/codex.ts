@@ -41,10 +41,12 @@ export async function probeCodex(host: HostEnv): Promise<AgentStatus> {
   return { status: "ready", version, detail: null };
 }
 
-/** One `codex exec`: the prompt on stdin, the final message written to `out`. */
-function exec(binary: string, dir: string, prompt: string, host: HostEnv, signal: AbortSignal): Promise<void> {
-  const args = [
+/** The arguments for one `codex exec`, with any pictures attached to the prompt. */
+export function execArgs(dir: string, images: string[] = []): string[] {
+  return [
     "exec",
+    // Comma-separated, and right after the subcommand so the variadic option can't swallow the "-" below.
+    ...(images.length > 0 ? ["--image", images.join(",")] : []),
     "--skip-git-repo-check",
     "--ephemeral",
     "--sandbox",
@@ -57,6 +59,11 @@ function exec(binary: string, dir: string, prompt: string, host: HostEnv, signal
     join(dir, "answer.json"),
     "-",
   ];
+}
+
+/** One `codex exec`: the prompt on stdin, the final message written to `out`. */
+function exec(binary: string, dir: string, prompt: string, images: string[] | undefined, host: HostEnv, signal: AbortSignal): Promise<void> {
+  const args = execArgs(dir, images);
   const shell = needsShell(binary);
   return new Promise((resolve, reject) => {
     const child = spawn(shell ? `"${binary}"` : binary, shell ? args.map(quoteArg) : args, {
@@ -101,9 +108,9 @@ export function codexAgent(host: HostEnv): Agent {
         await writeFile(join(dir, "schema.json"), JSON.stringify(run.task.jsonSchema));
         let prompt = `${instructions}\n\n${run.prompt}`;
         for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
-          run.activity(attempt === 1 ? "Codex is reading the transcript" : "Codex is fixing its answer");
+          run.activity(attempt > 1 ? "Codex is fixing its answer" : run.images?.length ? "Codex is looking at your media" : "Codex is reading the transcript");
           await rm(join(dir, "answer.json"), { force: true });
-          await exec(binary, dir, prompt, host, run.signal);
+          await exec(binary, dir, prompt, run.images, host, run.signal);
           const raw = await readFile(join(dir, "answer.json"), "utf8").catch(() => "");
           if (!raw.trim()) throw new Error("Codex finished without an answer");
           let answer: unknown;

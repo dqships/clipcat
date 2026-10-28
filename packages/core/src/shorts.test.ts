@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { initialSegments, setRange } from "./edits";
-import { counter, source, words } from "./fixtures";
+import { asset, counter, source, words } from "./fixtures";
+import { defaultOverlay, overlayProposal } from "./overlays";
+import { punchProposal } from "./punchins";
 import { buildTimeline } from "./timeline";
 import { Project } from "./project";
 import { keptParts, shortProject, shortSegments, validateShorts } from "./shorts";
@@ -119,7 +121,11 @@ describe("shortProject", () => {
         { id: "in", type: "silence", sourceId: "a", cuts: [[2, 3]], wordIds: [], reason: "Pause", confidence: 0.9, status: "pending" },
         { id: "out", type: "silence", sourceId: "a", cuts: [[9, 10]], wordIds: [], reason: "Pause", confidence: 0.9, status: "pending" },
         { id: "done", type: "cleanup", sourceId: "a", cuts: [[3, 4]], wordIds: [], reason: "Um", confidence: 0.9, status: "rejected" },
+        punchProposal({ id: "zoom-in", sourceId: "a", wordIds: [], reason: "", confidence: 0.5, status: "pending" }, [4, 6], "cut"),
+        punchProposal({ id: "zoom-out", sourceId: "a", wordIds: [], reason: "", confidence: 0.5, status: "pending" }, [9, 11], "cut"),
+        overlayProposal({ id: "broll-out", sourceId: "a", wordIds: [], reason: "", confidence: 0.5, status: "pending" }, defaultOverlay([10, 12], "m1", "full")),
       ],
+      assets: [asset("m1")],
       captions: { size: 70 },
       createdAt: "t",
       updatedAt: "t",
@@ -130,7 +136,9 @@ describe("shortProject", () => {
     expect(short.origin).toEqual({ projectId: "long", name: "Long talk", reason: "Bold claim" });
     expect(short.sources.map((s) => s.id)).toEqual(["a"]);
     expect(short.transcript.every((w) => w.sourceId === "a")).toBe(true);
-    expect(short.proposals.map((p) => p.id)).toEqual(["in"]);
+    // Suggestions outside the short stay behind, punch-ins and b-roll included; the media comes along.
+    expect(short.proposals.map((p) => p.id)).toEqual(["in", "zoom-in"]);
+    expect(short.assets.map((a) => a.id)).toEqual(["m1"]);
     expect(short.captions.size).toBe(70);
   });
 });
