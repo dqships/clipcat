@@ -5,7 +5,8 @@
 // Finding and checking the CLI follows Diffusion Studio's editor
 // (packages/agent-chat/src/host/claude.ts).
 
-import { createSdkMcpServer, query, tool } from "@anthropic-ai/claude-agent-sdk";
+import { readFile } from "node:fs/promises";
+import { type SDKUserMessage, createSdkMcpServer, query, tool } from "@anthropic-ai/claude-agent-sdk";
 import type { Agent, AgentRun } from "./analyze";
 import { type HostEnv, compareVersions, parseVersion, resolveBinary, resolveClaudeExecutable, runOnce } from "./env";
 
@@ -52,6 +53,21 @@ export async function probeClaude(host: HostEnv): Promise<AgentStatus> {
   return { status: "ready", version, detail: null };
 }
 
+/** The prompt as the SDK takes it: plain text, or one message with the pictures before the text. */
+export async function claudePrompt(text: string, images: string[] = []): Promise<string | AsyncIterable<SDKUserMessage>> {
+  if (images.length === 0) return text;
+  const pictures = await Promise.all(
+    images.map(async (path) => ({
+      type: "image" as const,
+      source: { type: "base64" as const, media_type: "image/jpeg" as const, data: (await readFile(path)).toString("base64") },
+    })),
+  );
+  const message: SDKUserMessage = { type: "user", message: { role: "user", content: [...pictures, { type: "text", text }] }, parent_tool_use_id: null };
+  return (async function* () {
+    yield message;
+  })();
+}
+
 export function claudeAgent(host: HostEnv, appVersion: string): Agent {
   return {
     label: "Claude",
@@ -72,7 +88,7 @@ export function claudeAgent(host: HostEnv, appVersion: string): Agent {
       let stderr = "";
       try {
         const q = query({
-          prompt: run.prompt,
+          prompt: await claudePrompt(run.prompt, run.images),
           options: {
             pathToClaudeCodeExecutable: resolveClaudeExecutable(binary),
             systemPrompt: `${run.system}\n\n${task.toolAnswer}`,
@@ -91,7 +107,7 @@ export function claudeAgent(host: HostEnv, appVersion: string): Agent {
             },
           },
         });
-        run.activity("Claude is reading the transcript");
+        run.activity(run.images?.length ? "Claude is looking at your media" : "Claude is reading the transcript");
         for await (const message of q) {
           if (message.type !== "result") continue;
           // Once the analysis is saved, how the turn ended doesn't matter.

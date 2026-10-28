@@ -149,10 +149,13 @@ export function shortSegments(plan: ShortPlan, duration: (sourceId: string) => n
   return mergeNeighbours(segments);
 }
 
+/** The source ranges a proposal is about: what it cuts, or where it zooms or shows b-roll. */
+const proposalRanges = (p: Project["proposals"][number]): Range[] => [...p.cuts, ...(p.punch ? [p.punch.range] : []), ...(p.overlay ? [p.overlay.range] : [])];
+
 /**
  * The short as a project of its own, vertical, with the recordings it uses
- * (their prepared media are shared with `parent`), all their words, and the
- * suggestions still waiting that fall inside it.
+ * (their prepared media are shared with `parent`), all their words, the
+ * parent's b-roll media, and the suggestions still waiting that fall inside it.
  */
 export function shortProject(parent: Project, plan: ShortPlan, opts: { id: string; now: string; segmentId: () => string }): Project {
   const used = new Set(plan.keep.map((k) => k.sourceId));
@@ -177,10 +180,11 @@ export function shortProject(parent: Project, plan: ShortPlan, opts: { id: strin
     brief: "",
     suggestedTitle: plan.title,
     sources,
+    assets: parent.assets.map((a) => structuredClone(a)),
     transcript: parent.transcript.filter((w) => used.has(w.sourceId)).map((w) => ({ ...w })),
     segments,
     proposals: parent.proposals
-      .filter((p) => p.status === "pending" && used.has(p.sourceId) && p.cuts.every((c) => inside(p.sourceId, c)))
+      .filter((p) => p.status === "pending" && used.has(p.sourceId) && proposalRanges(p).every((c) => inside(p.sourceId, c)))
       .map((p) => structuredClone(p)),
     captions: { ...parent.captions },
     history: { past: [], future: [] },

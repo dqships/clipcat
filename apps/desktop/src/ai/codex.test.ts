@@ -3,9 +3,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { AgentRun, SubmitReply } from "./analyze";
-import { codexAgent, isCodexAuthFailure, parseAnswer, probeCodex } from "./codex";
+import { codexAgent, execArgs, isCodexAuthFailure, parseAnswer, probeCodex } from "./codex";
 import { inheritedEnv } from "./env";
-import { ANALYSIS_TASK, type AgentTask, CORRECTIONS_TASK, EDITOR_PROMPT } from "./prompt";
+import { ANALYSIS_TASK, type AgentTask, CORRECTIONS_TASK, DESCRIBE_TASK, EDITOR_PROMPT, SHORTS_TASK } from "./prompt";
 
 let dir: string;
 beforeEach(async () => {
@@ -76,7 +76,13 @@ describe("codex", () => {
       }
       if (node.items) strict(node.items);
     };
-    for (const task of [ANALYSIS_TASK, CORRECTIONS_TASK] as AgentTask[]) strict(task.jsonSchema as Node);
+    for (const task of [ANALYSIS_TASK, CORRECTIONS_TASK, SHORTS_TASK, DESCRIBE_TASK] as AgentTask[]) strict(task.jsonSchema as Node);
+  });
+
+  it("attaches pictures right after the subcommand, where the list can't swallow the prompt", () => {
+    expect(execArgs("/t").slice(0, 2)).toEqual(["exec", "--skip-git-repo-check"]);
+    expect(execArgs("/t", ["/a/1.jpg", "/a/2.jpg"]).slice(0, 4)).toEqual(["exec", "--image", "/a/1.jpg,/a/2.jpg", "--skip-git-repo-check"]);
+    expect(execArgs("/t").at(-1)).toBe("-");
   });
 
   it("reads the answer, dropping nulls and code fences", () => {

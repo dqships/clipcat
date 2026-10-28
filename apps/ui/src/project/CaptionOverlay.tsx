@@ -2,9 +2,10 @@ import { type Project, applyCase, buildTimeline, captionCues, captionPixels, out
 import { useMemo } from "react";
 import type { Playhead } from "./Preview";
 
-/** The frames the preview stands in for; cue lengths and type size follow the frame's shape. */
+/** The frames the preview stands in for; cue lengths, type size and b-roll windows follow the frame's shape. */
 const WIDE = { width: 1920, height: 1080 };
 const TALL = { width: 1080, height: 1920 };
+export const previewFrame = (project: Pick<Project, "aspectRatio">) => (project.aspectRatio === "9:16" ? TALL : WIDE);
 
 /**
  * The caption the export will burn in at the playhead, drawn over the
@@ -12,7 +13,7 @@ const TALL = { width: 1080, height: 1920 };
  */
 export function CaptionOverlay({ project, playhead }: { project: Project; playhead: Playhead | null }) {
   const c = project.captions;
-  const frame = project.aspectRatio === "9:16" ? TALL : WIDE;
+  const frame = previewFrame(project);
   const timeline = useMemo(() => buildTimeline(project), [project]);
   const cues = useMemo(
     () => (c.enabled ? captionCues(outputWords(project, timeline), c.mode, frame) : []),

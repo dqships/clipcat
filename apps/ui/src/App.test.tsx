@@ -41,6 +41,7 @@ const project = {
       silenceRanges: [],
     },
   ],
+  assets: [],
   transcript: [
     { id: "s1-0", sourceId: "s1", text: "Hello", start: 0.5, end: 0.9 },
     { id: "s1-1", sourceId: "s1", text: "again.", start: 3, end: 3.5 },
@@ -294,6 +295,48 @@ describe("App", () => {
     await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:edit", { id: "p1", revision: 4, op: { type: "punch-style", id: "k1", style: "cut" } }));
     fireEvent.click(screen.getByRole("button", { name: "Remove the punch-in at 0:01" }));
     await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:edit", { id: "p1", revision: 4, op: { type: "decide", ids: ["k1"], status: "rejected" } }));
+  });
+
+  it("adds b-roll media, shows it over selected words and restyles it", async () => {
+    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude" };
+    const drone = {
+      id: "m1", name: "drone.mp4", path: "/v/drone.mp4", kind: "video", media: { duration: 12, width: 1920, height: 1080 },
+      prep: { preview: "media/assets/m1/preview.mp4", frames: ["media/assets/m1/frame-1.jpg"] }, description: "A city from above",
+    };
+    const withMedia = { ...project, revision: 4, assets: [drone] };
+    const broll = {
+      id: "o1", type: "visual", sourceId: "s1", cuts: [], wordIds: ["s1-0"], keepWordIds: [], reason: "", confidence: 1, status: "accepted", punch: null,
+      overlay: { range: [0.5, 0.9], assetId: "m1", placement: "full", shape: "rectangle", corner: "top-right", size: 0.35, offset: 0 },
+    };
+    const placed = { ...withMedia, revision: 5, proposals: [...project.proposals, broll] };
+    const { invoke, emit } = fakeBridge({
+      "app:info": info(),
+      "library:list": [summary],
+      "project:get": project,
+      "ai:status": ready,
+      "media:pick": ["/v/drone.mp4"],
+      "project:add-media": withMedia,
+      "project:edit": placed,
+    });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "talk" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Add pictures or clips" }));
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:add-media", { id: "p1", files: ["/v/drone.mp4"] }));
+    // The project reloads when main says it changed.
+    invoke.mockImplementation(async (method: string) => (method === "project:get" ? withMedia : method === "project:edit" ? placed : undefined));
+    emit("project:changed", { id: "p1", revision: 4 });
+    expect(((await screen.findByLabelText("What drone.mp4 shows")) as HTMLTextAreaElement).value).toBe("A city from above");
+
+    fireEvent.click(screen.getByRole("button", { name: "Hello" }));
+    fireEvent.change(screen.getByLabelText("Show b-roll over the selection"), { target: { value: "m1" } });
+    await vi.waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("project:edit", { id: "p1", revision: 4, op: { type: "overlay", wordIds: ["s1-0"], assetId: "m1", placement: "full" } }),
+    );
+    fireEvent.change(await screen.findByLabelText("Placement of the b-roll at 0:01"), { target: { value: "pip" } });
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:edit", { id: "p1", revision: 5, op: { type: "overlay-style", id: "o1", placement: "pip" } }));
+    expect(screen.getByRole("button", { name: "Hello" }).className).toContain("word--broll");
+    fireEvent.click(screen.getByRole("button", { name: "Remove drone.mp4" }));
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:edit", { id: "p1", revision: 5, op: { type: "remove-asset", assetId: "m1" } }));
   });
 
   it("changes the speed and cancels a running export", async () => {

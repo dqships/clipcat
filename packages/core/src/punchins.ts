@@ -29,7 +29,7 @@ export const PUNCH_SCALE: Record<PunchStyle, number> = { cut: 1.25, "zoom-in": 1
 export type TimedPunch = { id: string; sourceId: string; range: Range; style: PunchStyle; scale: number; start: number; end: number };
 
 /** Where a source range plays, from its first kept moment to its last; null if all of it was cut. */
-function outputSpan(timeline: Pick<Timeline, "items" | "speed">, sourceId: string, [a, b]: Range): [number, number] | null {
+export function outputSpan(timeline: Pick<Timeline, "items" | "speed">, sourceId: string, [a, b]: Range): [number, number] | null {
   const parts = timeline.items.filter((i) => i.sourceId === sourceId && i.sourceStart < b && a < i.sourceEnd);
   if (parts.length === 0) return null;
   const first = parts[0]!;
@@ -112,7 +112,7 @@ export function punchProposal(
   range: Range,
   style: PunchStyle,
 ): Proposal {
-  return { ...fields, type: "punch-in", cuts: [], keepWordIds: [], punch: { range, style, scale: PUNCH_SCALE[style] } };
+  return { ...fields, type: "punch-in", cuts: [], keepWordIds: [], punch: { range, style, scale: PUNCH_SCALE[style] }, overlay: null };
 }
 
 /**

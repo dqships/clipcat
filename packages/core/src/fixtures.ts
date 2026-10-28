@@ -1,5 +1,5 @@
 // Small builders for tests.
-import type { Source, Word } from "./project";
+import type { Asset, Source, Word } from "./project";
 
 export const counter = (prefix = "id") => {
   let n = 0;
@@ -31,4 +31,16 @@ export function words(sourceId: string, text: string, at = 0): Word[] {
     start: at + i * 0.6,
     end: at + i * 0.6 + 0.5,
   }));
+}
+
+export function asset(id: string, kind: "video" | "image" = "video", duration = 10): Asset {
+  return {
+    id,
+    name: `${id}.${kind === "video" ? "mp4" : "png"}`,
+    path: `/media/${id}`,
+    kind,
+    media: { duration: kind === "video" ? duration : 0, width: 1920, height: 1080 },
+    prep: { preview: `media/assets/${id}/preview.${kind === "video" ? "mp4" : "png"}`, frames: [`media/assets/${id}/frame-1.jpg`] },
+    description: "",
+  };
 }

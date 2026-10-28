@@ -5,6 +5,7 @@
 
 import { writeFile } from "node:fs/promises";
 import { availableParallelism } from "node:os";
+import { assetFrameArgs, assetPreviewArgs, probeAsset } from "../media/assets";
 import type { Encoder } from "../media/encoders";
 import { type FaceDetector, findFaces } from "../media/faces";
 import { prepArgs } from "../media/prep";
@@ -14,6 +15,7 @@ import { encodeWav, readWav } from "../media/wav";
 import { MODELS, type ModelId, downloadModel, hasModel, modelPath } from "../transcribe/models";
 import { PARAKEET_LANGUAGES, PARAKEET_MODEL, runParakeet } from "../transcribe/parakeet";
 import { runWhisper, termsPrompt, whisperArgs } from "../transcribe/whisper";
+import type { AssetDeps } from "./assets";
 import type { Heard, PipelineDeps } from "./import";
 
 export type Tools = {
@@ -107,5 +109,31 @@ export function realDeps(tools: Tools): Omit<PipelineDeps, "store" | "queue" | "
     },
     readWav,
     writeWav: (path, pcm) => writeFile(path, encodeWav(pcm.samples, pcm.sampleRate)),
+  };
+}
+
+/** The real tools behind b-roll media: ffprobe to read it, ffmpeg to prepare it. */
+export function realAssetDeps(tools: Pick<Tools, "ffmpeg" | "ffprobe" | "encoder">): Pick<AssetDeps, "probe" | "prep"> {
+  return {
+    probe: (file) => probeAsset(tools.ffprobe, file),
+    prep: async (asset, out, ctx) => {
+      const duration = Math.max(1, asset.media.duration);
+      // The frames are quick; the preview copy is most of the work.
+      await runFfmpeg(tools.ffmpeg, assetFrameArgs(asset.path, asset.kind, asset.media, out.frames), { duration: 1, signal: ctx.signal });
+      ctx.progress(0.1);
+      const pass = (encoder: Encoder) =>
+        runFfmpeg(tools.ffmpeg, assetPreviewArgs(asset.path, asset.kind, out.preview, encoder), {
+          duration,
+          onProgress: (f) => ctx.progress(0.1 + 0.9 * f),
+          signal: ctx.signal,
+        });
+      const encoder = asset.kind === "video" ? await tools.encoder() : "libx264";
+      try {
+        await pass(encoder);
+      } catch (e) {
+        if (encoder === "libx264" || ctx.signal.aborted) throw e;
+        await pass("libx264");
+      }
+    },
   };
 }

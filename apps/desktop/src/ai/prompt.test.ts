@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { source, words } from "@clipcat/core/fixtures";
-import { analysisPrompt, numberedTranscript, orderedWords } from "./prompt";
+import { asset, source, words } from "@clipcat/core/fixtures";
+import { analysisPrompt, describePrompt, numberedTranscript, orderedWords } from "./prompt";
 
 const second = { ...source("b", 3, 1), name: "take2.mov" };
 const first = { ...source("a", 9, 0), name: "take1.mov" };
@@ -10,6 +10,7 @@ const project = {
   transcript: [...words("b", "and again"), ...words("a", "hello there"), ...words("a", "friends", 4)],
   brief: "",
   language: "en",
+  assets: [],
 };
 
 describe("numberedTranscript", () => {
@@ -30,5 +31,22 @@ describe("numberedTranscript", () => {
   it("leads with the brief, or says there is none", () => {
     expect(analysisPrompt(project)).toMatch(/^The user gave no brief/);
     expect(analysisPrompt({ ...project, brief: "  Keep the joke  " })).toMatch(/^The user's brief:\nKeep the joke\n/);
+  });
+});
+
+describe("media for b-roll", () => {
+  const drone = { ...asset("m1", "video", 12), name: "drone.mp4", description: "Aerial shot of a city at dusk" };
+  const logo = { ...asset("m2", "image"), name: "logo.png", prep: null };
+
+  it("lists the prepared media after the transcript, numbered for the agent", () => {
+    const prompt = analysisPrompt({ ...project, assets: [logo, drone] });
+    expect(prompt.endsWith("## Media for b-roll\n[0] drone.mp4 (video, 12.0s): Aerial shot of a city at dusk")).toBe(true);
+    expect(analysisPrompt(project)).not.toContain("Media for b-roll");
+  });
+
+  it("tells the describer how many frames are each item's", () => {
+    expect(describePrompt([drone, { ...asset("m3", "image"), name: "chart.png" }])).toBe(
+      ["Describe these 2 items. The attached frames come in this order.", "", "[0] drone.mp4: video, 12.0s, 1 frame", "[1] chart.png: picture, 1 frame"].join("\n"),
+    );
   });
 });

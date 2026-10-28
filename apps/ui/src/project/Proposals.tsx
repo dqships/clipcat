@@ -3,7 +3,8 @@ import { Check, X } from "lucide-react";
 import { formatDuration } from "../format";
 import { ICON_STROKE } from "../icons";
 
-const TYPE_LABEL: Record<string, string> = { silence: "Pause", retake: "Retake", cleanup: "Clean-up", tighten: "Tighten", "punch-in": "Punch-in" };
+const TYPE_LABEL: Record<string, string> = { silence: "Pause", retake: "Retake", cleanup: "Clean-up", tighten: "Tighten", "punch-in": "Punch-in", visual: "B-roll" };
+const PLACEMENT_LABEL: Record<string, string> = { full: "full frame", pip: "picture in picture" };
 const STYLE_LABEL: Record<string, string> = { cut: "snap in", "zoom-in": "push in", "slow-zoom": "slow zoom" };
 
 type Props = {
@@ -16,23 +17,25 @@ const length = (p: Proposal) => p.cuts.reduce((n, [a, b]) => n + (b - a), 0);
 
 const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
-/** "2 cuts and 1 punch-in to review" */
+/** "2 cuts, 1 punch-in and 3 b-roll to review" */
 function toReview(pending: Proposal[]): string {
   const punches = pending.filter((p) => p.punch).length;
-  const cuts = pending.length - punches;
-  const parts = [cuts > 0 && count(cuts, "cut", "cuts"), punches > 0 && count(punches, "punch-in", "punch-ins")].filter(Boolean);
-  return `${parts.join(" and ")} to review`;
+  const broll = pending.filter((p) => p.overlay).length;
+  const cuts = pending.length - punches - broll;
+  const parts = [cuts > 0 && count(cuts, "cut", "cuts"), punches > 0 && count(punches, "punch-in", "punch-ins"), broll > 0 && `${broll} b-roll`].filter(Boolean);
+  return `${parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}` : parts[0]} to review`;
 }
 
 /**
- * The edits waiting on a decision: pauses, AI cuts and punch-ins. Accepting a
- * cut cuts its ranges, and accepting a punch-in zooms there; rejecting leaves
- * the video as it is. Both can be undone.
+ * The edits waiting on a decision: pauses, AI cuts, punch-ins and b-roll.
+ * Accepting a cut cuts its ranges, a punch-in zooms there and b-roll shows
+ * there; rejecting leaves the video as it is. All can be undone.
  */
 export function Proposals({ project, onSeek, onEdit }: Props) {
   const pending = project.proposals.filter((p) => p.status === "pending");
-  // Accepted punch-ins are listed with the other punch-ins.
-  const accepted = project.proposals.filter((p) => p.status === "accepted" && !p.punch);
+  // Accepted punch-ins and b-roll are listed in their own panels.
+  const accepted = project.proposals.filter((p) => p.status === "accepted" && !p.punch && !p.overlay);
+  const media = new Map(project.assets.map((a) => [a.id, a.name]));
   const text = new Map(project.transcript.map((w) => [w.id, w.text]));
   if (pending.length === 0 && accepted.length === 0) return null;
   const seconds = pending.reduce((n, p) => n + length(p), 0);
@@ -65,8 +68,14 @@ export function Proposals({ project, onSeek, onEdit }: Props) {
               const label = TYPE_LABEL[p.type] ?? p.type;
               return (
                 <li key={p.id} className="proposal-row">
-                  <button type="button" className="proposal" onClick={() => onSeek(p.sourceId, p.punch?.range[0] ?? p.cuts[0]?.[0] ?? 0)}>
-                    <span className="proposal__type">{p.punch ? `${label}, ${STYLE_LABEL[p.punch.style]}` : label}</span>
+                  <button type="button" className="proposal" onClick={() => onSeek(p.sourceId, p.punch?.range[0] ?? p.overlay?.range[0] ?? p.cuts[0]?.[0] ?? 0)}>
+                    <span className="proposal__type">
+                      {p.punch
+                        ? `${label}, ${STYLE_LABEL[p.punch.style]}`
+                        : p.overlay
+                          ? `${label}, ${media.get(p.overlay.assetId) ?? "media"}, ${PLACEMENT_LABEL[p.overlay.placement]}`
+                          : label}
+                    </span>
                     <span className="proposal__reason">{p.reason || `${length(p).toFixed(1)} seconds of silence`}</span>
                     {words && <span className="proposal__words">“{words}”</span>}
                   </button>

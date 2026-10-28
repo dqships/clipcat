@@ -1,3 +1,6 @@
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import Anthropic from "@anthropic-ai/sdk";
 import { describe, expect, it } from "vitest";
 import type { AgentRun, SubmitReply } from "./analyze";
@@ -66,6 +69,22 @@ describe("Claude API agent", () => {
     expect(first.fallbacks).toBe("default");
     const retry = requests[1]!.messages.at(-1)!;
     expect(retry.content).toEqual([{ type: "tool_result", tool_use_id: "t1", content: "proposal 0: word indices out of range" }]);
+  });
+
+  it("shows the pictures before the prompt", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "clipcat-api-"));
+    try {
+      await writeFile(join(dir, "f.jpg"), Buffer.from([0xff, 0xd8, 0xff]));
+      const { client, requests } = fakeClient([call("t1", { proposals: [], suggestedTitle: "" })] as never);
+      const { r } = run([{ text: "Saved.", done: true }]);
+      await apiAgent({ key: async () => "sk-ant-x", model: async () => "claude-opus-5-5", client: () => client }).run({ ...r, images: [join(dir, "f.jpg")] });
+      expect(requests[0]!.messages[0]!.content).toEqual([
+        { type: "image", source: { type: "base64", media_type: "image/jpeg", data: "/9j/" } },
+        { type: "text", text: "TRANSCRIPT" },
+      ]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 
   it("nudges an answer written as prose", async () => {

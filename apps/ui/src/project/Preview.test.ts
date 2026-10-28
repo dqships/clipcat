@@ -1,6 +1,6 @@
 import { buildTimeline } from "@clipcat/core";
 import { describe, expect, it } from "vitest";
-import { nextKept, previewOffset, punchViewBox } from "./Preview";
+import { brollStyle, nextKept, previewOffset, punchViewBox } from "./Preview";
 
 const seg = (id: string, sourceId: string, sourceStart: number, sourceEnd: number, included = true) => ({ id, sourceId, sourceStart, sourceEnd, included });
 const sources = [
@@ -60,5 +60,18 @@ describe("punchViewBox", () => {
     const box = punchViewBox(source, [0, 2], punch, 1, true);
     // Unzoomed it is the crop itself: 31.6% of the width, centred.
     expect(box).toBe("inset(0.000% 34.180% 0.000% 34.180%)");
+  });
+});
+
+describe("brollStyle", () => {
+  it("places b-roll with the export's box, as shares of the stage's width", () => {
+    const o = { placement: "pip", shape: "circle", corner: "top-left", size: 0.4 } as never;
+    expect(brollStyle(o, { width: 1080, height: 1920 })).toEqual({
+      left: "calc(43 / 1080 * 100cqw)",
+      top: "calc(43 / 1080 * 100cqw)",
+      width: "calc(432 / 1080 * 100cqw)",
+      height: "calc(432 / 1080 * 100cqw)",
+      borderRadius: "calc(216 / 1080 * 100cqw)",
+    });
   });
 });

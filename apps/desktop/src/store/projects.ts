@@ -97,7 +97,7 @@ export class ProjectStore {
   }
 
   /**
-   * Saves `project` as a new project whose sources' prepared media come from
+   * Saves `project` as a new project whose sources' (and b-roll's) prepared media come from
    * project `from`: hard links, so a short costs no disk space (copies where
    * the disk can't link).
    */
@@ -106,6 +106,7 @@ export class ProjectStore {
     if (parsed.id === from) throw new Error("A project can't be made from itself");
     try {
       for (const s of parsed.sources) await linkTree(this.mediaDir(from, s.id), this.mediaDir(parsed.id, s.id));
+      if (parsed.assets.length > 0) await linkTree(join(this.dir(from), "media", "assets"), join(this.dir(parsed.id), "media", "assets"));
       await writeFileAtomic(join(this.dir(parsed.id), "project.json"), JSON.stringify(parsed, null, 2));
     } catch (e) {
       await rm(this.dir(parsed.id), { recursive: true, force: true });

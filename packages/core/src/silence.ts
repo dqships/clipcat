@@ -172,6 +172,7 @@ export function silenceProposals(
       confidence: 1,
       status: "pending",
       punch: null,
+      overlay: null,
     });
   }
   return proposals;

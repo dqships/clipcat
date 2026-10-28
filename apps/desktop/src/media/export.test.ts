@@ -1,7 +1,7 @@
-import { buildTimeline, initialSegments, punchProposal, setRange, timedPunches } from "@clipcat/core";
-import { source } from "@clipcat/core/fixtures";
+import { buildTimeline, defaultOverlay, initialSegments, overlayProposal, punchProposal, setRange, timedOverlays, timedPunches } from "@clipcat/core";
+import { asset, source } from "@clipcat/core/fixtures";
 import { describe, expect, it } from "vitest";
-import { audioCommand, chunkCommand, chunkList, exportChunks, exportSize, frameTimeline, muxArgs, punchPieces } from "./export";
+import { audioCommand, chunkCommand, chunkList, chunkOverlays, exportChunks, exportSize, frameTimeline, muxArgs, overlayFit, punchPieces } from "./export";
 
 let n = 0;
 const id = () => `g${++n}`;
@@ -158,6 +158,66 @@ describe("punch-ins", () => {
     // The second half starts 30 frames into the punch-in; a zoom-in has pushed in by then (9 frames).
     expect(graph("zoom-in")).toContain("zoompan=z='1+0.2000*min(1,(30+on)/9)':x='(iw-iw/zoom)*0.5000':y='(ih-ih/zoom)*0.4000':d=1:s=1920x1080:fps=30000/1000");
     expect(graph("slow-zoom")).toContain("scale=3840:2160:flags=bicubic,zoompan=z='1+0.1500*(30+on)/60'");
+  });
+});
+
+describe("b-roll", () => {
+  const { shape, timeline } = setup();
+  const clip = asset("m1", "video", 3);
+  const picture = asset("m2", "image");
+  const at = (id: string, range: [number, number], a: typeof clip, placement: "full" | "pip") =>
+    overlayProposal({ id, sourceId: "a", wordIds: [], reason: "", confidence: 1, status: "accepted" }, defaultOverlay(range, a.id, placement));
+  // 1–3 s of "a" plays at 1–2 s (2–4 is cut); 6–7 s plays at 4–5 s.
+  const overlays = timedOverlays({ assets: [clip, picture], proposals: [at("o1", [1, 3], clip, "full"), at("o2", [6, 7], picture, "pip")] }, timeline);
+
+  it("cuts each one to the chunk it shows in, holding a short clip on its last stretch", () => {
+    expect(chunkOverlays({ start: 0, frames: 45 }, overlays, 30)).toEqual([{ overlay: overlays[0], from: 30, frames: 15, at: 0 }]);
+    expect(chunkOverlays({ start: 45, frames: 300 }, overlays, 30)).toEqual([
+      { overlay: overlays[0], from: 0, frames: 15, at: 0.5 },
+      { overlay: overlays[1], from: 75, frames: 30, at: 0 },
+    ]);
+    const late = { ...overlays[0]!, offset: 2.8 };
+    expect(chunkOverlays({ start: 0, frames: 300 }, [late], 30)[0]!.at).toBe(2.5);
+  });
+
+  it("covers the frame, or crops into a window with a rounded mask", () => {
+    expect(overlayFit(overlays[0]!, { width: 1920, height: 1080 })).toEqual({
+      filter: "scale=1920:1080:force_original_aspect_ratio=increase:flags=lanczos,crop=1920:1080,setsar=1,format=yuv420p",
+      x: 0,
+      y: 0,
+    });
+    const round = overlayFit({ ...overlays[1]!, shape: "circle" }, { width: 1920, height: 1080 });
+    expect(round).toMatchObject({ x: 1920 - 378 - 43, y: 43 });
+    expect(round.filter).toBe(
+      "scale=378:378:force_original_aspect_ratio=increase:flags=lanczos,crop=378:378,setsar=1,format=yuva420p,geq=lum='p(X,Y)':a='255*clip(189-hypot(max(abs(X+0.5-189)-0,0),max(abs(Y+0.5-189)-0,0))+0.5,0,1)'",
+    );
+  });
+
+  it("reads each one for its part of the chunk and lays it over the picture, under the captions", () => {
+    const overlayInputs = new Map([
+      ["m1", "/v/clip.mov"],
+      ["m2", "/p/m2/preview.png"],
+    ]);
+    const chunk = exportChunks(timeline, 1000)[0]!;
+    const { graph, args } = chunkCommand({
+      ...shape,
+      overlays,
+      overlayInputs,
+      chunk,
+      captions: { ass: "captions.ass", fontsDir: "fonts" },
+      encoder: "libx264",
+      out: "c.mp4",
+    });
+    expect(args.join(" ")).toContain("-ss 0.000000 -t 2.000000 -i /v/clip.mov -loop 1 -framerate 30 -t 2.000000 -i /p/m2/preview.png");
+    const lines = graph.trim().split(";\n");
+    expect(lines.slice(-6)).toEqual([
+      "[cv]settb=1/30,setpts=N[b0]",
+      expect.stringMatching(/^\[2:v:0\]fps=fps=30,tpad=stop_mode=clone:stop=-1,trim=end_frame=30,setpts=PTS-STARTPTS,scale=1920:1080:.*,settb=1\/30,setpts=N\+30\[o0\]$/),
+      "[b0][o0]overlay=x=0:y=0:eof_action=pass:format=auto[b1]",
+      expect.stringMatching(/^\[3:v:0\].*setpts=N\+120\[o1\]$/),
+      "[b1][o1]overlay=x=1205:y=43:eof_action=pass:format=auto[b2]",
+      "[b2]setpts=N+0,ass=filename=captions.ass:fontsdir=fonts,setpts=N[outv]",
+    ]);
   });
 });
 

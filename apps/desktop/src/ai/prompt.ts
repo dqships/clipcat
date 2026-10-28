@@ -2,7 +2,7 @@
 // line per phrase, with the pauses between phrases written in, so the agent
 // can cite exact word ranges and see where the takes break.
 
-import { AgentAnalysis, AgentCorrections, AgentShorts, type Project, type Word, isWordKept } from "@clipcat/core";
+import { AgentAnalysis, AgentCorrections, AgentDescriptions, AgentShorts, type Asset, type Project, type Word, isWordKept } from "@clipcat/core";
 import type { z } from "zod";
 
 /** A gap between words at least this long starts a new line. */
@@ -31,7 +31,7 @@ const JSON_ONLY = "Don't run commands or read files; everything you need is belo
 
 export const ANALYSIS_TASK: AgentTask = {
   tool: "submit_analysis",
-  description: "Submit the cut and punch-in proposals for this video. Call once with every proposal; if problems come back, fix them and call again.",
+  description: "Submit the cut, punch-in and b-roll proposals for this video. Call once with every proposal; if problems come back, fix them and call again.",
   shape: AgentAnalysis.shape,
   jsonSchema: {
     type: "object",
@@ -43,14 +43,16 @@ export const ANALYSIS_TASK: AgentTask = {
         items: {
           type: "object",
           additionalProperties: false,
-          required: ["type", "from", "to", "keepFrom", "keepTo", "punchStyle", "reason", "confidence"],
+          required: ["type", "from", "to", "keepFrom", "keepTo", "punchStyle", "media", "placement", "reason", "confidence"],
           properties: {
-            type: { type: "string", enum: ["retake", "cleanup", "tighten", "punch-in"] },
+            type: { type: "string", enum: ["retake", "cleanup", "tighten", "punch-in", "visual"] },
             from: { type: "integer" },
             to: { type: "integer" },
             keepFrom: { type: ["integer", "null"] },
             keepTo: { type: ["integer", "null"] },
             punchStyle: { type: ["string", "null"], enum: ["cut", "zoom-in", "slow-zoom", null] },
+            media: { type: ["integer", "null"] },
+            placement: { type: ["string", "null"], enum: ["full", "pip", null] },
             reason: { type: "string" },
             confidence: { type: "number" },
           },
@@ -61,7 +63,7 @@ export const ANALYSIS_TASK: AgentTask = {
   },
   toolAnswer:
     "Call submit_analysis once with every proposal. If it reports problems, fix them and call it again with the whole analysis. Once it says the analysis is saved, stop. Don't write anything else.",
-  jsonAnswer: `Answer with only the JSON object the output schema describes: every proposal, and suggestedTitle. Use null for keepFrom and keepTo except on retakes, and for punchStyle except on punch-ins. ${JSON_ONLY}`,
+  jsonAnswer: `Answer with only the JSON object the output schema describes: every proposal, and suggestedTitle. Use null for keepFrom and keepTo except on retakes, for punchStyle except on punch-ins, and for media and placement except on b-roll. ${JSON_ONLY}`,
 };
 
 export const CORRECTIONS_TASK: AgentTask = {
@@ -126,6 +128,40 @@ export const SHORTS_TASK: AgentTask = {
   jsonAnswer: `Answer with only the JSON object the output schema describes: every short. ${JSON_ONLY}`,
 };
 
+export const DESCRIBE_TASK: AgentTask = {
+  tool: "submit_media_descriptions",
+  description: "Submit a description of each picture and video. Call once with every description; if problems come back, fix them and call again.",
+  shape: AgentDescriptions.shape,
+  jsonSchema: {
+    type: "object",
+    additionalProperties: false,
+    required: ["descriptions"],
+    properties: {
+      descriptions: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          required: ["media", "description"],
+          properties: { media: { type: "integer" }, description: { type: "string" } },
+        },
+      },
+    },
+  },
+  toolAnswer:
+    "Call submit_media_descriptions once with a description of every item. If it reports problems, fix them and call it again with the whole list. Once it says they are saved, stop. Don't write anything else.",
+  jsonAnswer: `Answer with only the JSON object the output schema describes: a description of every item. The attached images are the frames, in the order listed. ${JSON_ONLY}`,
+};
+
+export const DESCRIBER_PROMPT = `You are ClipCat's media librarian. The user added pictures and video clips to use as b-roll over a talking-head video. You look at each one and write what it shows, so the editor can later pick the right one for a line without seeing it.
+
+Each item is numbered [m] and comes with frames: one for a picture, a few across a video's length.
+
+Rules:
+- One or two plain sentences per item: the subject, the setting, any action or camera movement, and anything readable such as a logo, a screen or a sign.
+- Describe what is there, not what it might mean. Don't start with "This image shows".
+- Describe every item, by its number.`;
+
 export const SHORTS_PROMPT = `You are ClipCat's shorts editor. You read the transcript of a long talking-head video and pick the stretches that work on their own as vertical shorts for TikTok, Reels and YouTube Shorts. Each short you pick becomes its own project the user can edit further.
 
 Words are numbered [n] across the whole project. Ranges are inclusive word indices. Words marked ~like this~ are already cut from the long video and stay cut in a short.
@@ -143,7 +179,7 @@ Rules:
 - reason: one sentence the user reads: the hook and why it stands alone.
 - Follow the user's brief when there is one.`;
 
-export const EDITOR_PROMPT = `You are ClipCat's editor. You read the transcript of a talking-head recording and propose cuts that make it tight and watchable, and punch-ins that give its best lines weight. You never change anything yourself: every proposal is shown to the user, who accepts or rejects it.
+export const EDITOR_PROMPT = `You are ClipCat's editor. You read the transcript of a talking-head recording and propose cuts that make it tight and watchable, punch-ins that give its best lines weight, and b-roll from the user's own media. You never change anything yourself: every proposal is shown to the user, who accepts or rejects it.
 
 Words are numbered [n] across the whole project. Ranges are inclusive word indices.
 
@@ -152,14 +188,16 @@ Proposal types:
 - cleanup: filler words (um, uh, "you know", "like" used as filler), stutters, repeated words, false starts, and remarks to the camera operator such as "let me do that again".
 - tighten: a tangent or a rambling stretch that can go without losing anything the viewer needs. Be conservative.
 - punch-in: not a cut. The picture zooms toward the speaker over from..to to give a line weight: the key claim, a punchline, a number worth remembering. from..to covers the words that land it, 1.5 to 8 seconds. Set punchStyle: "cut" snaps in (a punchline or a blunt statement), "zoom-in" pushes in quickly (a key point), "slow-zoom" creeps in over the range (a story building to its point).
+- visual: b-roll, not a cut. One of the user's media items (listed after the transcript, if there are any) shows over from..to while the speaker keeps talking. Set media to its number and placement: "full" covers the whole frame (the speaker is heard, not seen), "pip" shows it in a window in the corner beside the speaker. from..to covers the words it illustrates, 1.5 to 15 seconds.
 
 Rules:
 - Cut whole words only, and never leave a sentence that no longer makes sense.
 - Don't propose cuts just for pauses; ClipCat already handles silence.
 - Cut proposals must not overlap each other, and punch-ins must not overlap each other or sit on words you propose to cut.
 - Punch-ins are seasoning: at most one every 10 seconds of the finished video, with at least 6 seconds without one in between. Fewer, well-placed ones are better; skip them in a video that has no line that needs one.
+- Use b-roll only where a media item's description matches what is being said, and never two over the same words. Each item can be used more than once, but don't. With no media list, propose no b-roll.
 - reason: one short sentence the user reads in the editor, e.g. "Second take is complete; first stumbles".
-- confidence: 0 to 1, how sure you are the user wants this cut or punch-in.
+- confidence: 0 to 1, how sure you are the user wants this cut, punch-in or b-roll.
 - suggestedTitle: a short, plain title for the finished video.
 - Follow the user's brief when there is one.`;
 
@@ -215,9 +253,20 @@ export function numberedTranscript(project: Pick<Project, "sources" | "transcrip
   return lines.join("\n");
 }
 
-/** The user turn: the brief (or a one-off request), then the transcript. */
-export function analysisPrompt(project: Pick<Project, "sources" | "transcript" | "brief" | "language">, request?: string): string {
+/** The media the AI editor can place, numbered [m] in the order given. */
+export function mediaList(assets: Pick<Asset, "name" | "kind" | "media" | "description">[]): string {
+  return assets
+    .map((a, i) => `[${i}] ${a.name} (${a.kind === "video" ? `video, ${seconds(a.media.duration)}` : "picture"}): ${a.description || "no description"}`)
+    .join("\n");
+}
+
+/** The media the AI editor is shown: prepared, so they can be placed. */
+export const placeableAssets = (project: Pick<Project, "assets">) => project.assets.filter((a) => a.prep);
+
+/** The user turn: the brief (or a one-off request), then the transcript, then the media for b-roll. */
+export function analysisPrompt(project: Pick<Project, "sources" | "transcript" | "brief" | "language" | "assets">, request?: string): string {
   const brief = project.brief.trim();
+  const media = placeableAssets(project);
   return [
     request
       ? `The user asks for one change:\n${request.trim()}\nPropose only the cuts that make this change. If nothing in the transcript matches, propose nothing.`
@@ -227,6 +276,19 @@ export function analysisPrompt(project: Pick<Project, "sources" | "transcript" |
     `Transcript language: ${project.language}.`,
     "",
     numberedTranscript(project),
+    ...(media.length > 0 ? ["", "## Media for b-roll", mediaList(media)] : []),
+  ].join("\n");
+}
+
+/** The user turn for describing media: each item and how many of the attached frames are its. */
+export function describePrompt(assets: Pick<Asset, "name" | "kind" | "media" | "prep">[]): string {
+  return [
+    `Describe these ${assets.length} ${assets.length === 1 ? "item" : "items"}. The attached frames come in this order.`,
+    "",
+    ...assets.map((a, i) => {
+      const frames = a.prep?.frames.length ?? 0;
+      return `[${i}] ${a.name}: ${a.kind === "video" ? `video, ${seconds(a.media.duration)}, ${frames} ${frames === 1 ? "frame" : "frames"}` : "picture, 1 frame"}`;
+    }),
   ].join("\n");
 }
 

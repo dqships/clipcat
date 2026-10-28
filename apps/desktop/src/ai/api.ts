@@ -3,6 +3,7 @@
 // each tool call is checked like any other agent's answer, and the result
 // goes back as the tool result until ClipCat says it's saved.
 
+import { readFile } from "node:fs/promises";
 import Anthropic from "@anthropic-ai/sdk";
 import type { ApiModelValue as ApiModel } from "@clipcat/ipc";
 import type { Agent, AgentRun } from "./analyze";
@@ -48,10 +49,18 @@ export function apiAgent(options: { key: () => Promise<string | null>; model: ()
         input_schema: run.task.jsonSchema as Anthropic.Beta.BetaTool.InputSchema,
         strict: true,
       };
-      const messages: Anthropic.Beta.BetaMessageParam[] = [{ role: "user", content: run.prompt }];
+      const pictures = await Promise.all(
+        (run.images ?? []).map(async (path): Promise<Anthropic.Beta.BetaImageBlockParam> => ({
+          type: "image",
+          source: { type: "base64", media_type: "image/jpeg", data: (await readFile(path)).toString("base64") },
+        })),
+      );
+      const messages: Anthropic.Beta.BetaMessageParam[] = [
+        { role: "user", content: pictures.length > 0 ? [...pictures, { type: "text", text: run.prompt }] : run.prompt },
+      ];
 
       for (let turn = 1; turn <= TURNS; turn++) {
-        run.activity(turn === 1 ? "Claude is reading the transcript" : "Claude is fixing its answer");
+        run.activity(turn > 1 ? "Claude is fixing its answer" : pictures.length > 0 ? "Claude is looking at your media" : "Claude is reading the transcript");
         let response: Anthropic.Beta.BetaMessage;
         try {
           response = await client.beta.messages

@@ -7,12 +7,13 @@ import { mkdtemp, readFile, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { applyEdit, punchProposal } from "@clipcat/core";
+import { applyEdit, buildTimeline, defaultOverlay, overlayBox, overlayProposal, punchProposal, timedOverlays } from "@clipcat/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { JobQueue, type JobEvent } from "../jobs/queue";
 import { runFfmpeg } from "../media/run";
 import { ProjectStore } from "../store/projects";
-import { realDeps } from "./deps";
+import { AssetPipeline } from "./assets";
+import { realAssetDeps, realDeps } from "./deps";
 import { ExportRunner, srtPath } from "./export";
 import { ImportPipeline } from "./import";
 
@@ -172,5 +173,86 @@ describe.skipIf(!binDir)("prep with real ffmpeg", () => {
     const streams = await streamDurations(fast);
     expect(Math.abs(streams.video - streams.audio)).toBeLessThan(0.05);
     expect((await readdir(store.dir(projectId))).includes("export")).toBe(false);
+  }, 180_000);
+
+  it("prepares b-roll media and renders it full frame and in a round window", async () => {
+    expect(projectId).not.toBe("");
+    await store.update(projectId, null, (q) => {
+      q.speed = 1;
+      q.proposals = q.proposals.filter((x) => !x.punch);
+    });
+    // A clip and a picture in colours the test picture doesn't have, so their pixels are easy to find in the export.
+    const red = join(root, "red.mov");
+    const blue = join(root, "blue.png");
+    await run(exe("ffmpeg"), ["-hide_banner", "-y", "-f", "lavfi", "-i", "color=c=0xC08040:s=640x360:r=25:d=3", "-c:v", "libx264", "-pix_fmt", "yuv420p", red]);
+    await run(exe("ffmpeg"), ["-hide_banner", "-y", "-f", "lavfi", "-i", "color=c=0x40C0A0:s=400x400", "-frames:v", "1", blue]);
+    const events: JobEvent[] = [];
+    let described = 0;
+    const media = new AssetPipeline({
+      ...realAssetDeps({ ffmpeg: exe("ffmpeg"), ffprobe: exe("ffprobe"), encoder: sw }),
+      store,
+      queue: new JobQueue((e) => events.push(e)),
+      changed: () => {},
+      describe: () => void described++,
+    });
+    await media.add(projectId, [red, blue]);
+    for (let i = 0; i < 400 && events.filter((e) => e.state === "done" || e.state === "failed").length < 2; i++) {
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    expect(events.filter((e) => e.state === "failed")).toEqual([]);
+    expect(described).toBe(1);
+    const p = await store.get(projectId);
+    const [clipAsset, picture] = p.assets;
+    expect(clipAsset).toMatchObject({ kind: "video", media: { width: 640, height: 360 } });
+    expect(clipAsset!.media.duration).toBeCloseTo(3, 0);
+    expect(picture).toMatchObject({ kind: "image", media: { duration: 0, width: 400, height: 400 } });
+    for (const a of p.assets) {
+      for (const f of [a.prep!.preview, ...a.prep!.frames]) expect((await stat(join(store.dir(projectId), f))).size).toBeGreaterThan(100);
+    }
+    expect(clipAsset!.prep!.frames).toHaveLength(3);
+
+    const s = p.sources[0]!.id;
+    await store.update(projectId, null, (q) => {
+      const at = (id: string, range: [number, number], assetId: string, placement: "full" | "pip") =>
+        overlayProposal({ id, sourceId: s, wordIds: [], reason: "", confidence: 1, status: "accepted" }, defaultOverlay(range, assetId, placement));
+      q.proposals.push(at("o1", [0.3, 1.3], clipAsset!.id, "full"), { ...at("o2", [4.2, 5.4], picture!.id, "pip") });
+      q.proposals.at(-1)!.overlay!.shape = "circle";
+    });
+    const q = await store.get(projectId);
+    const [full, pip] = timedOverlays(q, buildTimeline(q));
+    const deps = {
+      store,
+      queue: new JobQueue(() => {}),
+      changed: () => {},
+      ffmpeg: (args: string[], { cwd, duration, ctx }: { cwd: string; duration: number; ctx: { signal: AbortSignal } }) =>
+        runFfmpeg(exe("ffmpeg"), args, { cwd, duration, signal: ctx.signal }),
+      encoder: sw,
+      fontsDir: join(__dirname, "..", "..", "resources", "fonts"),
+    };
+    // Chunks of a second, so b-roll is cut across chunks too.
+    const out = join(root, "broll.mp4");
+    await new ExportRunner({ ...deps, chunkSeconds: 1 }).run(projectId, "16:9", out, { signal: new AbortController().signal, progress: () => {} });
+
+    const pixel = async (t: number, x: number, y: number) => {
+      const { stdout } = await promisify(execFile)(
+        exe("ffmpeg"),
+        ["-v", "error", "-ss", t.toFixed(3), "-i", out, "-frames:v", "1", "-vf", `format=rgb24,crop=1:1:${x}:${y}`, "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
+        { encoding: "buffer" },
+      );
+      return [...(stdout as Buffer)];
+    };
+    const near = (want: number[]) => (px: number[]) => px.every((v, i) => Math.abs(v - want[i]!) < 24);
+    const clipColour = near([0xc0, 0x80, 0x40]);
+    const pictureColour = near([0x40, 0xc0, 0xa0]);
+    // Full frame: the clip everywhere while it shows, the test picture before.
+    expect(clipColour(await pixel((full!.start + full!.end) / 2, 20, 700))).toBe(true);
+    expect(clipColour(await pixel(0.1, 20, 700))).toBe(false);
+    expect(clipColour(await pixel(full!.end + 0.2, 20, 700))).toBe(false);
+    // The round window: the picture in the middle, the recording behind it at its corner.
+    const box = overlayBox(pip!, { width: 1280, height: 720 });
+    const mid = (pip!.start + pip!.end) / 2;
+    expect(pictureColour(await pixel(mid, box.x + box.width / 2, box.y + box.height / 2))).toBe(true);
+    expect(pictureColour(await pixel(mid, box.x + 2, box.y + 2))).toBe(false);
+    expect(pictureColour(await pixel(pip!.start - 0.3, box.x + box.width / 2, box.y + box.height / 2))).toBe(false);
   }, 180_000);
 });

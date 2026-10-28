@@ -90,6 +90,10 @@ export const methods = {
   "library:list": { input: z.void(), output: z.array(ProjectSummary) },
   /** Opens the system file picker; resolves with the chosen files, or [] when cancelled. */
   "files:pick": { input: z.void(), output: z.array(z.string()) },
+  /** Opens the system file picker for b-roll pictures and videos; [] when cancelled. */
+  "media:pick": { input: z.void(), output: z.array(z.string()) },
+  /** Adds pictures and videos to a project's b-roll media, then prepares and describes them. */
+  "project:add-media": { input: ProjectRef.extend({ files: Files }), output: Project },
   /** Adds files to a project (a new one when projectId is null) and starts processing them. */
   "project:import": { input: z.object({ projectId: z.string().regex(/^[a-zA-Z0-9-]+$/).nullable(), files: Files }), output: Project },
   "project:get": { input: ProjectRef, output: Project },
