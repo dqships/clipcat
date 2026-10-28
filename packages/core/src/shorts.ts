@@ -188,6 +188,7 @@ export function shortProject(parent: Project, plan: ShortPlan, opts: { id: strin
     assets: parent.assets.map((a) => structuredClone(a)),
     // Music is picked for a whole video; a short gets its own.
     music: null,
+    writeup: null,
     transcript: parent.transcript.filter((w) => used.has(w.sourceId)).map((w) => ({ ...w })),
     segments,
     proposals: parent.proposals

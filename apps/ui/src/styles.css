@@ -1058,3 +1058,8 @@ body {
 .sound__meaning {
   color: var(--color-text-muted);
 }
+
+/* Chapters: the time to jump to, the title to edit, and a way to take it out. */
+.chapters__item {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}

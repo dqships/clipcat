@@ -424,14 +424,33 @@ export function audioCommand(plan: AudioPlan): { graph: string; args: string[] }
 export const chunkList = (files: string[]) => `ffconcat version 1.0\n${files.map((f) => `file '${f}'`).join("\n")}\n`;
 
 /** Joins the chunks and the sound without re-encoding, with the index up front for streaming. */
-export function muxArgs(list: string, audio: string, out: string): string[] {
+export function muxArgs(list: string, audio: string, out: string, meta: string | null = null): string[] {
   return [
     ...BASE_ARGS,
     "-f", "concat", "-safe", "0", "-i", list,
     "-i", audio,
+    ...(meta ? ["-f", "ffmetadata", "-i", meta, "-map_metadata", "2", "-map_chapters", "2"] : []),
     "-map", "0:v:0", "-map", "1:a:0",
     "-c", "copy",
     "-movflags", "+faststart",
     out,
   ];
+}
+
+/** Escapes what ffmetadata gives a meaning to: = ; # \ and line breaks. */
+const metaText = (text: string) => text.replace(/[=;#\\\n]/g, (c) => `\\${c}`);
+
+/**
+ * The file's title and chapters as an ffmetadata file, each chapter running
+ * to the next one (the last to the end), so players list them.
+ */
+export function ffmetadata(title: string, chapters: { start: number; title: string }[], duration: number): string {
+  const ms = (t: number) => Math.round(t * 1000);
+  const lines = [";FFMETADATA1"];
+  if (title.trim()) lines.push(`title=${metaText(title.trim())}`);
+  chapters.forEach((c, i) => {
+    const end = i + 1 < chapters.length ? chapters[i + 1]!.start : duration;
+    lines.push("[CHAPTER]", "TIMEBASE=1/1000", `START=${ms(c.start)}`, `END=${ms(end)}`, `title=${metaText(c.title)}`);
+  });
+  return `${lines.join("\n")}\n`;
 }

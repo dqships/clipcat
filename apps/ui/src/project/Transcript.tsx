@@ -1,5 +1,5 @@
-import { type EditOp, type Project, SOUND_EFFECTS, type SlideLook, type Word, isWordKept } from "@clipcat/core";
-import { AudioLines, Image, Presentation, Scissors, Undo2, ZoomIn } from "lucide-react";
+import { type EditOp, type Project, SOUND_EFFECTS, type SlideLook, type Word, isWordKept, orderedWords } from "@clipcat/core";
+import { AudioLines, Bookmark, Image, Presentation, Scissors, Undo2, ZoomIn } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ICON_STROKE } from "../icons";
 import type { Playhead } from "./Preview";
@@ -17,18 +17,13 @@ type Props = {
   onEdit: (op: EditOp) => void;
 };
 
-/** Every word in play order: recordings by their order, words by time. */
-export function orderedWords(project: Project): Word[] {
-  const order = new Map(project.sources.map((s) => [s.id, s.order]));
-  return [...project.transcript].sort((a, b) => (order.get(a.sourceId) ?? 0) - (order.get(b.sourceId) ?? 0) || a.start - b.start);
-}
-
 /**
  * The transcript as the edit: struck words are cut, and cutting words cuts
  * the video. Click a word to jump there, shift-click to select a run, then
  * Delete to cut it (or to restore it, when it is all cut already), punch in on
  * it so the picture zooms there, show b-roll over it, have the AI editor
- * design a slide for it, or land a sound effect on its first word.
+ * design a slide for it, or land a sound effect or start a chapter on its
+ * first word.
  */
 export function Transcript({ project, playhead, onSeek, onEdit }: Props) {
   const words = useMemo(() => orderedWords(project), [project]);
@@ -46,6 +41,7 @@ export function Transcript({ project, playhead, onSeek, onEdit }: Props) {
     () => new Set(project.proposals.filter((p) => p.overlay && p.status === "accepted").flatMap((p) => p.wordIds)),
     [project.proposals],
   );
+  const chapterWords = useMemo(() => new Set(project.writeup?.chapters.map((c) => c.wordId)), [project.writeup]);
   const media = project.assets.filter((a) => a.prep && a.kind !== "slide");
   const [slide, setSlide] = useState<{ brief: string; look: SlideLook } | null>(null);
   const kept = useMemo(() => words.map((w) => isWordKept(project.segments, w)), [words, project.segments]);
@@ -166,6 +162,12 @@ export function Transcript({ project, playhead, onSeek, onEdit }: Props) {
                       Add slide
                     </button>
                   </form>
+                )}
+                {!slide && !chapterWords.has(selected[0]?.id ?? "") && (
+                  <button type="button" className="button" onClick={() => selected[0] && onEdit({ type: "chapter", wordId: selected[0].id, title: "New chapter" })}>
+                    <Bookmark className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
+                    Chapter
+                  </button>
                 )}
                 {!slide && (
                   <label className="editor__broll">

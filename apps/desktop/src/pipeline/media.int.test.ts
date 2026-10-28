@@ -320,6 +320,10 @@ describe.skipIf(!binDir)("prep with real ffmpeg", () => {
     await store.update(projectId, null, (q) => {
       q.proposals = q.proposals.filter((x) => !x.overlay);
       q.proposals.push(soundProposal({ id: "fx1", sourceId: s, wordIds: [], reason: "", confidence: 1, status: "accepted" }, { at: 0.5, effect: "boom", volume: 1 }));
+      // A title and two chapters, so the joined file carries them.
+      q.suggestedTitle = "Tones";
+      const ws = [...q.transcript].sort((a, b) => a.start - b.start);
+      q.writeup = { chapters: [{ wordId: ws[0]!.id, title: "First" }, { wordId: ws.at(-1)!.id, title: "Second" }], description: "", article: { title: "", markdown: "" } };
     });
     // A high tone the recording doesn't have, so the music is easy to hear in the export.
     const song = join(root, "song.flac");
@@ -347,6 +351,11 @@ describe.skipIf(!binDir)("prep with real ffmpeg", () => {
     await new ExportRunner(deps).run(projectId, "16:9", out, { signal: new AbortController().signal, progress: () => {} });
     const streams = await streamDurations(out);
     expect(Math.abs(streams.video - streams.audio)).toBeLessThan(0.05);
+    const { stdout: meta } = await run(exe("ffprobe"), ["-v", "error", "-show_chapters", "-show_entries", "format_tags=title", "-of", "json", out]);
+    const probed = JSON.parse(meta) as { chapters: { start_time: string; tags: { title: string } }[]; format: { tags?: { title?: string } } };
+    expect(probed.format.tags?.title).toBe("Tones");
+    expect(probed.chapters.map((c) => c.tags.title)).toEqual(["First", "Second"]);
+    expect(Number(probed.chapters[0]!.start_time)).toBe(0);
 
     /** The loudest moment, in dB, of one band of a stretch of a file's sound. */
     const peak = async (file: string, from: number, to: number, band: string) => {

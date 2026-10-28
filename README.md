@@ -136,6 +136,16 @@ compressor in the export; the preview approximates it). The export places
 each effect so its hit lands on the word, and mixes speech, effects and
 music with a limiter on top.
 
+The write-up is what goes with the video when it's posted. The AI editor
+reads the edited transcript and writes chapters (each on the word it starts
+with, so they follow the edit, at least 10 seconds apart, three or more on a
+video over a minute), a short description and an article in Markdown in the
+speaker's voice. Everything can be changed in the panel, and a chapter can be
+started on any word from the transcript. "Copy description and chapters"
+puts the description with a YouTube-style chapter list on the clipboard, the
+article saves as a `.md` file, and every export carries the title and the
+chapters in the MP4 itself.
+
 Editing happens in the transcript: click a word to jump there, shift-click to
 select a run, and press Delete to cut it (again to restore). Suggested cuts,
 from the pause finder and from Claude, are accepted or rejected under the

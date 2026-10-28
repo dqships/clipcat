@@ -371,3 +371,39 @@ describe("AnalysisRunner slides", () => {
     expect(forgotten).toEqual([first]);
   });
 });
+
+describe("AnalysisRunner write-up", () => {
+  it("asks again for enough chapters, then saves the chapters, description and article", async () => {
+    const article = { title: "Two hundred words", markdown: "They add up." };
+    const { agent, runs, replies } = scripted([
+      { chapters: [{ word: 0, title: "Start" }, { word: 100, title: "Middle" }], description: "About words.", article },
+      { chapters: [{ word: 0, title: "Start" }, { word: 60, title: "Middle" }, { word: 150, title: "End" }], description: "About words.", article },
+    ]);
+    const store = new ProjectStore(root);
+    const queue = new JobQueue(() => {});
+    const created = await store.create("talk");
+    await store.update(created.id, null, (p) => {
+      p.sources.push(source("a", 120));
+      p.transcript = words("a", Array.from({ length: 200 }, (_, i) => `w${i}`).join(" "));
+      p.segments = setRange(initialSegments("a", 120, counter("s")), "a", [6, 12], false, counter("t"));
+    });
+    const runner = new AnalysisRunner({ store, queue, agent: async () => agent, dictionary: async () => [], changed: () => {} });
+    runner.writeup(created.id);
+    await queue.idle(created.id);
+
+    expect(runs[0]!.system).toContain("You are ClipCat's writer");
+    expect(runs[0]!.prompt).toContain("The finished video is 114 seconds long.");
+    expect(runs[0]!.prompt).toContain("~w10~");
+    expect(replies[0]).toContain("give at least 3 chapters");
+    expect(replies[1]).toBe("Saved 3 chapters, the description and the article. Stop here.");
+    expect((await store.get(created.id)).writeup).toEqual({
+      chapters: [
+        { wordId: "a-w0", title: "Start" },
+        { wordId: "a-w60", title: "Middle" },
+        { wordId: "a-w150", title: "End" },
+      ],
+      description: "About words.",
+      article,
+    });
+  });
+});

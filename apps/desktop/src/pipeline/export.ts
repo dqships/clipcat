@@ -8,7 +8,20 @@
 import { createHash } from "node:crypto";
 import { access, copyFile, mkdir, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join } from "node:path";
-import { type Asset, type Project, SOUND_EFFECTS, buildTimeline, captionCues, outputWords, timedOverlays, timedPunches, timedSounds, toAss, toSrt } from "@clipcat/core";
+import {
+  type Asset,
+  type Project,
+  SOUND_EFFECTS,
+  buildTimeline,
+  captionCues,
+  outputWords,
+  timedChapters,
+  timedOverlays,
+  timedPunches,
+  timedSounds,
+  toAss,
+  toSrt,
+} from "@clipcat/core";
 import type { JobContext, JobQueue } from "../jobs/queue";
 import type { Encoder } from "../media/encoders";
 import {
@@ -21,6 +34,7 @@ import {
   exportFps,
   exportSize,
   frameTimeline,
+  ffmetadata,
   muxArgs,
 } from "../media/export";
 import { soundFile } from "../sound/library";
@@ -182,11 +196,15 @@ export class ExportRunner {
         await render("libx264");
       }
       await writeFile(join(work, "chunks.txt"), chunkList(files));
+      // The title and chapters go into the file, so players list the chapters.
+      const chapters = timedChapters(project, buildTimeline(project)).filter((c) => c.start < timeline.duration);
+      const title = project.suggestedTitle.trim();
+      if (title || chapters.length > 0) await writeFile(join(work, "meta.txt"), ffmetadata(title, chapters, timeline.duration));
 
       // Joined beside the target under a temporary name, so a failed export never leaves half a file under the real one.
       const partial = join(dirname(out), `.${basename(out, extname(out))}.clipcat-partial.mp4`);
       try {
-        await this.deps.ffmpeg(muxArgs("chunks.txt", "audio.m4a", partial), {
+        await this.deps.ffmpeg(muxArgs("chunks.txt", "audio.m4a", partial, title || chapters.length > 0 ? "meta.txt" : null), {
           cwd: work,
           duration: timeline.duration,
           ctx: { signal: ctx.signal, progress: (f) => ctx.progress(1 - MUX_SHARE + (f ?? 0) * MUX_SHARE) },

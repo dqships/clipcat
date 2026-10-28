@@ -8,13 +8,16 @@ import {
   AgentDescriptions,
   AgentShorts,
   AgentSlide,
+  AgentWriteup,
   type Asset,
+  CHAPTERS,
   type Project,
   SLIDE,
   SOUND_EFFECTS,
   type SlideLook,
   type Word,
   isWordKept,
+  orderedWords,
 } from "@clipcat/core";
 import type { z } from "zod";
 
@@ -144,6 +147,38 @@ export const SHORTS_TASK: AgentTask = {
   jsonAnswer: `Answer with only the JSON object the output schema describes: every short. ${JSON_ONLY}`,
 };
 
+export const WRITEUP_TASK: AgentTask = {
+  tool: "submit_writeup",
+  description: "Submit the write-up for this video: chapters, a description and an article. Call once with all of it; if problems come back, fix them and call again.",
+  shape: AgentWriteup.shape,
+  jsonSchema: {
+    type: "object",
+    additionalProperties: false,
+    required: ["chapters", "description", "article"],
+    properties: {
+      chapters: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          required: ["word", "title"],
+          properties: { word: { type: "integer" }, title: { type: "string" } },
+        },
+      },
+      description: { type: "string" },
+      article: {
+        type: "object",
+        additionalProperties: false,
+        required: ["title", "markdown"],
+        properties: { title: { type: "string" }, markdown: { type: "string" } },
+      },
+    },
+  },
+  toolAnswer:
+    "Call submit_writeup once with the chapters, the description and the article. If it reports problems, fix them and call it again with all of it. Once it says the write-up is saved, stop. Don't write anything else.",
+  jsonAnswer: `Answer with only the JSON object the output schema describes: the chapters, the description and the article. ${JSON_ONLY}`,
+};
+
 export const DESCRIBE_TASK: AgentTask = {
   tool: "submit_media_descriptions",
   description: "Submit a description of each picture and video. Call once with every description; if problems come back, fix them and call again.",
@@ -236,6 +271,25 @@ Rules:
 - reason: one sentence the user reads: the hook and why it stands alone.
 - Follow the user's brief when there is one.`;
 
+export const WRITEUP_PROMPT = `You are ClipCat's writer. You read the transcript of a finished talking-head video and write what goes with it when it is posted: chapters, a description and an article.
+
+Words are numbered [n] across the whole project. Words marked ~like this~ are cut from the video: the viewer never hears them, so leave them out of everything you write.
+
+Chapters:
+- Each chapter starts on a word, by its number, and has a short title (2 to 6 words) that says what the stretch is about. Plain words, no numbering, no emoji, no clickbait.
+- The first chapter starts on the first word that isn't cut. Chapters come in order, each at least ${CHAPTERS.seconds} seconds of the finished video long, and start where the topic changes, on the first word of a sentence.
+- A video of ${CHAPTERS.video} seconds or more gets ${CHAPTERS.min} to ${CHAPTERS.max} chapters, about one every one to three minutes. A shorter video gets none: send an empty list.
+
+Description:
+- Two to four sentences for YouTube or a podcast feed: what the viewer learns or gets, in the speaker's voice. No hashtags, no timestamps (ClipCat adds the chapters), no links, no "in this video".
+
+Article:
+- A blog post made from what the video says, for someone who would rather read: a title, then the body in Markdown with a short intro, a few ## sections and a closing paragraph. Don't repeat the title as a heading.
+- Write it as prose in the speaker's voice and point of view, tightened: drop the filler, the asides to the camera and the repetition, keep their examples, numbers and opinions. Don't invent facts, quotes or links they didn't give.
+- About 300 to 1200 words, depending on how much the video says.
+
+Write in the transcript's language. Follow the user's brief when there is one.`;
+
 export const EDITOR_PROMPT = `You are ClipCat's editor. You read the transcript of a talking-head recording and propose cuts that make it tight and watchable, punch-ins that give its best lines weight, b-roll from the user's own media, motion slides and sound effects. You never change anything yourself: every proposal is shown to the user, who accepts or rejects it.
 
 Words are numbered [n] across the whole project. Ranges are inclusive word indices.
@@ -274,12 +328,7 @@ Rules:
 
 const seconds = (t: number) => `${t.toFixed(1)}s`;
 
-/** Every word, recording by recording in project order: the numbering the agent cites. */
-export function orderedWords(project: Pick<Project, "sources" | "transcript">): Word[] {
-  return [...project.sources]
-    .sort((a, b) => a.order - b.order)
-    .flatMap((s) => project.transcript.filter((w) => w.sourceId === s.id).sort((a, b) => a.start - b.start));
-}
+export { orderedWords };
 
 /**
  * The numbered transcript, one recording after another, numbered as
@@ -392,5 +441,18 @@ export function designPrompt(slide: { brief: string; look: SlideLook }, frame: {
     `Frame: ${frame.width}×${frame.height} (${shape})`,
     `It shows for ${seconds.toFixed(1)} seconds: have everything in place by ${Math.max(0.6, Math.min(1.5, seconds - 0.5)).toFixed(1)} seconds.`,
     ...(line.trim() ? [`What the speaker says over it: "${line.trim()}"`] : []),
+  ].join("\n");
+}
+
+/** The user turn for the write-up: the finished length, the brief, then the transcript with the cuts marked. */
+export function writeupPrompt(project: Pick<Project, "sources" | "transcript" | "segments" | "brief" | "language" | "suggestedTitle">, seconds: number): string {
+  const brief = project.brief.trim();
+  return [
+    `The finished video is ${seconds.toFixed(0)} seconds long${seconds < CHAPTERS.video ? ", so it gets no chapters" : ""}.`,
+    ...(project.suggestedTitle.trim() ? [`Its title: ${project.suggestedTitle.trim()}`] : []),
+    brief ? `The user's brief for the video:\n${brief}` : "The user gave no brief.",
+    `Transcript language: ${project.language}.`,
+    "",
+    numberedTranscript(project, (w) => !isWordKept(project.segments, w)),
   ].join("\n");
 }
