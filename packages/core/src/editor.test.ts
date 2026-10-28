@@ -105,3 +105,31 @@ describe("applyEdit framing", () => {
     expect(() => applyEdit(p, { type: "frame", sourceId: "nope", x: 0.5 }, counter("g"))).toThrow("Unknown source");
   });
 });
+
+describe("applyEdit punch-ins", () => {
+  it("punches in on words as one undo step, and changes the style without one", () => {
+    const p = project();
+    const punched = applyEdit(p, { type: "punch", wordIds: ["a-w4", "a-w3"], style: "zoom-in" }, counter("n"));
+    const added = punched.proposals.at(-1)!;
+    expect(added).toMatchObject({ type: "punch-in", status: "accepted", wordIds: ["a-w3", "a-w4"], cuts: [], punch: { style: "zoom-in", scale: 1.2 } });
+    expect(added.punch!.range[0]).toBeCloseTo(1.8);
+    expect(added.punch!.range[1]).toBeCloseTo(2.9);
+    expect(punched.history.past).toHaveLength(1);
+    // Cuts are untouched.
+    expect(kept(punched)).toEqual(kept(p));
+
+    const snapped = applyEdit(punched, { type: "punch-style", id: added.id, style: "cut" }, counter("n"));
+    expect(snapped.proposals.at(-1)!.punch).toMatchObject({ style: "cut", scale: 1.25 });
+    expect(snapped.history.past).toHaveLength(1);
+
+    const undone = applyEdit(snapped, { type: "undo" }, counter("n"));
+    expect(undone.proposals.at(-1)!.status).toBe("rejected");
+    expect(applyEdit(undone, { type: "redo" }, counter("n")).proposals.at(-1)!.status).toBe("accepted");
+  });
+
+  it("refuses unknown words and punch-ins", () => {
+    const p = project();
+    expect(() => applyEdit(p, { type: "punch", wordIds: ["nope"], style: "cut" }, counter("n"))).toThrow("Unknown words: nope");
+    expect(() => applyEdit(p, { type: "punch-style", id: "x1", style: "cut" }, counter("n"))).toThrow("Unknown punch-in");
+  });
+});

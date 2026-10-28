@@ -1,4 +1,16 @@
-import { type Project, type Source, type Timeline, buildTimeline, cropOffset, framingAt } from "@clipcat/core";
+import {
+  type Project,
+  type Source,
+  type TimedPunch,
+  type Timeline,
+  buildTimeline,
+  cropOffset,
+  framingAt,
+  punchFocus,
+  punchZoom,
+  sourceToOutput,
+  timedPunches,
+} from "@clipcat/core";
 import { type Ref, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { mediaUrl } from "../format";
 
@@ -30,6 +42,27 @@ export function previewOffset(timeline: Timeline, source: Source, time: number):
   return cropOffset(framingAt(source, item?.sourceStart ?? time, item?.sourceEnd ?? time), aspect, 9 / 16);
 }
 
+const aspectOf = (s: Source) => (s.media.width > 0 && s.media.height > 0 ? s.media.width / s.media.height : 16 / 9);
+
+/**
+ * The part of the recording a punch-in shows, as a CSS object-view-box: the
+ * export's crop for the kept range `item`, zoomed by `zoom` toward where the
+ * punch-in aims. Its shape is the frame's, so object-fit has nothing left to crop.
+ */
+export function punchViewBox(source: Source, item: [number, number], punch: Pick<TimedPunch, "range">, zoom: number, tall: boolean): string {
+  const aspect = aspectOf(source);
+  const out = tall ? 9 / 16 : 16 / 9;
+  const width = Math.min(1, out / aspect);
+  const left = width < 1 ? cropOffset(framingAt(source, item[0], item[1]), aspect, out) * (1 - width) : 0;
+  const focus = punchFocus(source, item, punch.range, aspect, out);
+  const w = width / zoom;
+  const h = 1 / zoom;
+  const x = left + (width - w) * focus.x;
+  const y = (1 - h) * focus.y;
+  const pct = (n: number) => `${(Math.max(0, n) * 100).toFixed(3)}%`;
+  return `inset(${pct(y)} ${pct(1 - x - w)} ${pct(1 - y - h)} ${pct(x)})`;
+}
+
 /** The kept stretch to play after `time` in `sourceId`, in timeline order, or null at the end. */
 export function nextKept(timeline: Timeline, sourceId: string, time: number, order: Map<string, number>) {
   const here = order.get(sourceId) ?? 0;
@@ -56,8 +89,9 @@ export function Preview({ project, onTime, ref }: Props) {
   const pending = useRef<{ time: number; play: boolean } | null>(null);
   const tall = project.aspectRatio === "9:16";
   const [offset, setOffset] = useState(0.5);
-  const live = useRef({ timeline, order, sourceId, onTime, sources, tall });
-  live.current = { timeline, order, sourceId, onTime, sources, tall };
+  const punches = useMemo(() => timedPunches(project, timeline), [project, timeline]);
+  const live = useRef({ timeline, order, sourceId, onTime, sources, tall, punches });
+  live.current = { timeline, order, sourceId, onTime, sources, tall, punches };
 
   useEffect(() => {
     if (!sourceId && sources[0]) setSourceId(sources[0].id);
@@ -82,11 +116,17 @@ export function Preview({ project, onTime, ref }: Props) {
     let handle = 0;
     let reported = Number.NaN;
     const check = () => {
-      const { timeline: tl, order: ord, sourceId: sid, onTime: report, sources: all, tall: narrow } = live.current;
+      const { timeline: tl, order: ord, sourceId: sid, onTime: report, sources: all, tall: narrow, punches: zooms } = live.current;
       if (!sid) return;
       const t = v.currentTime;
-      const here = narrow ? all.find((s) => s.id === sid) : undefined;
-      if (here) setOffset(previewOffset(tl, here, t));
+      const here = all.find((s) => s.id === sid);
+      if (here && narrow) setOffset(previewOffset(tl, here, t));
+      // A punch-in zooms the picture, the way the export will.
+      const out = sourceToOutput(tl, sid, t);
+      const punch = out === null ? undefined : zooms.find((p) => out >= p.start && out < p.end);
+      const item = tl.items.find((i) => i.sourceId === sid && t >= i.sourceStart && t < i.sourceEnd);
+      const box = here && punch && item && out !== null ? punchViewBox(here, [item.sourceStart, item.sourceEnd], punch, punchZoom(punch, out), narrow) : "";
+      if (v.style.getPropertyValue("object-view-box") !== box) v.style.setProperty("object-view-box", box);
       if (v.paused || !(Math.abs(t - reported) < REPORT_STEP)) {
         reported = t;
         report({ sourceId: sid, time: t });

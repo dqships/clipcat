@@ -171,6 +171,7 @@ export function silenceProposals(
       reason: `${(b - a).toFixed(1)} s pause`,
       confidence: 1,
       status: "pending",
+      punch: null,
     });
   }
   return proposals;

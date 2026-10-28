@@ -7,7 +7,7 @@ import { mkdtemp, readFile, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { applyEdit } from "@clipcat/core";
+import { applyEdit, punchProposal } from "@clipcat/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { JobQueue, type JobEvent } from "../jobs/queue";
 import { runFfmpeg } from "../media/run";
@@ -119,6 +119,13 @@ describe.skipIf(!binDir)("prep with real ffmpeg", () => {
     const pause = p.proposals.find((x) => x.type === "silence")!;
     let n = 0;
     await store.update(projectId, null, (q) => applyEdit(q, { type: "decide", ids: [pause.id], status: "accepted" }, () => `e${++n}`));
+    // A punch-in of each kind, the slow one across the cut pause, so the zooms run through ffmpeg too.
+    await store.update(projectId, null, (q) => {
+      const s = q.sources[0]!.id;
+      const at = (id: string, range: [number, number], style: "cut" | "zoom-in" | "slow-zoom") =>
+        punchProposal({ id, sourceId: s, wordIds: [], reason: "", confidence: 1, status: "accepted" }, range, style);
+      q.proposals.push(at("k1", [0.2, 0.8], "cut"), at("k2", [0.9, 4.6], "slow-zoom"), at("k3", [4.8, 5.6], "zoom-in"));
+    });
     const deps = {
       store,
       queue: new JobQueue(() => {}),

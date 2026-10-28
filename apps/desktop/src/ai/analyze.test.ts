@@ -109,6 +109,24 @@ describe("AnalysisRunner", () => {
     ]);
   });
 
+  it("saves punch-ins as zooms, spaced out, and tells the agent which were too close", async () => {
+    const early = { type: "punch-in", from: 0, to: 2, punchStyle: "cut", reason: "Opener", confidence: 0.5 };
+    const late = { type: "punch-in", from: 4, to: 7, punchStyle: "slow-zoom", reason: "The point", confidence: 0.9 };
+    const { agent, replies } = scripted([{ proposals: [early, late] }, { proposals: [early, late] }]);
+    const { store, queue, runner, id } = await setup(agent);
+    await store.update(id, null, (p) => {
+      p.segments = initialSegments("a", 10, counter("g"));
+    });
+    await runner.analyze(id, "");
+    await queue.idle(id);
+
+    expect(replies[0]).toContain("punch-in at word 0: too close to another punch-in");
+    const p = await store.get(id);
+    expect(p.proposals.map((x) => [x.type, x.cuts, x.punch?.style])).toEqual([["punch-in", [], "slow-zoom"]]);
+    // A punch-in cuts nothing when accepted.
+    expect(p.proposals[0]!.wordIds).toEqual(["a-w4", "a-w5", "a-w6", "a-w7"]);
+  });
+
   it("fails the job when the agent never answers", async () => {
     const { agent } = scripted([]);
     const { queue, events, runner, id } = await setup(agent);

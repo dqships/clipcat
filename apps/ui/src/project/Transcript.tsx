@@ -1,5 +1,5 @@
 import { type EditOp, type Project, type Word, isWordKept } from "@clipcat/core";
-import { Scissors, Undo2 } from "lucide-react";
+import { Scissors, Undo2, ZoomIn } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ICON_STROKE } from "../icons";
 import type { Playhead } from "./Preview";
@@ -20,14 +20,19 @@ export function orderedWords(project: Project): Word[] {
 /**
  * The transcript as the edit: struck words are cut, and cutting words cuts
  * the video. Click a word to jump there, shift-click to select a run, then
- * Delete to cut it (or to restore it, when it is all cut already).
+ * Delete to cut it (or to restore it, when it is all cut already), or punch in
+ * on it so the picture zooms there.
  */
 export function Transcript({ project, playhead, onSeek, onEdit }: Props) {
   const words = useMemo(() => orderedWords(project), [project]);
   const [anchor, setAnchor] = useState<number | null>(null);
   const [focus, setFocus] = useState<number | null>(null);
   const proposed = useMemo(
-    () => new Set(project.proposals.filter((p) => p.type !== "silence" && p.status === "pending").flatMap((p) => p.wordIds)),
+    () => new Set(project.proposals.filter((p) => p.type !== "silence" && !p.punch && p.status === "pending").flatMap((p) => p.wordIds)),
+    [project.proposals],
+  );
+  const punched = useMemo(
+    () => new Set(project.proposals.filter((p) => p.punch && p.status === "accepted").flatMap((p) => p.wordIds)),
     [project.proposals],
   );
   const kept = useMemo(() => words.map((w) => isWordKept(project.segments, w)), [words, project.segments]);
@@ -43,6 +48,7 @@ export function Transcript({ project, playhead, onSeek, onEdit }: Props) {
   const [from, to] = anchor === null || focus === null ? [-1, -2] : [Math.min(anchor, focus), Math.max(anchor, focus)];
   const selected = words.slice(from, to + 1);
   const allCut = selected.length > 0 && kept.slice(from, to + 1).every((k) => !k);
+  const oneRecording = selected.every((w) => w.sourceId === selected[0]?.sourceId);
 
   const apply = (included: boolean) => {
     if (selected.length === 0) return;
@@ -78,10 +84,18 @@ export function Transcript({ project, playhead, onSeek, onEdit }: Props) {
                 Restore
               </button>
             ) : (
-              <button type="button" className="button" onClick={() => apply(false)}>
-                <Scissors className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
-                Cut
-              </button>
+              <>
+                <button type="button" className="button" onClick={() => apply(false)}>
+                  <Scissors className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
+                  Cut
+                </button>
+                {oneRecording && (
+                  <button type="button" className="button" onClick={() => onEdit({ type: "punch", wordIds: selected.map((w) => w.id), style: "zoom-in" })}>
+                    <ZoomIn className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
+                    Punch in
+                  </button>
+                )}
+              </>
             )}
           </>
         ) : (
@@ -94,6 +108,7 @@ export function Transcript({ project, playhead, onSeek, onEdit }: Props) {
           const classes = ["word"];
           if (!kept[i]) classes.push("word--cut");
           else if (proposed.has(w.id)) classes.push("word--proposed");
+          if (kept[i] && punched.has(w.id)) classes.push("word--punched");
           if (i === current) classes.push("word--current");
           if (i >= from && i <= to) classes.push("word--selected");
           return (

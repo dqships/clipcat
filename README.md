@@ -92,6 +92,14 @@ face position in it, so the frame moves only at cuts. Set Shape to Vertical
 9:16 to preview the crop, and untick "Follow the speaker" to place it by hand
 per recording.
 
+Punch-ins zoom the picture toward the speaker for a few seconds to give a line
+weight. The AI editor suggests them alongside its cuts, or you can select words
+in the transcript and press "Punch in". Each one snaps in, pushes in quickly
+or creeps in slowly, and they are kept at least 10 seconds apart with 6
+seconds of no zoom between them. They follow their words through later edits.
+The export zooms with crop/scale and zoompan, aimed at the face inside the
+frame's crop, and the preview shows the same zoom.
+
 Editing happens in the transcript: click a word to jump there, shift-click to
 select a run, and press Delete to cut it (again to restore). Suggested cuts,
 from the pause finder and from Claude, are accepted or rejected under the

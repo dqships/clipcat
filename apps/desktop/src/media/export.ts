@@ -6,7 +6,17 @@
 // picture and the sound the same length piece by piece, so they stay in sync
 // however many cuts there are.
 
-import { type Project, type Source, type Timeline, type TimelineItem, cropOffset, framingAt } from "@clipcat/core";
+import {
+  PUNCH,
+  type Project,
+  type Source,
+  type Timeline,
+  type TimelineItem,
+  type TimedPunch,
+  cropOffset,
+  framingAt,
+  punchFocus,
+} from "@clipcat/core";
 import { type Encoder, encoderArgs } from "./encoders";
 
 export type ExportFormat = "16:9" | "9:16";
@@ -100,6 +110,8 @@ export function exportChunks(timeline: FramedTimeline, size: number): Chunk[] {
 
 type Shape = {
   project: Pick<Project, "sources" | "speed">;
+  /** The punch-ins in effect, timed on the framed timeline (see timedPunches). */
+  punches?: TimedPunch[];
   format: ExportFormat;
   fps: number;
   /** The file each source is read from: the original, or the proxy for audio-only sources. */
@@ -127,12 +139,61 @@ export function fitFilter(s: Source, item: Pick<FramedItem, "sourceStart" | "sou
   if (format === "9:16") {
     // Fill the frame: crop to its shape around the speaker, then scale.
     const r = (W / H).toFixed(6);
-    const aspect = s.media.width > 0 && s.media.height > 0 ? s.media.width / s.media.height : 16 / 9;
-    const x = cropOffset(framingAt(s, item.sourceStart, item.sourceEnd), aspect, W / H).toFixed(4);
+    const x = cropOffset(framingAt(s, item.sourceStart, item.sourceEnd), sourceAspect(s), W / H).toFixed(4);
     return `crop=w='min(iw,ih*${r})':h='min(ih,iw/${r})':x='(iw-ow)*${x}':y='(ih-oh)/2',scale=${W}:${H}:flags=lanczos`;
   }
   // Fit inside the frame, letterboxed if the recording has another shape.
   return `scale=${W}:${H}:force_original_aspect_ratio=decrease:flags=lanczos,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:color=black`;
+}
+
+const sourceAspect = (s: Source) => (s.media.width > 0 && s.media.height > 0 ? s.media.width / s.media.height : 16 / 9);
+
+/** A stretch of a kept range to render as one branch: inside one punch-in, or outside all of them. */
+type Piece = FramedItem & { punch: TimedPunch | null; at: number };
+
+/**
+ * Splits a chunk's ranges where punch-ins start and end, so each piece zooms
+ * the same way throughout. `at` is the piece's first frame on the whole
+ * output, which a zoom's progress is counted from.
+ */
+export function punchPieces(items: FramedItem[], punches: TimedPunch[], fps: number, speed: number): Piece[] {
+  const step = frameStep(fps, speed);
+  const marks = punches.map((p) => ({ p, a: Math.round(p.start * fps), b: Math.round(p.end * fps) }));
+  const out: Piece[] = [];
+  for (const item of items) {
+    // A chunk's piece of a range keeps the range's own start; frames count on from there.
+    const base = Math.round(item.outputStart * fps) - Math.round(item.sourceStart / step);
+    const start = base + item.from;
+    const end = start + item.frames;
+    const cuts = [...new Set([start, end, ...marks.flatMap((m) => [m.a, m.b]).filter((f) => f > start && f < end)])].sort((x, y) => x - y);
+    for (let k = 0; k < cuts.length - 1; k++) {
+      const a = cuts[k]!;
+      const b = cuts[k + 1]!;
+      const punch = marks.find((m) => m.a <= a && b <= m.b)?.p ?? null;
+      out.push({ ...item, from: item.from + (a - start), frames: b - a, punch, at: a });
+    }
+  }
+  return out;
+}
+
+/** The zoom for one piece inside `punch`, applied to the fitted frame. */
+export function punchFilter(s: Source, piece: Piece, punch: TimedPunch, size: Size, fps: number, rate: string): string {
+  const { width: W, height: H } = size;
+  const focus = punchFocus(s, [piece.sourceStart, piece.sourceEnd], punch.range, sourceAspect(s), W / H);
+  const fx = focus.x.toFixed(4);
+  const fy = focus.y.toFixed(4);
+  const grown = (punch.scale - 1).toFixed(4);
+  if (punch.style === "cut") {
+    const z = punch.scale.toFixed(4);
+    return `crop=w='trunc(iw/${z}/2)*2':h='trunc(ih/${z}/2)*2':x='(iw-ow)*${fx}':y='(ih-oh)*${fy}',scale=${W}:${H}:flags=lanczos`;
+  }
+  // Frames into the punch-in where this piece starts, and the zoom's length in frames.
+  const into = piece.at - Math.round(punch.start * fps);
+  const length = punch.style === "zoom-in" ? Math.max(1, Math.round(PUNCH.ramp * fps)) : Math.max(1, Math.round(punch.end * fps) - Math.round(punch.start * fps));
+  const z = punch.style === "zoom-in" ? `1+${grown}*min(1,(${into}+on)/${length})` : `1+${grown}*(${into}+on)/${length}`;
+  // A slow creep moves by fractions of a pixel a frame; working at twice the size keeps it from stepping.
+  const up = punch.style === "slow-zoom" ? `scale=${W * 2}:${H * 2}:flags=bicubic,` : "";
+  return `${up}zoompan=z='${z}':x='(iw-iw/zoom)*${fx}':y='(ih-ih/zoom)*${fy}':d=1:s=${W}x${H}:fps=${rate}`;
 }
 
 export type ChunkPlan = Shape & {
@@ -153,7 +214,8 @@ export function chunkCommand(plan: ChunkPlan): { graph: string; args: string[] }
   const size = exportSize(format, project.sources);
   const step = frameStep(fps, project.speed);
   const sources = new Map(project.sources.map((s) => [s.id, s]));
-  const used = sourcesUsed(chunk.items);
+  const pieces = punchPieces(chunk.items, plan.punches ?? [], fps, project.speed);
+  const used = sourcesUsed(pieces);
   // ffmpeg reads fps as a fraction: frames per source second.
   const rate = `${fps * 1000}/${Math.round(project.speed * 1000)}`;
 
@@ -161,7 +223,7 @@ export function chunkCommand(plan: ChunkPlan): { graph: string; args: string[] }
   const lines: string[] = [];
   const first = new Map<string, number>();
   used.forEach((id, i) => {
-    const mine = chunk.items.filter((x) => x.sourceId === id);
+    const mine = pieces.filter((x) => x.sourceId === id);
     const from = Math.min(...mine.map((x) => x.from));
     const to = Math.max(...mine.map((x) => x.from + x.frames));
     first.set(id, from);
@@ -172,12 +234,14 @@ export function chunkCommand(plan: ChunkPlan): { graph: string; args: string[] }
   });
   const taken = new Map<string, number>();
   const parts: string[] = [];
-  chunk.items.forEach((item, k) => {
+  pieces.forEach((item, k) => {
     const i = used.indexOf(item.sourceId);
     const b = taken.get(item.sourceId) ?? 0;
     taken.set(item.sourceId, b + 1);
     const a = item.from - first.get(item.sourceId)!;
-    const fit = fitFilter(sources.get(item.sourceId)!, item, format, size);
+    const source = sources.get(item.sourceId)!;
+    const zoom = item.punch ? `,${punchFilter(source, item, item.punch, size, fps, rate)}` : "";
+    const fit = `${fitFilter(source, item, format, size)}${zoom}`;
     lines.push(`[s${i}v${b}]trim=start_frame=${a}:end_frame=${a + item.frames},setpts=PTS-STARTPTS,${fit},setsar=1,format=yuv420p[v${k}]`);
     parts.push(`[v${k}]`);
   });

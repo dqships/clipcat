@@ -12,6 +12,7 @@ import { ExportPanel } from "./ExportPanel";
 import { FramingPanel } from "./FramingPanel";
 import { type Playhead, Preview, type PreviewHandle } from "./Preview";
 import { Proposals } from "./Proposals";
+import { PunchInsPanel } from "./PunchInsPanel";
 import { ShortsPanel } from "./ShortsPanel";
 import { Waveform } from "./Waveform";
 import { Transcript } from "./Transcript";
@@ -21,7 +22,7 @@ type Props = { projectId: string; jobs: ProjectJobs; onBack: () => void; onOpen:
 
 /**
  * The editor: the preview plays the edit, the strip shows where the cuts
- * are, and the transcript is where they're made. Suggested cuts, from the
+ * are, and the transcript is where they're made. Suggested edits, from the
  * pause finder and from Claude, wait below the preview for a decision;
  * caption style and export come after.
  */
@@ -106,6 +107,7 @@ export function ProjectView({ projectId, jobs, onBack, onOpen }: Props) {
           {project && <Waveform project={project} playhead={playhead} onSeek={seek} />}
           <JobLine jobs={jobs} onCancel={() => void bridge()?.invoke("jobs:cancel", { id: projectId })} />
           {project && <Proposals project={project} onSeek={seek} onEdit={edit} />}
+          {project && <PunchInsPanel project={project} onSeek={seek} onEdit={edit} />}
           {project && <AiPanel project={project} jobs={jobs} />}
           {project && <ShortsPanel project={project} jobs={jobs} onOpen={onOpen} />}
           {project && <FramingPanel project={project} playhead={playhead} onEdit={edit} />}

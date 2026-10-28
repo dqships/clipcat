@@ -1,6 +1,6 @@
 import { buildTimeline } from "@clipcat/core";
 import { describe, expect, it } from "vitest";
-import { nextKept, previewOffset } from "./Preview";
+import { nextKept, previewOffset, punchViewBox } from "./Preview";
 
 const seg = (id: string, sourceId: string, sourceStart: number, sourceEnd: number, included = true) => ({ id, sourceId, sourceStart, sourceEnd, included });
 const sources = [
@@ -44,5 +44,21 @@ describe("previewOffset", () => {
   it("follows a hand-set position everywhere", () => {
     const manual = { ...faces, id: "a", framing: "manual", frameX: 0, faces: [{ t: 6, x: 0.8 }] } as never;
     expect(previewOffset(timeline, manual, 6)).toBe(0);
+  });
+});
+
+describe("punchViewBox", () => {
+  const source = { id: "a", frameX: 0.5, framing: "auto", faces: [{ t: 1, x: 0.5 }], media: { width: 1920, height: 1080 } } as never;
+  const punch = { range: [0, 2] as [number, number] };
+
+  it("zooms the whole landscape frame toward the face, aiming at the upper middle", () => {
+    // 1.25× shows 80% of each side: 20% left over, split 50/50 across and 40/60 down.
+    expect(punchViewBox(source, [0, 2], punch, 1.25, false)).toBe("inset(8.000% 10.000% 12.000% 10.000%)");
+  });
+
+  it("zooms inside the vertical crop, keeping its shape", () => {
+    const box = punchViewBox(source, [0, 2], punch, 1, true);
+    // Unzoomed it is the crop itself: 31.6% of the width, centred.
+    expect(box).toBe("inset(0.000% 34.180% 0.000% 34.180%)");
   });
 });
