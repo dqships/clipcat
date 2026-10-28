@@ -37,6 +37,7 @@
   --shadow-overlay: 0 2px 4px rgb(23 21 15 / 0.12), 0 16px 40px rgb(23 21 15 / 0.16);
   --control-height: 32px;
   --track-head: 88px;
+  --panel-min: 240px;
   --focus-ring: 0 0 0 2px var(--color-accent);
 
   --icon-stroke: 1.75;
