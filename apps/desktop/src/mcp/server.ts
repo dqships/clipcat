@@ -9,7 +9,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
-import { EditOp, type Project, SOUND_EFFECTS, buildTimeline, isWordKept, orderedWords } from "@clipcat/core";
+import { EditOp, type Project, SOUND_EFFECTS, type TimelineFormat, buildTimeline, isWordKept, orderedWords } from "@clipcat/core";
 import type { JobEventValue, ProjectSummaryValue } from "@clipcat/ipc";
 import { numberedTranscript } from "../ai/prompt";
 
@@ -27,6 +27,8 @@ export type McpDeps = {
   shorts: (id: string, count: number, seconds: 30 | 60 | 90) => Promise<void>;
   exportVideo: (id: string, format: ExportFormat, path: string) => Promise<void>;
   importFiles: (files: string[], projectId: string | null) => Promise<Project>;
+  /** Writes the edit as a timeline file for another editor. */
+  exportTimeline: (id: string, format: TimelineFormat, path: string) => Promise<void>;
   /** The latest state of recent jobs, newest first. */
   jobs: (projectId: string | null) => JobEventValue[];
 };
@@ -359,6 +361,26 @@ A mistake in the op comes back as an error saying what to fix.`,
       guard(async () => {
         await deps.exportVideo(projectId, format, path);
         return text(`Queued the ${format} export to ${path}.`);
+      }),
+  );
+
+  server.registerTool(
+    "export_timeline",
+    {
+      title: "Export a timeline for another editor",
+      description:
+        "Writes the edit (the kept stretches of the original recordings, at normal speed, with chapters as markers) to path as a timeline: fcpxml for Final Cut Pro or DaVinci Resolve (.fcpxml), premiere for Premiere Pro (Final Cut 7 XML, .xml), or edl (CMX 3600, .edl). Captions, punch-ins, b-roll and sounds stay in ClipCat.",
+      inputSchema: {
+        projectId: ProjectId,
+        format: z.enum(["fcpxml", "premiere", "edl"]),
+        path: z.string().min(1).max(4096).describe("Absolute path; an existing file there is replaced."),
+      },
+      annotations: { ...change, destructiveHint: true, idempotentHint: true },
+    },
+    ({ projectId, format, path }) =>
+      guard(async () => {
+        await deps.exportTimeline(projectId, format, path);
+        return text(`Wrote the ${format} timeline to ${path}.`);
       }),
   );
 

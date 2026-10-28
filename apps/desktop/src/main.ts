@@ -7,7 +7,7 @@ import { BrowserWindow, app, dialog, nativeTheme, safeStorage, shell } from "ele
 import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
-import { type Article, type EditOp, applyEdit } from "@clipcat/core";
+import { type Article, type EditOp, TIMELINE_FORMATS, type TimelineFormat, applyEdit } from "@clipcat/core";
 import tokens from "../../../design/tokens.json";
 import { homedir } from "node:os";
 import { extname, join, resolve } from "node:path";
@@ -222,6 +222,12 @@ function mcpEnv(socket: string): InstallEnv {
 /** A file name from the video's title: no characters Windows or macOS refuse. */
 const fileName = (title: string) => title.replace(/[\\/:*?"<>|\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim().slice(0, 120) || "ClipCat export";
 
+/** Writes the edit as a timeline for another editor, named for the video. */
+async function writeTimeline(store: ProjectStore, id: string, format: TimelineFormat, path: string): Promise<void> {
+  const project = await store.get(id);
+  await writeFile(path, TIMELINE_FORMATS[format].write(project, project.suggestedTitle || project.name));
+}
+
 /** The article as a Markdown file: its title as the heading, then the body. */
 const articleFile = (a: Article) => `${a.title.trim() ? `# ${a.title.trim()}\n\n` : ""}${a.markdown.trim()}\n`;
 
@@ -293,6 +299,7 @@ if (!squirrelLaunch) {
           exporter.export(id, format, path);
         },
         importFiles: (files, projectId) => pipeline.import(files, projectId),
+        exportTimeline: (id, format, path) => writeTimeline(store, id, format, path),
         jobs: (projectId) => jobs.list(projectId),
       }),
     ).then(
@@ -450,6 +457,21 @@ if (!squirrelLaunch) {
           if (result.canceled || !result.filePath) return { path: null };
           const path = extname(result.filePath).toLowerCase() === ".mp4" ? result.filePath : `${result.filePath}.mp4`;
           exporter.export(id, format, path);
+          return { path };
+        },
+        "project:export-timeline": async ({ id, format }, event) => {
+          const project = await store.get(id);
+          const { label, extension } = TIMELINE_FORMATS[format];
+          const win = BrowserWindow.fromWebContents(event.sender);
+          const options: Electron.SaveDialogOptions = {
+            title: `Export a timeline for ${label}`,
+            defaultPath: join(app.getPath("documents"), `${fileName(project.suggestedTitle || project.name)}.${extension}`),
+            filters: [{ name: label, extensions: [extension] }],
+          };
+          const result = win ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options);
+          if (result.canceled || !result.filePath) return { path: null };
+          const path = extname(result.filePath).toLowerCase() === `.${extension}` ? result.filePath : `${result.filePath}.${extension}`;
+          await writeTimeline(store, id, format, path);
           return { path };
         },
         "project:reveal-export": async ({ id }) => {

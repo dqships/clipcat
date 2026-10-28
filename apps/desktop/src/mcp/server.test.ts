@@ -43,6 +43,7 @@ beforeEach(async () => {
     shorts: vi.fn(async () => {}),
     exportVideo: vi.fn(async () => {}),
     importFiles: vi.fn(async () => store.get(projectId)),
+    exportTimeline: vi.fn(async () => {}),
     jobs: () => [{ projectId, jobId: "job-1", kind: "export", label: "Exporting 16:9", state: "running", fraction: 0.5 }],
   };
   const [a, b] = InMemoryTransport.createLinkedPair();
@@ -115,5 +116,7 @@ describe("ClipCat's MCP server", () => {
     expect(deps.exportVideo).toHaveBeenCalledWith(projectId, "9:16", "/tmp/out.mp4");
     expect((await call("export_video", { projectId, format: "9:16", path: "/tmp/out.mov" })).isError).toBe(true);
     expect(JSON.parse(textOf(await call("list_jobs", { projectId })))[0].state).toBe("running");
+    await call("export_timeline", { projectId, format: "fcpxml", path: "/tmp/cut.fcpxml" });
+    expect(deps.exportTimeline).toHaveBeenCalledWith(projectId, "fcpxml", "/tmp/cut.fcpxml");
   });
 });
