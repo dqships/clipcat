@@ -1,7 +1,7 @@
 {
   "name": "@clipcat/desktop",
   "productName": "ClipCat",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Personal AI video editor for talking-head videos",
   "private": true,
   "license": "UNLICENSED",
