@@ -4,8 +4,9 @@ import { useMemo, useState } from "react";
 import { bridge } from "../bridge";
 import { ICON_STROKE } from "../icons";
 import type { ProjectJobs } from "../useJobs";
+import type { Ai } from "./useAi";
 
-type Props = { project: Project; jobs: ProjectJobs; onSeek: (sourceId: string, time: number) => void; onEdit: (op: EditOp) => void };
+type Props = { project: Project; jobs: ProjectJobs; ai: Ai; onSeek: (sourceId: string, time: number) => void; onEdit: (op: EditOp) => void };
 
 /**
  * What goes with the video when it's posted: chapters on the words they
@@ -13,7 +14,7 @@ type Props = { project: Project; jobs: ProjectJobs; onSeek: (sourceId: string, t
  * chapters under it, and an article to save as Markdown. The AI editor
  * writes a draft from the edited transcript, and every part can be changed.
  */
-export function WriteupPanel({ project, jobs, onSeek, onEdit }: Props) {
+export function WriteupPanel({ project, jobs, ai, onSeek, onEdit }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const running = jobs.active?.kind === "writeup";
@@ -52,11 +53,12 @@ export function WriteupPanel({ project, jobs, onSeek, onEdit }: Props) {
           ? "Chapters follow their words through the edit, and go into the exported file. Rewriting replaces the chapters, description and article, including your changes."
           : "The AI editor writes chapters, a description and an article from the edited video. Select a word in the transcript to start a chapter there yourself."}
       </p>
-      <div>
-        <button type="button" className="button" disabled={project.transcript.length === 0 || running} onClick={write}>
+      <div className="ai__actions">
+        <button type="button" className="button" disabled={project.transcript.length === 0 || !ai.ready || running} onClick={write}>
           <PenLine className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
           {running ? "Writing…" : w ? "Rewrite chapters and article" : "Write chapters and article"}
         </button>
+        {project.transcript.length > 0 && ai.reason && <span className="ai__hint">{ai.reason}</span>}
       </div>
       {error && (
         <p className="notice notice--danger" role="alert">

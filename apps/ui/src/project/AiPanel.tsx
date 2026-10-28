@@ -1,14 +1,13 @@
 import type { Project, Proposal } from "@clipcat/core";
 import type { AgentNameValue, AiStatusValue, ApiModelValue } from "@clipcat/ipc";
-import { Copy, KeyRound, MessageSquare, Scissors, SpellCheck } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { Copy, KeyRound, MessageSquare, Scissors } from "lucide-react";
+import { useState } from "react";
 import { bridge } from "../bridge";
 import { ICON_STROKE } from "../icons";
 import type { ProjectJobs } from "../useJobs";
+import { AGENT_LABEL, type Ai, readiness } from "./useAi";
 
 const AI_TYPES = new Set<Proposal["type"]>(["retake", "cleanup", "tighten"]);
-
-const AGENT_LABEL: Record<AgentNameValue, string> = { claude: "Claude Code", codex: "Codex", api: "Claude API (your key)" };
 
 const MODEL_LABEL: Record<ApiModelValue, string> = {
   "claude-opus-5-5": "Opus 5.5 (best)",
@@ -28,43 +27,22 @@ function modelChoices(ai: AiStatusValue, name: "claude" | "codex"): { id: string
   return selected && !choices.some((c) => c.id === selected) ? [...choices, { id: selected, label: selected }] : choices;
 }
 
-/** Whether an agent can run now, and what to do if not. */
-function readiness(ai: AiStatusValue, name: AgentNameValue): { ready: boolean; installed: boolean; detail: string | null } {
-  if (name === "api") return { ready: ai.api.hasKey, installed: ai.api.hasKey, detail: ai.api.hasKey ? null : "Add a key from console.anthropic.com below." };
-  const s = ai[name];
-  return { ready: s.status === "ready", installed: s.status !== "not-installed", detail: s.detail };
-}
-
-type Props = { project: Project; jobs: ProjectJobs };
+type Props = { project: Project; jobs: ProjectJobs; ai: Ai };
 
 /**
  * Asks the user's Claude Code, Codex or Claude API key for a first edit:
- * which one, an optional brief and one button. What comes back is listed with the other
- * suggested cuts to accept or reject.
+ * which one, an optional brief and one button. What comes back is listed
+ * with the other suggested edits to accept or reject.
  */
-export function AiPanel({ project, jobs }: Props) {
-  const [ai, setAi] = useState<AiStatusValue | null>(null);
+export function AiPanel({ project, jobs, ai: shared }: Props) {
+  const { status: ai, setStatus: setAi, check } = shared;
   const [brief, setBrief] = useState(project.brief);
-  const [error, setError] = useState<string | null>(null);
-
-  const check = useCallback(() => {
-    setAi(null);
-    bridge()
-      ?.invoke("ai:status")
-      .then(setAi, (e: unknown) => setError(e instanceof Error ? e.message : String(e)));
-  }, []);
-  useEffect(check, [check]);
+  const [failure, setError] = useState<string | null>(null);
+  const error = failure ?? shared.error;
 
   const running = jobs.active?.kind === "analyze" || jobs.active?.kind === "correct";
   const [request, setRequest] = useState("");
   const [copied, setCopied] = useState(false);
-  const [terms, setTerms] = useState<string | null>(null);
-
-  useEffect(() => {
-    bridge()
-      ?.invoke("settings:get")
-      .then((s) => setTerms(s.dictionary.join(", ")), () => setTerms(""));
-  }, []);
   const agent = ai?.agent ?? "claude";
   const status = ai ? readiness(ai, agent) : null;
   const ready = status?.ready ?? false;
@@ -120,21 +98,11 @@ export function AiPanel({ project, jobs }: Props) {
       ?.invoke("project:request", { id: project.id, request })
       .then(() => setRequest(""), fail);
   };
-  const saveTerms = () => {
-    if (terms === null) return;
-    const dictionary = [...new Set(terms.split(/[,\n]/).map((t) => t.trim()).filter(Boolean))].slice(0, 200).map((t) => t.slice(0, 60));
-    bridge()?.invoke("settings:set", { dictionary }).catch(fail);
-  };
   const copyTitle = () => {
     navigator.clipboard.writeText(project.suggestedTitle).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }, fail);
-  };
-  const fixTranscript = () => {
-    setError(null);
-    saveTerms();
-    bridge()?.invoke("project:correct", { id: project.id }).catch(fail);
   };
 
   return (
@@ -260,24 +228,6 @@ export function AiPanel({ project, jobs }: Props) {
         <button type="button" className="button" disabled={!ready || !hasWords || running || !request.trim()} onClick={ask}>
           <MessageSquare className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
           Send
-        </button>
-      </div>
-      <label className="ai__label" htmlFor="ai-terms">
-        Names and words to spell right
-      </label>
-      <div className="ai__row">
-        <input
-          id="ai-terms"
-          className="ai__brief"
-          placeholder="ClipCat, DaQuan, Vercel"
-          value={terms ?? ""}
-          disabled={terms === null}
-          onChange={(e) => setTerms(e.target.value)}
-          onBlur={saveTerms}
-        />
-        <button type="button" className="button" disabled={!ready || !hasWords || running} onClick={fixTranscript}>
-          <SpellCheck className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
-          Fix spelling
         </button>
       </div>
       {error && (

@@ -5,8 +5,9 @@ import { bridge } from "../bridge";
 import { formatDuration } from "../format";
 import { ICON_STROKE } from "../icons";
 import type { ProjectJobs } from "../useJobs";
+import type { Ai } from "./useAi";
 
-type Props = { project: Project; jobs: ProjectJobs; onOpen: (id: string) => void };
+type Props = { project: Project; jobs: ProjectJobs; ai: Ai; onOpen: (id: string) => void };
 
 const COUNTS = [1, 3, 5] as const;
 const LENGTHS = [30, 60, 90] as const;
@@ -16,7 +17,7 @@ const LENGTHS = [30, 60, 90] as const;
  * their own, and each becomes a vertical project to edit and export. In a
  * short, this says where it came from instead.
  */
-export function ShortsPanel({ project, jobs, onOpen }: Props) {
+export function ShortsPanel({ project, jobs, ai, onOpen }: Props) {
   const [count, setCount] = useState<(typeof COUNTS)[number]>(3);
   const [seconds, setSeconds] = useState<(typeof LENGTHS)[number]>(60);
   const [error, setError] = useState<string | null>(null);
@@ -77,11 +78,11 @@ export function ShortsPanel({ project, jobs, onOpen }: Props) {
             ))}
           </select>
         </label>
-        <button type="button" className="button" disabled={!hasWords || running} onClick={make}>
+        <button type="button" className="button" disabled={!hasWords || !ai.ready || running} onClick={make}>
           <Smartphone className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
           {running ? "Finding shorts…" : "Make shorts"}
         </button>
-        {!hasWords && <span className="ai__hint">Available once the transcript is ready.</span>}
+        {!hasWords ? <span className="ai__hint">Available once the transcript is ready.</span> : ai.reason && <span className="ai__hint">{ai.reason}</span>}
       </div>
       {error && (
         <p className="notice notice--danger" role="alert">

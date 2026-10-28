@@ -16,10 +16,13 @@ import { Proposals } from "./Proposals";
 import { PunchInsPanel } from "./PunchInsPanel";
 import { ShortsPanel } from "./ShortsPanel";
 import { SoundPanel } from "./SoundPanel";
+import { Spelling } from "./Spelling";
+import { Tools } from "./Tools";
 import { Waveform } from "./Waveform";
 import { Transcript } from "./Transcript";
 import { type Dock, type PanelId, panelsIn, SIZE_LIMITS, SPLIT_LIMITS, usePanelLayout } from "./layout";
 import { DockPanel, Resizer } from "./Panels";
+import { useAi } from "./useAi";
 import { useEditor } from "./useEditor";
 import { ThumbnailPanel } from "./ThumbnailPanel";
 import { WriteupPanel } from "./WriteupPanel";
@@ -36,9 +39,9 @@ type Props = {
 /**
  * The editor: the preview plays the edit, the strip shows where the cuts
  * are, and the transcript is where they're made. The preview stays put; the
- * transcript and the controls (suggested edits, sound, captions, export and
- * the rest) are panels that dock left, right or below it, and split a dock
- * they share.
+ * transcript and the tools (in tabs: editing, the look, what to publish with
+ * it, and export) are panels that dock left, right or below it, and split a
+ * dock they share.
  */
 export function ProjectView({ projectId, jobs, onBack, onOpen, onRecord }: Props) {
   const [project, setProjectState] = useState<Project | null>(null);
@@ -64,6 +67,7 @@ export function ProjectView({ projectId, jobs, onBack, onOpen, onRecord }: Props
   useProjectChanges(load);
   const reload = useCallback(() => load(projectId), [load, projectId]);
   const edit = useEditor(project, setProject, reload, setError);
+  const ai = useAi();
 
   const seek = useCallback((sourceId: string, time: number) => {
     preview.current?.seek(sourceId, time);
@@ -82,24 +86,45 @@ export function ProjectView({ projectId, jobs, onBack, onOpen, onRecord }: Props
     id === "transcript" ? (
       <DockPanel key={id} id={id} title="Transcript" dock={layout.dock[id]} onMove={(d) => move(id, d)} grow={grow}>
         {project && hasWords ? (
-          <Transcript project={project} playhead={playhead} onSeek={seek} onEdit={edit} />
+          <>
+            <Spelling project={project} jobs={jobs} ai={ai} />
+            <Transcript project={project} playhead={playhead} onSeek={seek} onEdit={edit} />
+          </>
         ) : (
           <p className="empty__body">{transcribed ? "No speech found." : "The transcript appears here once it's ready."}</p>
         )}
       </DockPanel>
     ) : (
-      <DockPanel key={id} id={id} title="Controls" dock={layout.dock[id]} onMove={(d) => move(id, d)} grow={grow}>
-        {project && <Proposals project={project} onSeek={seek} onEdit={edit} />}
-        {project && <PunchInsPanel project={project} onSeek={seek} onEdit={edit} />}
-        {project && <MediaPanel project={project} onSeek={seek} onEdit={edit} />}
-        {project && <SoundPanel project={project} onSeek={seek} onEdit={edit} />}
-        {project && <AiPanel project={project} jobs={jobs} />}
-        {project && <ShortsPanel project={project} jobs={jobs} onOpen={onOpen} />}
-        {project && <WriteupPanel project={project} jobs={jobs} onSeek={seek} onEdit={edit} />}
-        {project && <ThumbnailPanel project={project} playhead={playhead} jobs={jobs} onEdit={edit} />}
-        {project && <FramingPanel project={project} playhead={playhead} onEdit={edit} />}
-        {project && <CaptionsPanel project={project} onEdit={edit} />}
-        {project && <ExportPanel project={project} jobs={jobs} onEdit={edit} />}
+      <DockPanel key={id} id={id} title="Tools" dock={layout.dock[id]} onMove={(d) => move(id, d)} grow={grow}>
+        {project && (
+          <Tools
+            pending={project.proposals.filter((p) => p.status === "pending").length}
+            edit={
+              <>
+                {project.origin && <ShortsPanel project={project} jobs={jobs} ai={ai} onOpen={onOpen} />}
+                <AiPanel project={project} jobs={jobs} ai={ai} />
+                <Proposals project={project} onSeek={seek} onEdit={edit} />
+                <PunchInsPanel project={project} onSeek={seek} onEdit={edit} />
+                <MediaPanel project={project} onSeek={seek} onEdit={edit} />
+                <SoundPanel project={project} onSeek={seek} onEdit={edit} />
+              </>
+            }
+            look={
+              <>
+                <FramingPanel project={project} playhead={playhead} onEdit={edit} />
+                <CaptionsPanel project={project} onEdit={edit} />
+              </>
+            }
+            publish={
+              <>
+                <ThumbnailPanel project={project} playhead={playhead} jobs={jobs} onEdit={edit} />
+                <WriteupPanel project={project} jobs={jobs} ai={ai} onSeek={seek} onEdit={edit} />
+                {!project.origin && <ShortsPanel project={project} jobs={jobs} ai={ai} onOpen={onOpen} />}
+              </>
+            }
+            export={<ExportPanel project={project} jobs={jobs} onEdit={edit} />}
+          />
+        )}
       </DockPanel>
     );
 
