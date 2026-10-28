@@ -161,6 +161,19 @@ from the pause finder and from Claude, are accepted or rejected under the
 preview. Every edit is undoable with Cmd/Ctrl+Z and redone with
 Shift+Cmd/Ctrl+Z, and the preview plays the edit with the cuts skipped.
 
+Claude Code, Codex and the Claude desktop app can drive ClipCat from outside
+it. Settings (the gear in the library) adds ClipCat's MCP server to each
+agent's config: `~/.claude.json`, `~/.codex/config.toml` or
+`claude_desktop_config.json`. The entry runs ClipCat's own executable as Node
+(`ELECTRON_RUN_AS_NODE=1`) on `dist/mcp.cjs`, a small bridge that pipes the
+agent's stdio to a socket in the app's data folder (a named pipe on Windows),
+so there is no port and no token. The tools read projects and the numbered
+transcript, cut and restore words, decide proposals, take any edit op, start
+the app's own AI passes and exports, and import recordings. Every change goes
+through the same revision check as the editor, so nothing overwrites an edit
+made in the window. A packaged ClipCat that isn't running is started by the
+bridge, and entries are pointed at the current copy of the app on every launch.
+
 Export renders the edit with ffmpeg: 16:9 at the recordings' own height (up to
 1440p) or 9:16 at 1080×1920, cropped around the speaker, at the speed set in the
 Export panel (0.5× to 2×, which the preview plays at too). Every kept range is

@@ -106,6 +106,8 @@ jobs:
           grep -q '"faceDetector":null' "$out"
           # So does the subject cutout (ISNet on ONNX Runtime's WebAssembly backend).
           grep -q '"cutout":null' "$out"
+          # An outside agent reaches the MCP server through the packaged bridge.
+          grep -q '"mcp":null' "$out"
       - name: Cache the speech models
         uses: actions/cache@v4
         with:
