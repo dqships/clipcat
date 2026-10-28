@@ -1,6 +1,6 @@
 import { type EditOp, type Project, SOUND_EFFECTS, type SlideLook, type Word, isWordKept, orderedWords } from "@clipcat/core";
 import { AudioLines, Bookmark, Image, Presentation, Scissors, Undo2, ZoomIn } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { ICON_STROKE } from "../icons";
 import type { Playhead } from "./Preview";
 
@@ -48,13 +48,19 @@ export function Transcript({ project, playhead, onSeek, onEdit }: Props) {
   const names = new Map(project.sources.map((s) => [s.id, s.name]));
   const several = project.sources.length > 1;
 
-  // A new transcript (another import, a re-run) invalidates index-based selections.
-  useEffect(() => {
+  // A new transcript (another import, a re-run) invalidates index-based
+  // selections, and the slide form belongs to the selection it was opened for.
+  // Both reset while rendering rather than in an effect, so a click that lands
+  // before a pending effect runs isn't undone by it.
+  const [seen, setSeen] = useState({ length: words.length, anchor, focus });
+  if (seen.length !== words.length) {
+    setSeen({ length: words.length, anchor: null, focus: null });
     setAnchor(null);
     setFocus(null);
-  }, [words.length]);
-  // The slide form belongs to the selection it was opened for.
-  useEffect(() => setSlide(null), [anchor, focus]);
+  } else if (seen.anchor !== anchor || seen.focus !== focus) {
+    setSeen({ length: words.length, anchor, focus });
+    setSlide(null);
+  }
 
   const [from, to] = anchor === null || focus === null ? [-1, -2] : [Math.min(anchor, focus), Math.max(anchor, focus)];
   const selected = words.slice(from, to + 1);
