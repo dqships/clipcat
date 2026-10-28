@@ -1,15 +1,15 @@
 // ClipCat's main process: one window, the UI on app://clipcat, prepared media
 // on media://, sound effects on sound://, the cutout model on model://, the
-// IPC handlers, and the MCP socket outside agents drive it through. All media
-// work lives here, never in the renderer.
+// IPC handlers, the MCP socket outside agents drive it through, and the
+// recordings in progress. All media work lives here, never in the renderer.
 
-import { BrowserWindow, app, dialog, nativeTheme, safeStorage, shell } from "electron";
+import { BrowserWindow, app, desktopCapturer, dialog, nativeTheme, safeStorage, session, shell, systemPreferences } from "electron";
 import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { type Article, type EditOp, TIMELINE_FORMATS, type TimelineFormat, applyEdit } from "@clipcat/core";
 import tokens from "../../../design/tokens.json";
-import { homedir } from "node:os";
+import { homedir, release } from "node:os";
 import { extname, join, resolve } from "node:path";
 import type { AppInfoValue } from "@clipcat/ipc";
 import { AnalysisRunner } from "./ai/analyze";
@@ -28,6 +28,9 @@ import { IMAGE_EXTENSIONS, VIDEO_EXTENSIONS } from "./media/assets";
 import { MUSIC_EXTENSIONS } from "./media/music";
 import { encoderTestArgs, lazyEncoder, pickEncoder } from "./media/encoders";
 import { runFfmpeg } from "./media/run";
+import { inspectStreams } from "./media/probe";
+import { startNative } from "./record/native";
+import { RecordingSessions } from "./record/sessions";
 import { closeCutout, cutout, cutoutProblem, setCutoutPage } from "./cutout";
 import { closeFaceDetector, faceDetector, faceDetectorProblem, setFacePage } from "./faceDetector";
 import { AssetPipeline } from "./pipeline/assets";
@@ -90,6 +93,16 @@ async function appInfo(): Promise<AppInfoValue> {
     PARAKEET ? toolInfo("clipcat-parakeet") : null,
   ]);
   return { name: "ClipCat", version: app.getVersion(), platform: process.platform, arch: process.arch, ffmpeg, whisper, parakeet, encoder: await encoder() };
+}
+
+/** The macOS recorder needs ScreenCaptureKit's recording output, new in macOS 15 (Darwin 24). */
+const NATIVE_SCREEN = process.platform === "darwin" && Number(release().split(".")[0]) >= 24;
+
+/** The system settings page that grants camera, microphone or screen recording. */
+function privacyPane(kind: "camera" | "microphone" | "screen"): string {
+  if (process.platform === "win32") return kind === "camera" ? "ms-settings:privacy-webcam" : "ms-settings:privacy-microphone";
+  const pane = { camera: "Privacy_Camera", microphone: "Privacy_Microphone", screen: "Privacy_ScreenCapture" }[kind];
+  return `x-apple.systempreferences:com.apple.preference.security?${pane}`;
 }
 
 /** The smaller whisper model is for CI and slow machines; everyone else gets the accurate one. */
@@ -206,7 +219,14 @@ function startPipeline() {
     if (op.type === "slide" || op.type === "describe") void analysis.designMissing(id);
     return next;
   };
-  return { store, settings, keys, queue, jobs, pipeline, media, music, thumbnail, analysis, exporter, edit };
+  const recordings = new RecordingSessions({
+    tempDir: join(data, "recordings"),
+    outDir: join(app.getPath("videos"), "ClipCat"),
+    inspect: (file) => inspectStreams(tool("ffprobe"), file),
+    ffmpeg: (args) => runFfmpeg(tool("ffmpeg"), args, { duration: 0 }),
+    now: () => new Date(),
+  });
+  return { store, settings, keys, queue, jobs, pipeline, media, music, thumbnail, analysis, exporter, edit, recordings };
 }
 
 /** Where outside agents reach the app, and what their configs run to get there. */
@@ -281,7 +301,23 @@ if (!squirrelLaunch) {
   if (!app.requestSingleInstanceLock()) app.quit();
 
   app.whenReady().then(() => {
-    const { store, settings, keys, queue, jobs, pipeline, media, music, thumbnail, analysis, exporter, edit } = startPipeline();
+    const { store, settings, keys, queue, jobs, pipeline, media, music, thumbnail, analysis, exporter, edit, recordings } = startPipeline();
+    app.on("will-quit", () => void recordings.discardAll());
+    // The UI's getDisplayMedia gets the screen picked in the recorder, with the computer's sound on Windows.
+    let pickedScreen: { screenId: string; systemAudio: boolean } | null = null;
+    session.defaultSession.setDisplayMediaRequestHandler((_request, callback) => {
+      const pick = pickedScreen;
+      pickedScreen = null;
+      if (!pick) return callback({});
+      void desktopCapturer.getSources({ types: ["screen"] }).then(
+        (sources) => {
+          const source = sources.find((s) => s.id === pick.screenId);
+          if (!source) return callback({});
+          callback({ video: source, ...(pick.systemAudio && process.platform === "win32" ? { audio: "loopback" as const } : {}) });
+        },
+        () => callback({}),
+      );
+    });
     const socket = socketPath(app.getPath("userData"), process.platform);
     const installEnv = mcpEnv(socket);
     const mcp = listen(socket, () =>
@@ -331,12 +367,13 @@ if (!squirrelLaunch) {
           const info = await appInfo();
           const file = process.env.CLIPCAT_SMOKE_IMPORT;
           const ai = await aiStatus();
-          const [faceDetector, cutout, mcpProblem] = await Promise.all([
+          const [faceDetector, cutout, mcpProblem, recorder] = await Promise.all([
             faceDetectorProblem(),
             cutoutProblem(),
             mcp.then((problem) => problem ?? smokeMcp(installEnv.spec)),
+            process.platform === "darwin" ? toolInfo("clipcat-recorder") : null,
           ]);
-          finishSmoke({ screen, info, ai, faceDetector, cutout, mcp: mcpProblem, ...(file ? { import: await smokeImport(pipeline, exporter, store, queue, file) } : {}) });
+          finishSmoke({ screen, info, ai, faceDetector, cutout, mcp: mcpProblem, recorder, ...(file ? { import: await smokeImport(pipeline, exporter, store, queue, file) } : {}) });
         },
         "library:list": () => store.list(),
         "files:pick": async (_, event) => {
@@ -479,6 +516,45 @@ if (!squirrelLaunch) {
           if (last) shell.showItemInFolder(last.path);
         },
         "jobs:cancel": ({ id }) => queue.cancel(id),
+        "record:setup": async () => {
+          const screenAccess = process.platform === "darwin" ? systemPreferences.getMediaAccessStatus("screen") : "granted";
+          const sources = await desktopCapturer.getSources({ types: ["screen"], thumbnailSize: { width: 320, height: 180 } }).catch(() => []);
+          const native = NATIVE_SCREEN && existsSync(tool("clipcat-recorder"));
+          return {
+            screens: sources.map((s, i) => ({ id: s.id, displayId: s.display_id || "", name: sources.length > 1 ? `Screen ${i + 1}` : "Your screen", thumbnail: s.thumbnail.toDataURL() })),
+            native,
+            systemAudio: native || process.platform === "win32",
+            screenAccess,
+          };
+        },
+        "record:access": async ({ kind }) =>
+          process.platform === "darwin" ? systemPreferences.askForMediaAccess(kind) : systemPreferences.getMediaAccessStatus(kind) !== "denied",
+        "record:pick-screen": (pick) => {
+          pickedScreen = pick;
+        },
+        "record:begin": async ({ kind, mimeType }) => {
+          const token = await recordings.begin(kind, mimeType);
+          // The window keeps out of its own screen recording (WDA_EXCLUDEFROMCAPTURE on Windows, sharing off on a Mac);
+          // the macOS 15 recorder leaves ClipCat out by itself.
+          if (kind === "screen") mainWindow?.setContentProtection(true);
+          return { token };
+        },
+        "record:privacy": ({ kind }) => shell.openExternal(privacyPane(kind)),
+        "record:native": async ({ displayId, mic, micName, systemAudio }) => {
+          if (!NATIVE_SCREEN) throw new Error("The built-in screen recorder needs macOS 15 or newer");
+          const binary = tool("clipcat-recorder");
+          const token = await recordings.beginNative((out) => startNative(binary, { displayId, out, mic, micName, systemAudio, excludePid: process.pid }));
+          return { token };
+        },
+        "record:chunk": ({ token, data }) => recordings.append(token, Buffer.from(data, "base64")),
+        "record:end": async ({ token, projectId }) => {
+          const file = await recordings.end(token).finally(() => mainWindow?.setContentProtection(false));
+          return pipeline.import([file], projectId);
+        },
+        "record:discard": async ({ token }) => {
+          mainWindow?.setContentProtection(false);
+          await recordings.discard(token);
+        },
         "mcp:status": () => mcpStatus(installEnv),
         "mcp:connect": async ({ agent, connect }) => {
           await connectAgent(installEnv, agent, connect);

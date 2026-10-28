@@ -1,5 +1,5 @@
 import type { ProjectSummaryValue } from "@clipcat/ipc";
-import { Plus, Settings } from "lucide-react";
+import { Plus, Settings, Video } from "lucide-react";
 import { type DragEvent, useCallback, useEffect, useState } from "react";
 import lockupInk from "../../../../brand/logo/clipcat-lockup-ink.svg";
 import lockupWhite from "../../../../brand/logo/clipcat-lockup-white.svg";
@@ -13,10 +13,11 @@ type Props = {
   jobsFor: (projectId: string) => ProjectJobs;
   onOpen: (projectId: string) => void;
   onSettings: () => void;
+  onRecord: () => void;
 };
 
 /** The first screen: your projects, newest first. Drop files anywhere to start one. */
-export function Library({ jobsFor, onOpen, onSettings }: Props) {
+export function Library({ jobsFor, onOpen, onSettings, onRecord }: Props) {
   const [projects, setProjects] = useState<ProjectSummaryValue[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -71,6 +72,12 @@ export function Library({ jobsFor, onOpen, onSettings }: Props) {
         </picture>
         <div className="titlebar__action">
           {hasProjects && (
+            <button type="button" className="button" onClick={onRecord}>
+              <Video className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
+              Record
+            </button>
+          )}
+          {hasProjects && (
             <button type="button" className="button button--primary" onClick={pick}>
               <Plus className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
               Add videos
@@ -105,12 +112,18 @@ export function Library({ jobsFor, onOpen, onSettings }: Props) {
               No videos yet
             </h2>
             <p className="empty__body">
-              Drop in your raw takes and ClipCat cuts the retakes and silences, then captions what's left.
+              Drop in your raw takes, or record one here, and ClipCat cuts the retakes and silences, then captions what's left.
             </p>
-            <button type="button" className="button button--primary" onClick={pick}>
-              <Plus className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
-              Add videos
-            </button>
+            <div className="empty__actions">
+              <button type="button" className="button button--primary" onClick={pick}>
+                <Plus className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
+                Add videos
+              </button>
+              <button type="button" className="button" onClick={onRecord}>
+                <Video className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
+                Record
+              </button>
+            </div>
           </section>
         ) : (
           <ul className="grid" aria-label="Projects">

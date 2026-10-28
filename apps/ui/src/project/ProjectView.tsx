@@ -1,5 +1,5 @@
 import type { Project } from "@clipcat/core";
-import { ArrowLeft, Redo2, Undo2 } from "lucide-react";
+import { ArrowLeft, Redo2, Undo2, Video } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { bridge } from "../bridge";
 import { ICON_STROKE } from "../icons";
@@ -22,7 +22,14 @@ import { useEditor } from "./useEditor";
 import { ThumbnailPanel } from "./ThumbnailPanel";
 import { WriteupPanel } from "./WriteupPanel";
 
-type Props = { projectId: string; jobs: ProjectJobs; onBack: () => void; onOpen: (id: string) => void };
+type Props = {
+  projectId: string;
+  jobs: ProjectJobs;
+  onBack: () => void;
+  onOpen: (id: string) => void;
+  /** Records another take into this project. */
+  onRecord: (name: string | null) => void;
+};
 
 /**
  * The editor: the preview plays the edit, the strip shows where the cuts
@@ -30,7 +37,7 @@ type Props = { projectId: string; jobs: ProjectJobs; onBack: () => void; onOpen:
  * pause finder and from Claude, wait below the preview for a decision;
  * caption style and export come after.
  */
-export function ProjectView({ projectId, jobs, onBack, onOpen }: Props) {
+export function ProjectView({ projectId, jobs, onBack, onOpen, onRecord }: Props) {
   const [project, setProjectState] = useState<Project | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [playhead, setPlayhead] = useState<Playhead | null>(null);
@@ -71,6 +78,15 @@ export function ProjectView({ projectId, jobs, onBack, onOpen }: Props) {
         </button>
         <h1 className="titlebar__title">{project?.name ?? "Project"}</h1>
         <div className="titlebar__action">
+          <button
+            type="button"
+            className="button button--icon"
+            aria-label="Record another take"
+            title="Record another take"
+            onClick={() => onRecord(project?.name ?? null)}
+          >
+            <Video className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
+          </button>
           <button
             type="button"
             className="button button--icon"

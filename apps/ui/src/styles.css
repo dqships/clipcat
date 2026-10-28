@@ -153,6 +153,229 @@ body {
   white-space: nowrap;
 }
 
+/* Recorder: what to record, a preview of it, the devices, then Record. */
+.recorder {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  justify-items: center;
+  gap: var(--space-4);
+  padding: var(--space-6);
+  overflow: auto;
+}
+
+.recorder > * {
+  width: 100%;
+  max-width: calc(var(--space-9) * 7);
+}
+
+.recorder__modes {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-1);
+}
+
+.recorder__mode {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-height);
+  padding: 0 var(--space-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: var(--text-callout);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+}
+
+.recorder__mode:hover:not(:disabled) {
+  color: var(--color-text);
+}
+
+.recorder__mode--on {
+  border-color: var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.recorder__mode:disabled {
+  cursor: default;
+}
+
+.recorder__mode:disabled:not(.recorder__mode--on) {
+  opacity: 0.5;
+}
+
+.recorder__mode:focus-visible,
+.recorder__screen:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.recorder__stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-panel);
+  background: var(--color-surface);
+  overflow: hidden;
+}
+
+/* A mirror is what people expect to see of themselves; the take itself isn't flipped. */
+.recorder__video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);
+}
+
+.recorder__voice {
+  display: grid;
+  place-items: center;
+  width: calc(var(--space-9) * 1.5);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--color-surface-raised);
+}
+
+.recorder__voice-icon {
+  width: var(--space-7);
+  height: var(--space-7);
+  color: var(--color-text-muted);
+}
+
+.recorder__screens {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(calc(var(--space-9) * 2), 1fr));
+  align-self: stretch;
+  justify-self: stretch;
+  align-content: center;
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+
+.recorder__screen {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-callout);
+  cursor: pointer;
+}
+
+.recorder__screen img {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: var(--radius-control);
+}
+
+.recorder__screen--on {
+  border-color: var(--color-accent);
+  box-shadow: inset 0 0 0 1px var(--color-accent);
+}
+
+.recorder__live {
+  position: absolute;
+  top: var(--space-3);
+  left: var(--space-3);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-control);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-size: var(--text-callout);
+  line-height: var(--leading-callout);
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.recorder__dot {
+  width: var(--space-2);
+  height: var(--space-2);
+  border-radius: 50%;
+  background: var(--color-danger);
+  animation: pulse calc(var(--motion-duration) * 3) ease-in-out infinite alternate;
+}
+
+@keyframes pulse {
+  to {
+    opacity: 0.35;
+  }
+}
+
+/* Loudness from the microphone; --level is set every frame from script, 0 to 1. */
+.recorder__level {
+  height: var(--space-1);
+  border-radius: var(--radius-control);
+  background: var(--color-border);
+  overflow: hidden;
+}
+
+.recorder__level-bar {
+  width: 100%;
+  height: 100%;
+  background: var(--color-accent);
+  transform: scaleX(var(--level, 0));
+  transform-origin: left;
+}
+
+.fields.recorder__fields {
+  grid-template-columns: repeat(auto-fit, minmax(calc(var(--space-9) * 2), 1fr));
+}
+
+.recorder__fields .field__control {
+  width: 100%;
+  min-width: 0;
+}
+
+.recorder__fields .field--inline {
+  align-self: end;
+  min-height: var(--control-height);
+}
+
+.recorder__blocked {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.recorder__actions {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.recorder__note {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-caption);
+  line-height: var(--leading-caption);
+  text-align: center;
+}
+
+.empty__actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .recorder__dot {
+    animation: none;
+  }
+}
+
 /* Buttons: one control height everywhere, the focus ring from the tokens. */
 .button {
   display: inline-flex;
@@ -192,6 +415,18 @@ body {
 .button--primary:hover {
   background: var(--color-primary);
   filter: brightness(1.1);
+}
+
+/* The main action of a screen (DESIGN.md: one per screen). */
+.button--accent {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+.button--accent:hover {
+  background: var(--color-accent);
+  filter: brightness(1.05);
 }
 
 .button--danger {

@@ -94,6 +94,32 @@ export const McpAgent = z.object({
   unavailable: z.string().nullable(),
 });
 
+/** A screen ClipCat can record, as the picker shows it. */
+export const RecordScreen = z.object({
+  /** desktopCapturer's source id, for recording through Chromium. */
+  id: z.string(),
+  /** The system's display id, for the macOS recorder. */
+  displayId: z.string(),
+  name: z.string(),
+  /** A small picture of what's on it, as a data URL. */
+  thumbnail: z.string(),
+});
+
+/** What recording can do on this computer. */
+export const RecordSetup = z.object({
+  screens: z.array(RecordScreen),
+  /** Whether the screen is recorded by the macOS recorder (macOS 15) rather than through Chromium. */
+  native: z.boolean(),
+  /** Whether the computer's own sound can be recorded with the screen. */
+  systemAudio: z.boolean(),
+  /** macOS's answer for screen recording; "granted" elsewhere. */
+  screenAccess: z.enum(["granted", "denied", "not-determined", "restricted", "unknown"]),
+});
+
+export const RecordKind = z.enum(["camera", "screen", "voice"]);
+
+const Token = z.string().uuid();
+
 const ProjectRef = z.object({ id: z.string().regex(/^[a-zA-Z0-9-]+$/) });
 /** Absolute paths, as the file picker or a drop gives them. */
 const Files = z.array(z.string().min(1).max(4096)).min(1).max(200);
@@ -168,6 +194,27 @@ export const methods = {
   "project:reveal-export": { input: ProjectRef, output: z.void() },
   /** Cancels the project's queued and running jobs. */
   "jobs:cancel": { input: ProjectRef, output: z.void() },
+  /** Screens to record, and what recording can do here. Listing screens may make macOS ask for screen recording access. */
+  "record:setup": { input: z.void(), output: RecordSetup },
+  /** Asks the system for camera or microphone access (macOS asks once); resolves with whether it's granted. */
+  "record:access": { input: z.object({ kind: z.enum(["camera", "microphone"]) }), output: z.boolean() },
+  /** Opens the system's privacy settings at camera, microphone or screen recording. */
+  "record:privacy": { input: z.object({ kind: z.enum(["camera", "microphone", "screen"]) }), output: z.void() },
+  /** Picks the screen (and whether to take the computer's sound) that the UI's next getDisplayMedia call gets. */
+  "record:pick-screen": { input: z.object({ screenId: z.string().min(1).max(200), systemAudio: z.boolean() }), output: z.void() },
+  /** Starts a recording the UI streams chunks into, in this MediaRecorder MIME type. */
+  "record:begin": { input: z.object({ kind: RecordKind, mimeType: z.string().max(200) }), output: z.object({ token: Token }) },
+  /** Starts recording a screen with the macOS recorder. Resolves once it's recording. */
+  "record:native": {
+    input: z.object({ displayId: z.string().regex(/^\d+$/), mic: z.boolean(), micName: z.string().max(300).nullable(), systemAudio: z.boolean() }),
+    output: z.object({ token: Token }),
+  },
+  /** One chunk of a recording, base64. */
+  "record:chunk": { input: z.object({ token: Token, data: z.string().max(40_000_000).regex(/^[A-Za-z0-9+/]*={0,2}$/) }), output: z.void() },
+  /** Stops and keeps the recording, then imports it into the project (a new one when projectId is null). */
+  "record:end": { input: z.object({ token: Token, projectId: z.string().regex(/^[a-zA-Z0-9-]+$/).nullable() }), output: Project },
+  /** Stops and throws the recording away. */
+  "record:discard": { input: z.object({ token: Token }), output: z.void() },
   /** The coding agents ClipCat's MCP server can be added to, and which have it. */
   "mcp:status": { input: z.void(), output: z.array(McpAgent) },
   /** Adds ClipCat's MCP server to an agent's config (connect: true) or takes it out; resolves with every agent's state. */
@@ -214,5 +261,8 @@ export type AgentNameValue = z.output<typeof AgentName>;
 export type ApiModelValue = z.output<typeof ApiModel>;
 export type ApiStatusValue = z.output<typeof ApiStatus>;
 export type SettingsValue = z.output<typeof Settings>;
+export type RecordSetupValue = z.output<typeof RecordSetup>;
+export type RecordScreenValue = z.output<typeof RecordScreen>;
+export type RecordKindValue = z.output<typeof RecordKind>;
 export type McpAgentIdValue = z.output<typeof McpAgentId>;
 export type McpAgentValue = z.output<typeof McpAgent>;

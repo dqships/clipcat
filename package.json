@@ -18,7 +18,8 @@
     "fetch:cutout": "node scripts/fetch-cutout.mjs",
     "make": "npm run make --workspace=@clipcat/desktop",
     "build:whisper": "node scripts/build-whisper.mjs",
-    "build:parakeet": "node scripts/build-parakeet.mjs"
+    "build:parakeet": "node scripts/build-parakeet.mjs",
+    "build:recorder": "node scripts/build-recorder.mjs"
   },
   "devDependencies": {
     "jsdom": "^30.0.0",
