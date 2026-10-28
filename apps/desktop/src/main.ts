@@ -506,7 +506,7 @@ if (!squirrelLaunch && !app.requestSingleInstanceLock()) {
         "project:save-article": async ({ id }, event) => {
           const project = await store.get(id);
           const article = project.writeup?.article;
-          if (!article?.markdown.trim()) throw new Error("There is no article yet");
+          if (!article?.markdown.trim()) throw new Error("There's no article yet. Write chapters and article first.");
           const win = BrowserWindow.fromWebContents(event.sender);
           const options: Electron.SaveDialogOptions = {
             title: "Save the article",

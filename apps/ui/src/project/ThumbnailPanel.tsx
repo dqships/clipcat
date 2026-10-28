@@ -145,7 +145,7 @@ export function ThumbnailPanel({ project, playhead, jobs, onEdit }: Props) {
           </label>
           <label className="field field--inline">
             <input type="checkbox" checked={t.behind} disabled={!t.subject} onChange={(e) => style({ behind: e.target.checked })} />
-            Text behind me
+            Put the text behind you
           </label>
           <div>
             <button type="button" className="button" disabled={!pictures} onClick={save}>

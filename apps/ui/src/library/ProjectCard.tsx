@@ -30,7 +30,7 @@ export function ProjectCard({ project, jobs, onOpen, onRemove }: Props) {
               Delete project
             </button>
             <button type="button" className="button" onClick={() => setConfirming(false)}>
-              Keep
+              Keep project
             </button>
           </>
         ) : (
