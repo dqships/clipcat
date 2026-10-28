@@ -3,6 +3,7 @@ import { ArrowLeft, Download, FileArchive, FolderOpen, Plug, RefreshCw, RotateCw
 import { useEffect, useState } from "react";
 import { bridge } from "../bridge";
 import { ICON_STROKE } from "../icons";
+import { AgentGuide } from "./AgentGuide";
 
 type Props = { update: UpdateStatusValue | null; onBack: () => void };
 
@@ -121,10 +122,8 @@ export function Settings({ update, onBack }: Props) {
               </li>
             ))}
           </ul>
-          <p className="settings__hint">
-            Then ask it something like "In ClipCat, cut the filler words from my newest project" or "Export my launch video as a vertical short".
-          </p>
         </section>
+        <AgentGuide agents={agents} />
         <section className="settings__section" aria-labelledby="updates-title">
           <h2 id="updates-title" className="section-title">
             Updates
