@@ -646,6 +646,35 @@ describe("App", () => {
     expect(await screen.findByRole("heading", { level: 2, name: "No videos yet" })).toBeTruthy();
   });
 
+  it("offers a downloaded update, checks for one from settings and saves diagnostics", async () => {
+    const status = (over: object) => ({ state: "idle", version: null, detail: null, page: "https://github.com/o/r/releases/latest", checkedAt: null, ...over });
+    const { invoke, emit } = fakeBridge({
+      "app:info": info(),
+      "library:list": [],
+      "mcp:status": [],
+      "update:status": status({}),
+      "update:check": () => status({ state: "checking" }),
+      "app:diagnostics": { path: "/Users/me/Desktop/ClipCat diagnostics 2026-10-28.zip" },
+    });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
+    expect(await screen.findByText("You have the newest version.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Check now" }));
+    expect(invoke).toHaveBeenCalledWith("update:check");
+
+    fireEvent.click(screen.getByRole("button", { name: "Save diagnostics" }));
+    expect(await screen.findByText("Saved ClipCat diagnostics 2026-10-28.zip.")).toBeTruthy();
+
+    emit("update", status({ state: "ready", version: "0.2.0" }));
+    expect(screen.getByText("ClipCat 0.2.0 is downloaded. Restart to use it.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Restart to update to 0.2.0" }));
+    expect(invoke).toHaveBeenCalledWith("update:install");
+
+    emit("update", status({ state: "available", version: "0.2.0" }));
+    fireEvent.click(screen.getByRole("button", { name: "ClipCat 0.2.0 is out: download it" }));
+    expect(invoke).toHaveBeenCalledWith("update:open");
+  });
+
   describe("recording", () => {
     /** Stand-ins for the camera, the microphone and MediaRecorder, which jsdom doesn't have. */
     function fakeMedia() {

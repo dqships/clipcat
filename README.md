@@ -213,11 +213,43 @@ counted in 1001ths), at normal speed, with chapters as markers; captions,
 punch-ins, b-roll and sound stay in ClipCat. Agents connected over MCP can
 write the same files with `export_timeline`.
 
+## Releases and updates
+
+Pushing a tag that matches `apps/desktop/package.json`'s version (`v0.2.0`)
+makes CI build, smoke test and publish a GitHub release with the Mac DMG and
+zip and the Windows installer. The newest installers are always at
+`https://github.com/dqships/video-editor/releases/latest/download/ClipCat-arm64.dmg`
+and `.../ClipCat-x64-Setup.exe`.
+
+Installed copies update from the same place (`clipcat.updateFeed` in
+`apps/desktop/package.json`): every four hours and from Settings, Windows
+through Squirrel and the release's `RELEASES` and nupkg, macOS through the
+`RELEASES.json` the zip maker writes. A Mac only installs an update into a
+signed app; an unsigned one says a new version is out and opens the release
+page. To sign and notarize Mac releases, add these repository secrets:
+`MACOS_CERT_P12` (a Developer ID Application certificate, base64) and
+`MACOS_CERT_PASSWORD`, plus `APPLE_ID`, `APPLE_PASSWORD` (an app-specific
+password) and `APPLE_TEAM_ID`. Locally, `npm run make` signs with the Developer
+ID in your keychain (`APPLE_SIGN_IDENTITY` picks one) unless `SKIP_SIGN=1`.
+Windows builds are signed when `WINDOWS_SIGNTOOL_PATH`, `WINDOWS_SIGN_DLIB` and
+`WINDOWS_SIGN_METADATA` are set (Azure Artifact Signing). The Electron fuses
+turn off `NODE_OPTIONS` and the inspector flags but keep RunAsNode, which the
+MCP bridge needs.
+
+Settings also saves a diagnostics zip: the main log (`logs/main.log` in the
+app's data folder, which records warnings, errors, failed jobs and crashed
+processes as they happen), versions and setup, recent jobs, each project's
+event log and shape without its transcript, and the latest crash dumps (kept
+locally; nothing is uploaded). The home folder is replaced by `~` in it.
+
 ## Licenses
 
 A few files in `apps/desktop` are adapted from Diffusion Studio's editor and keep
-their MPL-2.0 headers. The bundled ffmpeg is a GPL build; ClipCat is a personal
-tool and isn't distributed.
+their MPL-2.0 headers. Releases bundle third-party binaries under their own
+licenses: ffmpeg 6.1.1 is a GPL build from
+[eugeneware/ffmpeg-static b6.1.1](https://github.com/eugeneware/ffmpeg-static/releases/tag/b6.1.1),
+whose page links the exact sources and configuration; whisper.cpp is MIT; the
+subject cutout model is AGPL-3.0 (see the thumbnail section above).
 
 The face detector is MediaPipe Tasks Vision and its BlazeFace short-range model
 (`apps/ui/src/faces/blaze_face_short_range.tflite`), both Apache-2.0.

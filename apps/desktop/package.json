@@ -6,6 +6,9 @@
   "private": true,
   "license": "UNLICENSED",
   "main": "dist/main.cjs",
+  "clipcat": {
+    "updateFeed": "https://github.com/dqships/video-editor/releases/latest/download"
+  },
   "scripts": {
     "build:main": "esbuild src/main.ts --bundle --platform=node --format=cjs --target=node22 --external:electron --outfile=dist/main.cjs \"--banner:js=const __importMetaUrl = require('node:url').pathToFileURL(__filename).href;\" --define:import.meta.url=__importMetaUrl",
     "build:preload": "esbuild src/preload.ts --bundle --platform=node --format=cjs --target=node22 --external:electron --outfile=dist/preload.cjs",
@@ -24,6 +27,7 @@
     "@clipcat/core": "*",
     "@clipcat/ipc": "*",
     "@modelcontextprotocol/sdk": "1.32.2",
+    "fflate": "0.8.2",
     "zod": "^4.6.7"
   },
   "devDependencies": {
@@ -31,7 +35,9 @@
     "@electron-forge/maker-dmg": "7.11.2",
     "@electron-forge/maker-squirrel": "7.11.2",
     "@electron-forge/maker-zip": "7.11.2",
+    "@electron-forge/plugin-fuses": "7.11.2",
     "@electron-forge/shared-types": "7.11.2",
+    "@electron/fuses": "1.8.0",
     "@types/node": "^22.18.0",
     "electron": "44.7.2",
     "esbuild": "^0.28.1"
