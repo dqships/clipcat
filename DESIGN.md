@@ -32,6 +32,7 @@ opening ±40°. The geometry is generated, so it stays exact.
 | `brand/icon/favicon.svg`, `favicon.ico` | Site favicon |
 | `brand/icon/apple-touch-icon.png` | 180 px, square, for the site |
 | `brand/icon/png/` | All rendered sizes |
+| `apps/desktop/resources/dmg/background.png`, `@2x` | Mac installer window: paper, one line of ink, a strip of tape from ClipCat to Applications. Rendered from the tokens by `brand/scripts/render-dmg.mjs` |
 
 Rules:
 
