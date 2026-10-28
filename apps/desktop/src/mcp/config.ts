@@ -29,6 +29,13 @@ export const SERVER_NAME = "clipcat";
 /** The env var only our entry carries: it marks an entry as ours, wherever the app was when it was written. */
 export const SOCKET_ENV = "CLIPCAT_SOCKET";
 
+/**
+ * The argument the bridge starts the app with when an agent needs it and it
+ * isn't running: no window and no Dock icon, just the socket, until the
+ * person opens ClipCat themselves. It quits when the last agent leaves.
+ */
+export const BACKGROUND_ARG = "--mcp-background";
+
 export type ServerEntry = Record<string, string | string[] | boolean | Record<string, string>>;
 
 /** How a config file spells its server map: JSON under `mcpServers`, or Codex's TOML tables. */

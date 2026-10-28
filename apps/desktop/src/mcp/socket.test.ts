@@ -13,6 +13,7 @@ import { listen, socketPath } from "./socket";
 let dir: string;
 let bridge: string;
 let server: Server;
+const counts: number[] = [];
 const path = () => (process.platform === "win32" ? socketPath(dir, "win32") : join(dir, "mcp.sock"));
 
 beforeAll(async () => {
@@ -23,7 +24,7 @@ beforeAll(async () => {
     const s = new McpServer({ name: "clipcat", version: "0" });
     s.registerTool("ping", { description: "Answers pong" }, async () => ({ content: [{ type: "text", text: "pong" }] }));
     return s;
-  });
+  }, process.platform, (open) => counts.push(open));
 });
 afterAll(async () => {
   await new Promise((r) => server?.close(r));
@@ -51,6 +52,9 @@ describe("the socket and the bridge", () => {
       expect(await client.callTool({ name: "ping", arguments: {} })).toMatchObject({ content: [{ text: "pong" }] });
     }
     await Promise.all([a.close(), b.close()]);
+    // A ClipCat started in the background for an agent leaves when the count is back to 0.
+    await expect.poll(() => counts.at(-1)).toBe(0);
+    expect(Math.max(...counts)).toBe(2);
   });
 
   it("says plainly when the app isn't running", () => {

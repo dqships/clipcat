@@ -189,7 +189,11 @@ transcript, cut and restore words, decide proposals, take any edit op, start
 the app's own AI passes and exports, and import recordings. Every change goes
 through the same revision check as the editor, so nothing overwrites an edit
 made in the window. A packaged ClipCat that isn't running is started by the
-bridge, and entries are pointed at the current copy of the app on every launch.
+bridge in the background (`--mcp-background`): no window and no Dock icon, since
+the Claude desktop app starts its MCP servers as it opens. It becomes the
+ordinary app when you open ClipCat, and otherwise quits once the last agent
+disconnects and its jobs finish. Entries are pointed at the current copy of the
+app on every launch.
 
 Export renders the edit with ffmpeg: 16:9 at the recordings' own height (up to
 1440p) or 9:16 at 1080×1920, cropped around the speaker, at the speed set in the
