@@ -131,6 +131,9 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      - name: The DMG window shows only ClipCat and Applications
+        if: matrix.target == 'darwin-arm64'
+        run: node scripts/check-dmg.mjs apps/desktop/out/make/ClipCat-arm64.dmg
       - name: Bundled ffmpeg has libass
         run: |
           "${{ matrix.ffmpeg }}" -hide_banner -version | head -1
