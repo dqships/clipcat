@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 
@@ -658,7 +658,7 @@ describe("App", () => {
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
     expect(await screen.findByRole("heading", { level: 1, name: "Settings" })).toBeTruthy();
-    expect(await screen.findByText(/Codex/)).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Connect Codex" })).toBeTruthy();
     expect(screen.getByText("Not found on this computer. You can still connect it for later.")).toBeTruthy();
 
     // Connect asks first, showing the file and the entry; cancelling writes nothing.
@@ -684,8 +684,26 @@ describe("App", () => {
     expect(await screen.findByText("Connected now (claude-code 2.1.312).")).toBeTruthy();
     expect(screen.getByText("Claude Code is connected now (claude-code 2.1.312).")).toBeTruthy();
 
+    // The walkthrough opens on the agent just connected, and switches per agent.
+    expect(screen.getByRole("tab", { name: "Claude Code, connected" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByRole("tabpanel").textContent).toContain("Type /mcp.");
+    fireEvent.click(screen.getByRole("tab", { name: "Claude desktop app" }));
+    expect(screen.getByRole("tabpanel").textContent).toContain("Settings > Developer");
     fireEvent.click(screen.getByRole("button", { name: "Back to library" }));
     expect(await screen.findByRole("heading", { level: 2, name: "No videos yet" })).toBeTruthy();
+  });
+
+  it("copies an example prompt from the agent walkthrough", async () => {
+    const writeText = vi.fn(async () => {});
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    fakeBridge({ "app:info": info(), "library:list": [], "mcp:status": [] });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
+    const prompts = within(await screen.findByRole("list", { name: "Example prompts" })).getAllByRole("listitem");
+    fireEvent.click(within(prompts[0]!).getByRole("button", { name: "Copy prompt" }));
+    expect(writeText).toHaveBeenCalledWith(prompts[0]!.textContent);
+    expect(await within(prompts[0]!).findByRole("button", { name: "Copied" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: /full guide/ }).getAttribute("href")).toMatch(/^https:\/\/.+\/agents$/);
   });
 
   it("offers a downloaded update, checks for one from settings and saves diagnostics", async () => {

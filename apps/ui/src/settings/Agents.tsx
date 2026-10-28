@@ -1,6 +1,6 @@
 import type { McpAgentIdValue, McpAgentValue, McpCheckStepValue } from "@clipcat/ipc";
 import { Check, Clock, LoaderCircle, Minus, Plug, RefreshCw, Unplug, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { bridge } from "../bridge";
 import { ICON_STROKE } from "../icons";
 
@@ -89,20 +89,11 @@ function Steps({ agent, steps }: { agent: McpAgentValue; steps: McpCheckStepValu
  * file read back, the entry run through to ClipCat, the agent's own CLI
  * asked), and the last line follows the sessions agents actually open.
  */
-export function Agents() {
-  const [agents, setAgents] = useState<McpAgentValue[] | null>(null);
+export function Agents({ agents, onAgents: setAgents }: { agents: McpAgentValue[] | null; onAgents: (agents: McpAgentValue[]) => void }) {
   const [confirming, setConfirming] = useState<McpAgentIdValue | null>(null);
   const [busy, setBusy] = useState<McpAgentIdValue | null>(null);
   const [checks, setChecks] = useState<Partial<Record<McpAgentIdValue, McpCheckStepValue[] | "running">>>({});
   const [errors, setErrors] = useState<Partial<Record<McpAgentIdValue, string>>>({});
-  const [loadError, setLoadError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const api = bridge();
-    if (!api) return;
-    api.invoke("mcp:status").then(setAgents, (e: unknown) => setLoadError(message(e)));
-    return api.on("mcp:agents", setAgents);
-  }, []);
 
   const fail = (id: McpAgentIdValue, e: unknown) => setErrors((all) => ({ ...all, [id]: message(e) }));
 
@@ -137,14 +128,6 @@ export function Agents() {
     if (on) await check(agent.id);
     else setChecks(({ [agent.id]: _gone, ...rest }) => rest);
   };
-
-  if (loadError) {
-    return (
-      <p className="notice notice--danger" role="alert">
-        {loadError}
-      </p>
-    );
-  }
 
   return (
     <ul className="agents" aria-label="Coding agents">

@@ -1,8 +1,9 @@
-import type { UpdateStatusValue } from "@clipcat/ipc";
+import type { McpAgentValue, UpdateStatusValue } from "@clipcat/ipc";
 import { ArrowLeft, Download, FileArchive, FolderOpen, RefreshCw, RotateCw } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { bridge } from "../bridge";
 import { ICON_STROKE } from "../icons";
+import { AgentGuide } from "./AgentGuide";
 import { Agents } from "./Agents";
 
 type Props = { update: UpdateStatusValue | null; onBack: () => void };
@@ -36,9 +37,19 @@ function updateText(u: UpdateStatusValue | null): string {
  * make edits while ClipCat is open.
  */
 export function Settings({ update, onBack }: Props) {
+  const [agents, setAgents] = useState<McpAgentValue[] | null>(null);
+  const [agentsError, setAgentsError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // The rows and the guide both follow the agents, including sessions they open while this screen is up.
+  useEffect(() => {
+    const api = bridge();
+    if (!api) return;
+    api.invoke("mcp:status").then(setAgents, (e: unknown) => setAgentsError(message(e)));
+    return api.on("mcp:agents", setAgents);
+  }, []);
 
   const saveDiagnostics = () => {
     setError(null);
@@ -66,11 +77,14 @@ export function Settings({ update, onBack }: Props) {
             Connect an agent and, while ClipCat is open, it can read your transcripts, cut words, accept suggested edits, add punch-ins, b-roll and
             sounds, and start exports. Every change shows up here and can be undone.
           </p>
-          <Agents />
-          <p className="settings__hint">
-            Then ask it something like "In ClipCat, cut the filler words from my newest project" or "Export my launch video as a vertical short".
-          </p>
+          {agentsError && (
+            <p className="notice notice--danger" role="alert">
+              {agentsError}
+            </p>
+          )}
+          <Agents agents={agents} onAgents={setAgents} />
         </section>
+        <AgentGuide agents={agents} />
         <section className="settings__section" aria-labelledby="updates-title">
           <h2 id="updates-title" className="section-title">
             Updates
