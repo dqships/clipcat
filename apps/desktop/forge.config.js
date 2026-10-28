@@ -51,8 +51,9 @@ const config = {
     // and microphone (the bundled helpers in Resources/bin get the same). APPLE_SIGN_IDENTITY picks the
     // certificate when the keychain holds more than one Developer ID.
     osxSign: process.env.SKIP_SIGN ? undefined : { ...(process.env.APPLE_SIGN_IDENTITY ? { identity: process.env.APPLE_SIGN_IDENTITY } : {}) },
+    // Only a signed app can be notarized, so an unsigned build (SKIP_SIGN, every pull request) skips it.
     osxNotarize:
-      process.env.APPLE_ID && process.env.APPLE_PASSWORD && process.env.APPLE_TEAM_ID
+      !process.env.SKIP_SIGN && process.env.APPLE_ID && process.env.APPLE_PASSWORD && process.env.APPLE_TEAM_ID
         ? { appleId: process.env.APPLE_ID, appleIdPassword: process.env.APPLE_PASSWORD, teamId: process.env.APPLE_TEAM_ID }
         : undefined,
     windowsSign: sign,
