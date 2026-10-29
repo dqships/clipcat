@@ -12,7 +12,7 @@ This page takes you from installing ClipCat to an exported video. Each step link
 ## What you need
 
 - A Mac with macOS 14 or newer (Apple Silicon or Intel), or a 64-bit Windows 10 or 11 PC.
-- One of these for the AI suggestions: a Claude plan with [Claude Code](https://claude.com/claude-code), a ChatGPT plan with Codex, or a Claude API key. Everything else in ClipCat works without one.
+- One of these for the AI suggestions: a Claude plan with [Claude Code](https://claude.com/claude-code), a ChatGPT plan with Codex, or your own Claude, OpenAI or OpenRouter API key. Everything else in ClipCat works without one.
 - There's no ClipCat account. Nothing to sign up for.
 
 ## 1. Install ClipCat
@@ -35,13 +35,13 @@ Long pauses are already suggested as cuts. They're listed under **Suggested edit
 
 ## 4. Set up the AI editor
 
-On the **Edit** tab, the **AI editor** section has a **Use** menu. Pick Claude Code, Codex or Claude API (your key).
+Open **Settings > AI editor** (the gear in the library, or **Set up** in the **AI editor** section of the **Edit** tab) and pick one:
 
-- **Claude Code**: install it and sign in once by running `claude auth login` in a terminal. Or install it from ClipCat's [Settings](settings.md).
+- **Claude Code**: install it and sign in once by running `claude auth login` in a terminal. Or install it from the same page.
 - **Codex**: install the Codex CLI and run `codex login` once.
-- **Claude API**: paste a key from console.anthropic.com and choose **Save key**.
+- **Claude API**, **OpenAI** or **OpenRouter**: paste your key and choose **Save key**.
 
-If the AI isn't ready, the section says why and has a **Check again** button.
+If the AI isn't ready, its row says why. See [Settings](settings.md#ai-editor).
 
 ## 5. Get the suggested edit
 

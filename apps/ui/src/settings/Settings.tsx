@@ -1,16 +1,18 @@
 import { AUTO_LANGUAGE, languageName } from "@clipcat/core";
 import type { McpAgentValue, SettingsValue, UpdateStatusValue } from "@clipcat/ipc";
-import { ArrowLeft, AudioLines, Download, FileArchive, FolderOpen, LifeBuoy, type LucideIcon, Plug, RefreshCw, RotateCw } from "lucide-react";
+import { ArrowLeft, AudioLines, Bot, Download, FileArchive, FolderOpen, LifeBuoy, type LucideIcon, Plug, RefreshCw, RotateCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { bridge } from "../bridge";
 import { ICON_STROKE } from "../icons";
+import { useAi } from "../project/useAi";
 import { AgentGuide } from "./AgentGuide";
 import { Group, PageHead } from "./Group";
 import { Agents } from "./Agents";
+import { AiModels, aiShort } from "./AiModels";
 import { Transcription } from "./Transcription";
 
 /** The pages of Settings, in the order the list shows them. */
-export const SECTIONS = ["agents", "transcription", "updates", "help"] as const;
+export const SECTIONS = ["ai", "agents", "transcription", "updates", "help"] as const;
 export type SectionId = (typeof SECTIONS)[number];
 
 type Props = { update: UpdateStatusValue | null; onBack: () => void; section?: SectionId };
@@ -84,8 +86,8 @@ function speechShort(prefs: SettingsValue | null): string {
 
 /**
  * Settings: a list of pages on the left, each with a word on where it
- * stands, and the open page on the right. The pages are hooking ClipCat into
- * the coding agents on this computer, how speech is transcribed, updates,
+ * stands, and the open page on the right. The pages are which AI runs the
+ * AI editor, hooking ClipCat into the coding agents on this computer, how speech is transcribed, updates,
  * and diagnostics.
  */
 export function Settings({ update, onBack, section }: Props) {
@@ -97,6 +99,7 @@ export function Settings({ update, onBack, section }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const ai = useAi();
 
   // The rows and the guide both follow the agents, including sessions they open while this screen is up.
   useEffect(() => {
@@ -138,6 +141,7 @@ export function Settings({ update, onBack, section }: Props) {
   };
 
   const pages: Record<SectionId, { label: string; icon: LucideIcon; status: string }> = {
+    ai: { label: "AI editor", icon: Bot, status: aiShort(ai.status) },
     agents: { label: "Coding agents", icon: Plug, status: agentsShort(agents) },
     transcription: { label: "Transcription", icon: AudioLines, status: speechShort(prefs) },
     updates: { label: "Updates", icon: RefreshCw, status: updateShort(update) },
@@ -170,6 +174,15 @@ export function Settings({ update, onBack, section }: Props) {
           </ul>
         </nav>
         <main className="settings__page" key={open}>
+          {open === "ai" && (
+            <>
+              <PageHead id="ai-title" title="AI editor">
+                ClipCat has no AI service of its own. It uses the AI you pick here, which gets one tool for handing back suggestions and no access to
+                your files, your terminal or the web.
+              </PageHead>
+              <AiModels ai={ai} />
+            </>
+          )}
           {open === "agents" && (
             <>
               <PageHead id="agents-title" title="Coding agents">

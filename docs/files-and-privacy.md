@@ -26,11 +26,11 @@ A project's folder holds its edit, the transcript, light preview copies of the r
 
 Deleting a project removes its folder. Your original recordings and recorded takes stay.
 
-Your Claude API key, if you saved one, is stored encrypted with your system's keychain, not in the settings file.
+Your Claude, OpenAI and OpenRouter API keys, if you saved any, are stored encrypted with your system's keychain, not in the settings file.
 
 ## What leaves your computer
 
-- **When you ask the AI for something** (a suggested edit, a change, fixing spelling, shorts, the write-up or a slide): the text of the transcript goes to the AI you chose, your Claude Code, your Codex or the Claude API with your key. For b-roll and slides, a few still frames go with it. Their own privacy terms apply.
+- **When you ask the AI for something** (a suggested edit, a change, fixing spelling, shorts, the write-up or a slide): the text of the transcript goes to the AI you chose, your Claude Code, your Codex, or the Claude, OpenAI or OpenRouter API with your key. For b-roll and slides, a few still frames go with it. Their own privacy terms apply.
 - **Speech models** are downloaded once from Hugging Face.
 - **Update checks** read the list of releases on GitHub.
 - **Installing or updating Claude Code or Codex** from Settings runs their makers' install scripts, which download from them.

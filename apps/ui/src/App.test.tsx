@@ -67,6 +67,9 @@ const models = {
   codex: { choices: [{ id: "gpt-6.1-sol", label: "GPT-6.1-Sol" }], fallback: "gpt-6.1-sol", selected: null },
 };
 
+/** An OpenAI or OpenRouter key that isn't saved. */
+const noKey = { hasKey: false, model: null, choices: [] };
+
 function fakeBridge(given: Record<string, unknown>) {
   const answers: Record<string, unknown> = { "settings:get": { agent: "claude", dictionary: ["ClipCat"] }, ...given };
   const listeners = new Map<string, Set<(p: unknown) => void>>();
@@ -151,7 +154,7 @@ describe("App", () => {
   });
 
   it("opens a project with its transcript and pauses", async () => {
-    fakeBridge({ "app:info": info(), "library:list": [summary], "project:get": project, "ai:status": { claude: { status: "ready", version: null, detail: null }, codex: { status: "not-installed", version: null, detail: "Install the Codex CLI, then reopen ClipCat." }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude", models } });
+    fakeBridge({ "app:info": info(), "library:list": [summary], "project:get": project, "ai:status": { claude: { status: "ready", version: null, detail: null }, codex: { status: "not-installed", version: null, detail: "Install the Codex CLI, then reopen ClipCat." }, api: { hasKey: false, model: "claude-opus-5-5" }, openai: noKey, openrouter: noKey, agent: "claude", models } });
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "talk" }));
     expect(await screen.findByRole("heading", { level: 1, name: "talk" })).toBeTruthy();
@@ -162,7 +165,7 @@ describe("App", () => {
   });
 
   it("docks the transcript and the tools anywhere, splits a shared dock and remembers it", async () => {
-    fakeBridge({ "app:info": info(), "library:list": [summary], "project:get": project, "ai:status": { claude: { status: "ready", version: null, detail: null }, codex: { status: "not-installed", version: null, detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude", models } });
+    fakeBridge({ "app:info": info(), "library:list": [summary], "project:get": project, "ai:status": { claude: { status: "ready", version: null, detail: null }, codex: { status: "not-installed", version: null, detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, openai: noKey, openrouter: noKey, agent: "claude", models } });
     const view = render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "talk" }));
     await screen.findByRole("button", { name: "again." });
@@ -198,7 +201,7 @@ describe("App", () => {
   });
 
   it("asks Claude for cuts with the brief and lists what came back", async () => {
-    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude", models };
+    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, openai: noKey, openrouter: noKey, agent: "claude", models };
     const { invoke } = fakeBridge({ "app:info": info(), "library:list": [summary], "project:get": project, "ai:status": ready, "project:analyze": undefined });
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "talk" }));
@@ -211,7 +214,7 @@ describe("App", () => {
 
   it("shows proposed cuts struck through in the transcript", async () => {
     const cut = { id: "a1", type: "cleanup", sourceId: "s1", cuts: [[0.5, 0.9]], wordIds: ["s1-0"], keepWordIds: [], reason: "Filler", confidence: 0.8, status: "pending" };
-    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude", models };
+    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, openai: noKey, openrouter: noKey, agent: "claude", models };
     fakeBridge({
       "app:info": info(),
       "library:list": [summary],
@@ -228,7 +231,7 @@ describe("App", () => {
   });
 
   it("cuts the selected words and restores them", async () => {
-    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude", models };
+    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, openai: noKey, openrouter: noKey, agent: "claude", models };
     const cut = { ...project, revision: 4, segments: [{ ...project.segments[0], sourceEnd: 1.95 }, { id: "g2", sourceId: "s1", sourceStart: 1.95, sourceEnd: 75, included: false }] };
     const { invoke } = fakeBridge({ "app:info": info(), "library:list": [summary], "project:get": project, "ai:status": ready, "project:edit": cut });
     render(<App />);
@@ -246,7 +249,7 @@ describe("App", () => {
   });
 
   it("hides cut words and shows them again, and remembers the choice", async () => {
-    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude", models };
+    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, openai: noKey, openrouter: noKey, agent: "claude", models };
     const cut = { ...project, segments: [{ ...project.segments[0], sourceEnd: 1.95 }, { id: "g2", sourceId: "s1", sourceStart: 1.95, sourceEnd: 75, included: false }] };
     fakeBridge({ "app:info": info(), "library:list": [summary], "project:get": cut, "ai:status": ready });
     render(<App />);
@@ -263,7 +266,7 @@ describe("App", () => {
   });
 
   it("accepts a suggested cut and undoes with the keyboard", async () => {
-    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude", models };
+    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, openai: noKey, openrouter: noKey, agent: "claude", models };
     const { invoke } = fakeBridge({
       "app:info": info(),
       "library:list": [summary],
@@ -283,7 +286,7 @@ describe("App", () => {
   });
 
   it("follows the menu bar: open recent, tabs, hide cuts, undo, add videos, settings", async () => {
-    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude", models };
+    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, openai: noKey, openrouter: noKey, agent: "claude", models };
     const done = { ...project, revision: 4, history: { past: [{ segments: [], statuses: {} }], future: [] } };
     const { invoke, emit } = fakeBridge({
       "app:info": info(),
@@ -328,7 +331,7 @@ describe("App", () => {
   });
 
   it("leaves Undo to a text box that has focus", async () => {
-    const { invoke, emit } = fakeBridge({ "app:info": info(), "library:list": [summary], "project:get": { ...project, history: { past: [{ segments: [], statuses: {} }], future: [] } }, "ai:status": { claude: { status: "ready", version: null, detail: null }, codex: { status: "ready", version: null, detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude", models } });
+    const { invoke, emit } = fakeBridge({ "app:info": info(), "library:list": [summary], "project:get": { ...project, history: { past: [{ segments: [], statuses: {} }], future: [] } }, "ai:status": { claude: { status: "ready", version: null, detail: null }, codex: { status: "ready", version: null, detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, openai: noKey, openrouter: noKey, agent: "claude", models } });
     const execCommand = vi.fn(() => true);
     document.execCommand = execCommand;
     render(<App />);
@@ -345,7 +348,7 @@ describe("App", () => {
   });
 
   it("imports videos into a new project from the File menu and opens it", async () => {
-    const { invoke, emit } = fakeBridge({ "app:info": info(), "library:list": [], "files:pick": ["/v/a.mov"], "project:import": project, "project:get": project, "ai:status": { claude: { status: "ready", version: null, detail: null }, codex: { status: "ready", version: null, detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude", models } });
+    const { invoke, emit } = fakeBridge({ "app:info": info(), "library:list": [], "files:pick": ["/v/a.mov"], "project:import": project, "project:get": project, "ai:status": { claude: { status: "ready", version: null, detail: null }, codex: { status: "ready", version: null, detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, openai: noKey, openrouter: noKey, agent: "claude", models } });
     render(<App />);
     await screen.findByRole("heading", { level: 2, name: "No projects yet" });
     emit("menu", { command: "import" });
@@ -375,7 +378,7 @@ describe("App", () => {
   });
 
   it("styles captions, shows them over the preview and exports", async () => {
-    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude", models };
+    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, openai: noKey, openrouter: noKey, agent: "claude", models };
     const exported = { ...project, lastExport: { path: "/Movies/talk.mp4", format: "16:9", at: "" } };
     const { invoke } = fakeBridge({
       "app:info": info(),
@@ -423,7 +426,7 @@ describe("App", () => {
   });
 
   it("switches to the vertical shape, crops the preview around the face and takes a hand-set position", async () => {
-    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude", models };
+    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, openai: noKey, openrouter: noKey, agent: "claude", models };
     const withFaces = { ...project, sources: [{ ...project.sources[0]!, framing: "auto", faces: [{ t: 2, x: 0.8 }] }] };
     const tall = { ...withFaces, aspectRatio: "9:16", revision: 4 };
     const { invoke } = fakeBridge({
@@ -450,7 +453,7 @@ describe("App", () => {
   });
 
   it("punches in on selected words, then lists the punch-in to restyle or remove", async () => {
-    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude", models };
+    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, openai: noKey, openrouter: noKey, agent: "claude", models };
     const punch = {
       id: "k1", type: "punch-in", sourceId: "s1", cuts: [], wordIds: ["s1-0"], keepWordIds: [], reason: "", confidence: 1, status: "accepted",
       punch: { range: [0.5, 0.9], style: "zoom-in", scale: 1.2 },
@@ -472,7 +475,7 @@ describe("App", () => {
   });
 
   it("adds b-roll media, shows it over selected words and restyles it", async () => {
-    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude", models };
+    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, openai: noKey, openrouter: noKey, agent: "claude", models };
     const drone = {
       id: "m1", name: "drone.mp4", path: "/v/drone.mp4", kind: "video", media: { duration: 12, width: 1920, height: 1080 },
       prep: { preview: "media/assets/m1/preview.mp4", frames: ["media/assets/m1/frame-1.jpg"] }, description: "A city from above",
@@ -514,7 +517,7 @@ describe("App", () => {
   });
 
   it("asks for a slide over selected words, and offers to design one that has no design yet", async () => {
-    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude", models };
+    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, openai: noKey, openrouter: noKey, agent: "claude", models };
     const card = {
       id: "g1", name: "Three steps", path: "", kind: "slide", media: { duration: 2, width: 0, height: 0 }, prep: null, description: "Three steps",
       slide: { brief: "Three steps", look: "ink", html: "" },
@@ -551,7 +554,7 @@ describe("App", () => {
   });
 
   it("lands a sound effect on a word, labels a suggested one, and adds and tunes music", async () => {
-    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude", models };
+    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, openai: noKey, openrouter: noKey, agent: "claude", models };
     const sound = (id: string, status: string, effect: string) => ({
       id, type: "sound", sourceId: "s1", cuts: [], wordIds: ["s1-1"], keepWordIds: [], reason: "New topic", confidence: 0.8, status, punch: null, overlay: null,
       sound: { at: 3, effect, volume: 0.7 },
@@ -593,7 +596,7 @@ describe("App", () => {
   });
 
   it("writes up the video, edits its chapters and copies them for YouTube", async () => {
-    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude", models };
+    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, openai: noKey, openrouter: noKey, agent: "claude", models };
     const writeup = {
       chapters: [{ wordId: "s1-0", title: "Hello" }, { wordId: "s1-1", title: "Again" }],
       description: "Two words.",
@@ -640,7 +643,7 @@ describe("App", () => {
       "app:info": info(),
       "library:list": [summary],
       "project:get": { ...project, thumbnail },
-      "ai:status": { claude: { status: "missing", version: null, detail: null }, codex: { status: "missing", version: null, detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude", models },
+      "ai:status": { claude: { status: "missing", version: null, detail: null }, codex: { status: "missing", version: null, detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, openai: noKey, openrouter: noKey, agent: "claude", models },
       "project:thumbnail-frame": undefined,
       "project:edit": { ...project, thumbnail },
     });
@@ -667,7 +670,7 @@ describe("App", () => {
   });
 
   it("changes the speed and cancels a running export", async () => {
-    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude", models };
+    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, openai: noKey, openrouter: noKey, agent: "claude", models };
     const { invoke, emit } = fakeBridge({
       "app:info": info(),
       "library:list": [summary],
@@ -689,16 +692,24 @@ describe("App", () => {
   });
 
   it("says when Claude Code isn't installed", async () => {
-    const missing = { claude: { status: "not-installed", version: null, detail: "Install Claude Code, then reopen ClipCat." }, codex: { status: "signed-out", version: "0.165.0", detail: "Run `codex login` in a terminal, then try again." }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude", models };
+    const missing = { claude: { status: "not-installed", version: null, detail: "Install Claude Code, then reopen ClipCat." }, codex: { status: "signed-out", version: "0.165.0", detail: "Run `codex login` in a terminal, then try again." }, api: { hasKey: false, model: "claude-opus-5-5" }, openai: noKey, openrouter: noKey, agent: "claude", models };
     fakeBridge({ "app:info": info(), "library:list": [summary], "project:get": project, "ai:status": missing });
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "talk" }));
-    expect(await screen.findByText(/Install Claude Code, then reopen ClipCat/)).toBeTruthy();
+    expect(await screen.findByText(/Claude Code isn't set up. Install Claude Code, then reopen ClipCat/)).toBeTruthy();
     expect((screen.getByRole("button", { name: "Suggest an edit" }) as HTMLButtonElement).disabled).toBe(true);
+
+    // Setting it up happens in Settings, on the AI editor page, and Back returns to the project.
+    fireEvent.click(screen.getByRole("button", { name: "Set up Claude Code" }));
+    expect(await screen.findByRole("heading", { name: "AI editor" })).toBeTruthy();
+    expect(screen.getByRole("radio", { name: /Claude Code/ })).toHaveProperty("checked", true);
+    expect(screen.getAllByText("Run `codex login` in a terminal, then try again.").length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", { name: "Back to library" }));
+    expect(await screen.findByRole("button", { name: "Suggest an edit" })).toBeTruthy();
   });
 
   it("switches the AI to Codex", async () => {
-    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude", models };
+    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, openai: noKey, openrouter: noKey, agent: "claude", models };
     const { invoke } = fakeBridge({
       "app:info": info(),
       "library:list": [summary],
@@ -714,7 +725,11 @@ describe("App", () => {
     fireEvent.change(pick, { target: { value: "codex" } });
     expect(invoke).toHaveBeenCalledWith("settings:set", { agent: "codex" });
     expect((screen.getByRole("button", { name: "Suggest an edit" }) as HTMLButtonElement).disabled).toBe(false);
-    const model = screen.getByLabelText("Model") as HTMLSelectElement;
+    expect(screen.getByText("Model: default (gpt-6.1-sol).")).toBeTruthy();
+
+    // Models are picked in Settings.
+    fireEvent.click(screen.getByRole("button", { name: "AI settings" }));
+    const model = (await screen.findByLabelText("Codex model")) as HTMLSelectElement;
     expect([...model.options].map((o) => o.text)).toEqual(["Codex default (gpt-6.1-sol)", "GPT-6.1-Sol"]);
     fireEvent.change(model, { target: { value: "gpt-6.1-sol" } });
     expect(invoke).toHaveBeenCalledWith("settings:set", { codexModel: "gpt-6.1-sol" });
@@ -723,7 +738,7 @@ describe("App", () => {
   });
 
   it("runs the AI with the user's own Claude API key", async () => {
-    const ready = { claude: { status: "not-installed", version: null, detail: "Install Claude Code, then reopen ClipCat." }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "api", models };
+    const ready = { claude: { status: "not-installed", version: null, detail: "Install Claude Code, then reopen ClipCat." }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, openai: noKey, openrouter: noKey, agent: "api", models };
     const { invoke } = fakeBridge({
       "app:info": info(),
       "library:list": [summary],
@@ -734,19 +749,55 @@ describe("App", () => {
     });
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "talk" }));
-    const keyField = await screen.findByLabelText("Claude API key");
+    expect(await screen.findByText(/Claude API isn't set up. Add your key in Settings./)).toBeTruthy();
     expect((screen.getByRole("button", { name: "Suggest an edit" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByLabelText("Claude API key")).toBeNull();
+
+    // The key is kept in Settings, not in the project.
+    fireEvent.click(screen.getByRole("button", { name: "Set up Claude API" }));
+    const keyField = await screen.findByLabelText("Claude API key");
     fireEvent.change(keyField, { target: { value: " sk-ant-test-key " } });
-    fireEvent.click(screen.getByRole("button", { name: "Save key" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save Claude API key" }));
     expect(invoke).toHaveBeenCalledWith("settings:api-key", { key: "sk-ant-test-key" });
-    expect(await screen.findByText(/Your API key is saved, encrypted/)).toBeTruthy();
-    expect((screen.getByRole("button", { name: "Suggest an edit" }) as HTMLButtonElement).disabled).toBe(false);
-    fireEvent.change(screen.getByLabelText("Model"), { target: { value: "claude-sonnet-5-5" } });
+    expect(await screen.findByText("Key saved, encrypted on this computer.")).toBeTruthy();
+    expect(within(screen.getByRole("navigation", { name: "Settings" })).getByText("Claude API")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Claude API model"), { target: { value: "claude-sonnet-5-5" } });
     expect(invoke).toHaveBeenCalledWith("settings:set", { apiModel: "claude-sonnet-5-5" });
+    fireEvent.click(screen.getByRole("radio", { name: /Codex/ }));
+    expect(invoke).toHaveBeenCalledWith("settings:set", { agent: "codex" });
+  });
+
+  it("runs the AI on OpenRouter once a key is saved and a model picked", async () => {
+    const status = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, openai: noKey, openrouter: noKey, agent: "openrouter", models };
+    const choices = [{ id: "qwen/qwen4-max", label: "Qwen 4 Max (qwen/qwen4-max)" }, { id: "google/gemini-3-pro", label: "Gemini 3 Pro (google/gemini-3-pro)" }];
+    const { invoke } = fakeBridge({
+      "app:info": info(),
+      "library:list": [],
+      "ai:status": status,
+      "settings:provider-key": { hasKey: true, model: null, choices },
+      "settings:set": {},
+    });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
+    const list = screen.getByRole("navigation", { name: "Settings" });
+    expect(await within(list).findByText("OpenRouter, not set up")).toBeTruthy();
+    expect(screen.getByText("Needs a key from openrouter.ai/keys.")).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText("OpenRouter key"), { target: { value: "sk-or-v1-test" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save OpenRouter key" }));
+    expect(invoke).toHaveBeenCalledWith("settings:provider-key", { provider: "openrouter", key: "sk-or-v1-test" });
+    const model = (await screen.findByLabelText("OpenRouter model")) as HTMLSelectElement;
+    expect([...model.options].map((o) => o.text)).toEqual(["Pick a model", ...choices.map((c) => c.label)]);
+    expect(screen.getByText("Pick a model in Settings.")).toBeTruthy();
+
+    fireEvent.change(model, { target: { value: "google/gemini-3-pro" } });
+    expect(invoke).toHaveBeenCalledWith("settings:set", { openrouterModel: "google/gemini-3-pro" });
+    expect(await within(list).findByText("OpenRouter")).toBeTruthy();
+    expect(screen.getByText("Key saved, encrypted on this computer.")).toBeTruthy();
   });
 
   it("asks for one change and fixes the transcript with the user's terms", async () => {
-    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude", models };
+    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, openai: noKey, openrouter: noKey, agent: "claude", models };
     const { invoke } = fakeBridge({
       "app:info": info(),
       "library:list": [summary],
@@ -783,7 +834,7 @@ describe("App", () => {
   });
 
   it("makes shorts and opens one, which links back to the long video", async () => {
-    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: null, detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude", models };
+    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: null, detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, openai: noKey, openrouter: noKey, agent: "claude", models };
     const withShort = { ...project, revision: 4, shorts: [{ id: "sh1", title: "The hook", seconds: 42 }] };
     const short = { ...project, id: "sh1", name: "The hook", aspectRatio: "9:16", origin: { projectId: "p1", name: "talk", reason: "Bold claim up front." } };
     const { invoke, emit } = fakeBridge({
@@ -904,6 +955,7 @@ describe("App", () => {
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
     expect(await screen.findByRole("heading", { level: 1, name: "Settings" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^Coding agents/ }));
     expect(await screen.findByRole("button", { name: "Connect Codex" })).toBeTruthy();
     expect(screen.getByText("Not found on this computer. You can still connect it for later.")).toBeTruthy();
 
@@ -957,6 +1009,7 @@ describe("App", () => {
     });
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Coding agents/ }));
     expect(await screen.findByText("Not found on this computer: Cursor, Gemini CLI")).toBeTruthy();
     expect(screen.getByRole("list", { name: "Coding agents" }).textContent).not.toContain("Cursor");
     expect(screen.getByRole("button", { name: "Connect Cursor" })).toBeTruthy();
@@ -977,6 +1030,7 @@ describe("App", () => {
     fakeBridge({ "app:info": info(), "library:list": [], "mcp:status": [] });
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Coding agents/ }));
     const prompts = within(await screen.findByRole("list", { name: "Example prompts" })).getAllByRole("listitem");
     fireEvent.click(within(prompts[0]!).getByRole("button", { name: "Copy prompt" }));
     expect(writeText).toHaveBeenCalledWith(prompts[0]!.textContent);
@@ -1031,7 +1085,7 @@ describe("App", () => {
     const list = screen.getByRole("navigation", { name: "Settings" });
     expect(await within(list).findByText("1 of 2 connected")).toBeTruthy();
     expect(await within(list).findByText("Japanese")).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Coding agents" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "AI editor" })).toBeTruthy();
 
     fireEvent.click(within(list).getByRole("button", { name: /^Transcription/ }));
     expect(within(list).getByRole("button", { name: /^Transcription/ }).getAttribute("aria-current")).toBe("page");

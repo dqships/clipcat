@@ -11,8 +11,8 @@ import type { Agent, AgentRun } from "./analyze";
 /** Requests per run: the answer, a retry with the problems (or a slide's stills, and then problems), and room for a nudge if it answers in prose. */
 const TURNS = 5;
 
-const NO_KEY = "Add a Claude API key in the AI panel, or pick another way to run the AI editor.";
-const BAD_KEY = "The Claude API refused the key. Check it in the AI panel.";
+const NO_KEY = "Add a Claude API key in Settings > AI editor, or pick another way to run the AI editor.";
+const BAD_KEY = "The Claude API refused the key. Check it in Settings > AI editor.";
 
 /** A readable reason for an API failure. */
 export function apiError(e: unknown): Error {

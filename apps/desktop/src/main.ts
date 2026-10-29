@@ -11,12 +11,13 @@ import { type Article, type EditOp, TIMELINE_FORMATS, type TimelineFormat, apply
 import tokens from "../../../design/tokens.json";
 import { homedir, release, totalmem } from "node:os";
 import { dirname, extname, join, resolve } from "node:path";
-import type { AppInfoValue, MenuCommandValue, MenuStateValue } from "@clipcat/ipc";
+import type { AppInfoValue, KeyedProviderValue, MenuCommandValue, MenuStateValue, SettingsValue } from "@clipcat/ipc";
 import { AnalysisRunner } from "./ai/analyze";
 import { apiAgent, verifyKey } from "./ai/api";
 import { CLAUDE_MODELS, claudeAgent, probeClaude } from "./ai/claude";
 import { type CliDeps, cliStatus, runCli } from "./ai/cli";
 import { codexAgent, codexModels, probeCodex, resolveCodex } from "./ai/codex";
+import { type ModelChoice, listModels, providerAgent, verifyProviderKey } from "./ai/openai";
 import { hydrateEnv } from "./ai/env";
 import { type Binary, binaryPath, probeVersion } from "./tools";
 import { broadcast, registerIpc, send } from "./ipc";
@@ -160,11 +161,17 @@ function startPipeline() {
   const data = app.getPath("userData");
   const store = new ProjectStore(join(data, "projects"));
   const settings = new SettingsStore(join(data, "settings.json"));
-  const keys = new KeyStore(join(data, "claude-api-key"), {
+  const cipher = {
     available: () => safeStorage.isEncryptionAvailable(),
-    encrypt: (plain) => safeStorage.encryptString(plain),
-    decrypt: (data) => safeStorage.decryptString(data),
-  });
+    encrypt: (plain: string) => safeStorage.encryptString(plain),
+    decrypt: (data: Buffer) => safeStorage.decryptString(data),
+  };
+  const keys = new KeyStore(join(data, "claude-api-key"), cipher);
+  // One encrypted file per provider, beside the Claude key.
+  const providerKeys: Record<KeyedProviderValue, KeyStore> = {
+    openai: new KeyStore(join(data, "openai-api-key"), cipher),
+    openrouter: new KeyStore(join(data, "openrouter-api-key"), cipher),
+  };
   const jobs = new JobLog();
   const queue = new JobQueue((event) => {
     if (isSmokeRun()) recordSmokeJob(event);
@@ -180,6 +187,13 @@ function startPipeline() {
       const host = await hostEnv;
       const { agent, claudeModel, codexModel } = await settings.get();
       if (agent === "api") return apiAgent({ key: () => keys.get(), model: async () => (await settings.get()).apiModel });
+      if (agent === "openai" || agent === "openrouter") {
+        const model = async () => {
+          const current = await settings.get();
+          return agent === "openai" ? current.openaiModel : current.openrouterModel;
+        };
+        return providerAgent(agent, { key: () => providerKeys[agent].get(), model });
+      }
       if (agent === "codex") {
         const status = await probeCodex(host);
         if (status.status !== "ready") throw new Error(status.detail ?? "Codex isn't ready");
@@ -264,7 +278,7 @@ function startPipeline() {
     ffmpeg: (args) => runFfmpeg(tool("ffmpeg"), args, { duration: 0 }),
     now: () => new Date(),
   });
-  return { store, settings, keys, queue, jobs, pipeline, media, music, thumbnail, analysis, exporter, edit, recordings, speech };
+  return { store, settings, keys, providerKeys, queue, jobs, pipeline, media, music, thumbnail, analysis, exporter, edit, recordings, speech };
 }
 
 /** Where outside agents reach the app, and what their configs run to get there. */
@@ -367,7 +381,7 @@ if (!squirrelLaunch && !app.requestSingleInstanceLock()) {
 } else if (!squirrelLaunch) {
   if (background) app.dock?.hide();
   app.whenReady().then(() => {
-    const { store, settings, keys, queue, jobs, pipeline, media, music, thumbnail, analysis, exporter, edit, recordings, speech } = startPipeline();
+    const { store, settings, keys, providerKeys, queue, jobs, pipeline, media, music, thumbnail, analysis, exporter, edit, recordings, speech } = startPipeline();
     app.on("will-quit", () => void recordings.discardAll());
     const updater = new Updater({
       feed: updateFeed(),
@@ -457,13 +471,39 @@ if (!squirrelLaunch && !app.requestSingleInstanceLock()) {
       },
     );
     if (!isSmokeRun()) void healRegistrations(installEnv);
+    // Each key's model list, fetched once per key: listing needs the network, and the lists change rarely.
+    const modelLists = new Map<string, Promise<ModelChoice[]>>();
+    const providerStatus = async (provider: KeyedProviderValue, current: SettingsValue) => {
+      const key = await providerKeys[provider].get();
+      const model = provider === "openai" ? current.openaiModel : current.openrouterModel;
+      if (!key) return { hasKey: false, model, choices: [] };
+      const cacheKey = `${provider}:${key}`;
+      if (!modelLists.has(cacheKey)) {
+        const list = listModels(provider, key);
+        modelLists.set(cacheKey, list);
+        // A failed listing is tried again next time rather than kept.
+        list.catch(() => modelLists.delete(cacheKey));
+      }
+      const choices = await modelLists.get(cacheKey)!.catch(() => [] as ModelChoice[]);
+      return { hasKey: true, model, choices };
+    };
     const aiStatus = async () => {
       const host = await hostEnv;
-      const [claude, codex, current, key, codexOffers] = await Promise.all([probeClaude(host), probeCodex(host), settings.get(), keys.get(), codexModels(host)]);
+      const current = await settings.get();
+      const [claude, codex, key, codexOffers, openai, openrouter] = await Promise.all([
+        probeClaude(host),
+        probeCodex(host),
+        keys.get(),
+        codexModels(host),
+        providerStatus("openai", current),
+        providerStatus("openrouter", current),
+      ]);
       return {
         claude,
         codex,
         api: { hasKey: key !== null, model: current.apiModel },
+        openai,
+        openrouter,
         agent: current.agent,
         models: {
           claude: { choices: CLAUDE_MODELS, fallback: null, selected: current.claudeModel },
@@ -694,6 +734,19 @@ if (!squirrelLaunch && !app.requestSingleInstanceLock()) {
           if (key) await verifyKey(key, apiModel);
           await keys.set(key);
           return { hasKey: key !== null, model: apiModel };
+        },
+        "settings:provider-key": async ({ provider, key }) => {
+          // A key is tried before it's kept, so a typo shows up here rather than mid-analysis.
+          if (key) await verifyProviderKey(provider, key);
+          await providerKeys[provider].set(key);
+          let current = await settings.get();
+          const status = await providerStatus(provider, current);
+          // OpenAI's list is short and ranked, so a new key starts on its best model; OpenRouter's is too long to guess from.
+          if (provider === "openai" && key && !current.openaiModel && status.choices[0]) {
+            current = await settings.set({ openaiModel: status.choices[0].id });
+            return { ...status, model: current.openaiModel };
+          }
+          return status;
         },
         "project:analyze": ({ id, brief }) => analysis.analyze(id, brief),
         "project:request": async ({ id, request }) => analysis.request(id, request),
