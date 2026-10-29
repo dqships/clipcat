@@ -1,4 +1,4 @@
-import { type KeyboardEvent, type ReactNode, useState } from "react";
+import type { KeyboardEvent, ReactNode } from "react";
 
 const TABS = [
   { id: "edit", label: "Edit" },
@@ -7,11 +7,14 @@ const TABS = [
   { id: "export", label: "Export" },
 ] as const;
 
-type TabId = (typeof TABS)[number]["id"];
+export type TabId = (typeof TABS)[number]["id"];
 
 type Props = Record<TabId, ReactNode> & {
   /** Suggested edits waiting on a decision, shown on the Edit tab so they're found from any tab. */
   pending: number;
+  /** The open tab; the editor holds it, so the View menu can switch it. */
+  tab: TabId;
+  onTab: (tab: TabId) => void;
 };
 
 /**
@@ -19,9 +22,7 @@ type Props = Record<TabId, ReactNode> & {
  * goes out with it, then export. Every tab stays mounted, so a half-typed
  * brief or title survives a switch.
  */
-export function Tools({ pending, ...panels }: Props) {
-  const [tab, setTab] = useState<TabId>("edit");
-
+export function Tools({ pending, tab, onTab: setTab, ...panels }: Props) {
   const onKeyDown = (e: KeyboardEvent) => {
     if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
     e.preventDefault();

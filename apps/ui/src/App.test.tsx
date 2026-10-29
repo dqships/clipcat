@@ -282,6 +282,73 @@ describe("App", () => {
     await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:edit", { id: "p1", revision: 4, op: { type: "undo" } }));
   });
 
+  it("follows the menu bar: open recent, tabs, hide cuts, undo, add videos, settings", async () => {
+    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude", models };
+    const done = { ...project, revision: 4, history: { past: [{ segments: [], statuses: {} }], future: [] } };
+    const { invoke, emit } = fakeBridge({
+      "app:info": info(),
+      "library:list": [summary],
+      "project:get": done,
+      "ai:status": ready,
+      "files:pick": ["/v/take-2.mp4"],
+      "project:import": done,
+      "project:edit": { ...done, revision: 5, history: { past: [], future: [] } },
+      "update:status": { state: "idle", version: null, detail: null, page: null },
+    });
+    render(<App />);
+    await screen.findByRole("button", { name: "talk" });
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("menu:state", { project: null }));
+
+    emit("menu", { command: "open-project", projectId: "p1" });
+    expect(await screen.findByRole("heading", { level: 1, name: "talk" })).toBeTruthy();
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("menu:state", { project: { id: "p1", hideCuts: false } }));
+
+    emit("menu", { command: "export" });
+    expect(screen.getByRole("tab", { name: "Export" }).getAttribute("aria-selected")).toBe("true");
+    emit("menu", { command: "tab-look" });
+    expect(screen.getByRole("tab", { name: "Look" }).getAttribute("aria-selected")).toBe("true");
+
+    emit("menu", { command: "hide-cuts" });
+    expect(screen.getByRole("button", { name: "Hide cuts" }).getAttribute("aria-pressed")).toBe("true");
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("menu:state", { project: { id: "p1", hideCuts: true } }));
+
+    emit("menu", { command: "undo" });
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:edit", { id: "p1", revision: 4, op: { type: "undo" } }));
+
+    emit("menu", { command: "add-videos" });
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:import", { projectId: "p1", files: ["/v/take-2.mp4"] }));
+
+    emit("menu", { command: "settings" });
+    expect(await screen.findByRole("heading", { level: 1, name: "Settings" })).toBeTruthy();
+    await vi.waitFor(() => expect(invoke).toHaveBeenLastCalledWith("menu:state", { project: null }));
+  });
+
+  it("leaves Undo to a text box that has focus", async () => {
+    const { invoke, emit } = fakeBridge({ "app:info": info(), "library:list": [summary], "project:get": { ...project, history: { past: [{ segments: [], statuses: {} }], future: [] } }, "ai:status": { claude: { status: "ready", version: null, detail: null }, codex: { status: "ready", version: null, detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude", models } });
+    const execCommand = vi.fn(() => true);
+    document.execCommand = execCommand;
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "talk" }));
+    await screen.findByRole("heading", { level: 1, name: "talk" });
+    await vi.waitFor(() => expect((screen.getByRole("button", { name: "Undo" }) as HTMLButtonElement).disabled).toBe(false));
+    const box = document.createElement("input");
+    document.body.append(box);
+    box.focus();
+    emit("menu", { command: "undo" });
+    expect(execCommand).toHaveBeenCalledWith("undo");
+    expect(invoke).not.toHaveBeenCalledWith("project:edit", expect.anything());
+    box.remove();
+  });
+
+  it("imports videos into a new project from the File menu and opens it", async () => {
+    const { invoke, emit } = fakeBridge({ "app:info": info(), "library:list": [], "files:pick": ["/v/a.mov"], "project:import": project, "project:get": project, "ai:status": { claude: { status: "ready", version: null, detail: null }, codex: { status: "ready", version: null, detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude", models } });
+    render(<App />);
+    await screen.findByRole("heading", { level: 2, name: "No projects yet" });
+    emit("menu", { command: "import" });
+    expect(await screen.findByRole("heading", { level: 1, name: "talk" })).toBeTruthy();
+    expect(invoke).toHaveBeenCalledWith("project:import", { projectId: null, files: ["/v/a.mov"] });
+  });
+
   it("keeps a history of decided suggestions, where a decision can be changed", async () => {
     const decided = {
       ...project,
