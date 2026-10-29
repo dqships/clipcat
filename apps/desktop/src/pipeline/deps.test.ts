@@ -36,12 +36,12 @@ const fakeParakeet = (ok: boolean) =>
       : "echo 'needs macOS 14' >&2; exit 1",
   );
 
-async function deps(parakeet: string | null) {
+async function deps(parakeet: string | null, engine: "auto" | "whisper" = "auto") {
   // A whisper model on disk already, so nothing downloads.
   const model = join(dir, "ggml-base.bin");
   await writeFile(model, "");
   await truncate(model, 2_000_000);
-  const tools: Tools = { ffmpeg: "", ffprobe: "", whisper: await fakeWhisper(), parakeet, modelsDir: dir, model: "base", encoder: async () => "libx264" };
+  const tools: Tools = { ffmpeg: "", ffprobe: "", whisper: await fakeWhisper(), parakeet, modelsDir: dir, model: async () => "base", engine: async () => engine, encoder: async () => "libx264" };
   return realDeps(tools);
 }
 
@@ -59,6 +59,11 @@ describe.skipIf(process.platform === "win32")("realDeps transcribe", () => {
   it("uses whisper for other languages, and where there is no Parakeet", async () => {
     expect(await (await deps(await fakeParakeet(true))).transcribe(opts("ja"), ctx)).toMatchObject({ backend: "whisper.cpp", model: "base" });
     expect(await (await deps(null)).transcribe(opts("en"), ctx)).toMatchObject({ backend: "whisper.cpp" });
+  });
+
+  it("uses whisper when Settings say so, or when it has to guess the language", async () => {
+    expect(await (await deps(await fakeParakeet(true), "whisper")).transcribe(opts("en"), ctx)).toMatchObject({ backend: "whisper.cpp" });
+    expect(await (await deps(await fakeParakeet(true))).transcribe(opts("auto"), ctx)).toMatchObject({ backend: "whisper.cpp" });
   });
 
   it("falls back to whisper when Parakeet fails, and says why", async () => {

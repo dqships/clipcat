@@ -53,6 +53,7 @@ import { Updater } from "./update";
 import { ProjectStore } from "./store/projects";
 import { KeyStore } from "./store/keys";
 import { SettingsStore } from "./store/settings";
+import { SpeechLibrary } from "./transcribe/library";
 import type { ModelId } from "./transcribe/models";
 import { startSmokeTimer, finishSmoke, isSmokeRun, recordSmokeJob, smokeImport, smokeMcp } from "./smoke";
 
@@ -133,8 +134,8 @@ function privacyPane(kind: "camera" | "microphone" | "screen"): string {
   return `x-apple.systempreferences:com.apple.preference.security?${pane}`;
 }
 
-/** The smaller whisper model is for CI and slow machines; everyone else gets the accurate one. */
-const MODEL: ModelId = process.env.CLIPCAT_MODEL === "base" ? "base" : "large-v3-turbo-q5_0";
+/** CI forces the small whisper model; everyone else gets the one picked in Settings. */
+const FORCED_MODEL: ModelId | null = process.env.CLIPCAT_MODEL === "base" ? "base" : null;
 
 /** The user's PATH from their login shell, read once; the agent CLIs are found on it. */
 const hostEnv = hydrateEnv();
@@ -201,19 +202,24 @@ function startPipeline() {
     },
     forget: (projectId, assetId) => void media.forget(projectId, assetId),
   });
+  // CI points this at a cached folder so each run doesn't download the model again.
+  const modelsDir = process.env.CLIPCAT_MODELS_DIR ?? join(data, "models");
+  const parakeetBin = PARAKEET && existsSync(tool("clipcat-parakeet")) ? tool("clipcat-parakeet") : null;
+  const speech = new SpeechLibrary({ modelsDir, parakeet: parakeetBin, onProgress: (id, fraction) => broadcast("speech:progress", { id, fraction }) });
   const pipeline = new ImportPipeline({
     ...realDeps({
       ffmpeg: tool("ffmpeg"),
       ffprobe: tool("ffprobe"),
       whisper: tool("whisper-cli"),
-      parakeet: PARAKEET && existsSync(tool("clipcat-parakeet")) ? tool("clipcat-parakeet") : null,
-      // CI points this at a cached folder so each run doesn't download the model again.
-      modelsDir: process.env.CLIPCAT_MODELS_DIR ?? join(data, "models"),
-      model: MODEL,
+      parakeet: parakeetBin,
+      modelsDir,
+      model: async () => FORCED_MODEL ?? (await settings.get()).whisperModel,
+      engine: async () => (await settings.get()).speechEngine,
       encoder,
       dictionary: async () => (await settings.get()).dictionary,
       faceDetector,
     }),
+    language: async () => (await settings.get()).speechLanguage,
     store,
     queue,
     changed,
@@ -255,7 +261,7 @@ function startPipeline() {
     ffmpeg: (args) => runFfmpeg(tool("ffmpeg"), args, { duration: 0 }),
     now: () => new Date(),
   });
-  return { store, settings, keys, queue, jobs, pipeline, media, music, thumbnail, analysis, exporter, edit, recordings };
+  return { store, settings, keys, queue, jobs, pipeline, media, music, thumbnail, analysis, exporter, edit, recordings, speech };
 }
 
 /** Where outside agents reach the app, and what their configs run to get there. */
@@ -355,7 +361,7 @@ if (!squirrelLaunch && !app.requestSingleInstanceLock()) {
 } else if (!squirrelLaunch) {
   if (background) app.dock?.hide();
   app.whenReady().then(() => {
-    const { store, settings, keys, queue, jobs, pipeline, media, music, thumbnail, analysis, exporter, edit, recordings } = startPipeline();
+    const { store, settings, keys, queue, jobs, pipeline, media, music, thumbnail, analysis, exporter, edit, recordings, speech } = startPipeline();
     app.on("will-quit", () => void recordings.discardAll());
     const updater = new Updater({
       feed: updateFeed(),
@@ -562,6 +568,16 @@ if (!squirrelLaunch && !app.requestSingleInstanceLock()) {
         "project:analyze": ({ id, brief }) => analysis.analyze(id, brief),
         "project:request": async ({ id, request }) => analysis.request(id, request),
         "project:correct": async ({ id }) => analysis.correct(id),
+        "project:language": ({ id, language }) => pipeline.setLanguage(id, language),
+        "speech:models": () => speech.list(),
+        "speech:download": async ({ id }) => {
+          await speech.download(id);
+          return speech.list();
+        },
+        "speech:remove": async ({ id }) => {
+          await speech.remove(id);
+          return speech.list();
+        },
         "project:design-slides": ({ id }) => analysis.designMissing(id),
         "project:writeup": async ({ id }) => analysis.writeup(id),
         "project:save-article": async ({ id }, event) => {

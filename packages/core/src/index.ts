@@ -14,3 +14,4 @@ export * from "./slides";
 export * from "./sounds";
 export * from "./writeup";
 export * from "./interchange";
+export * from "./languages";

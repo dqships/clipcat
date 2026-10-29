@@ -16,6 +16,33 @@ export const SITE = {
   tagline: "A free AI video editor for talking-head videos. Your Claude or Codex suggests the edit, and you approve each change.",
 };
 
+/**
+ * The languages ClipCat transcribes, by code, as packages/core/src/languages.ts
+ * lists them (a core test keeps the two the same). Whisper hears all of them;
+ * Parakeet hears the ones in PARAKEET_CODES on Apple Silicon.
+ */
+export const SPEECH_LANGUAGES = [
+  ["en", "English"], ["zh", "Chinese"], ["de", "German"], ["es", "Spanish"], ["ru", "Russian"], ["ko", "Korean"], ["fr", "French"],
+  ["ja", "Japanese"], ["pt", "Portuguese"], ["tr", "Turkish"], ["pl", "Polish"], ["ca", "Catalan"], ["nl", "Dutch"], ["ar", "Arabic"],
+  ["sv", "Swedish"], ["it", "Italian"], ["id", "Indonesian"], ["hi", "Hindi"], ["fi", "Finnish"], ["vi", "Vietnamese"], ["he", "Hebrew"],
+  ["uk", "Ukrainian"], ["el", "Greek"], ["ms", "Malay"], ["cs", "Czech"], ["ro", "Romanian"], ["da", "Danish"], ["hu", "Hungarian"],
+  ["ta", "Tamil"], ["no", "Norwegian"], ["th", "Thai"], ["ur", "Urdu"], ["hr", "Croatian"], ["bg", "Bulgarian"], ["lt", "Lithuanian"],
+  ["la", "Latin"], ["mi", "Māori"], ["ml", "Malayalam"], ["cy", "Welsh"], ["sk", "Slovak"], ["te", "Telugu"], ["fa", "Persian"],
+  ["lv", "Latvian"], ["bn", "Bengali"], ["sr", "Serbian"], ["az", "Azerbaijani"], ["sl", "Slovenian"], ["kn", "Kannada"],
+  ["et", "Estonian"], ["mk", "Macedonian"], ["br", "Breton"], ["eu", "Basque"], ["is", "Icelandic"], ["hy", "Armenian"], ["ne", "Nepali"],
+  ["mn", "Mongolian"], ["bs", "Bosnian"], ["kk", "Kazakh"], ["sq", "Albanian"], ["sw", "Swahili"], ["gl", "Galician"], ["mr", "Marathi"],
+  ["pa", "Punjabi"], ["si", "Sinhala"], ["km", "Khmer"], ["sn", "Shona"], ["yo", "Yoruba"], ["so", "Somali"], ["af", "Afrikaans"],
+  ["oc", "Occitan"], ["ka", "Georgian"], ["be", "Belarusian"], ["tg", "Tajik"], ["sd", "Sindhi"], ["gu", "Gujarati"], ["am", "Amharic"],
+  ["yi", "Yiddish"], ["lo", "Lao"], ["uz", "Uzbek"], ["fo", "Faroese"], ["ht", "Haitian Creole"], ["ps", "Pashto"], ["tk", "Turkmen"],
+  ["nn", "Norwegian Nynorsk"], ["mt", "Maltese"], ["sa", "Sanskrit"], ["lb", "Luxembourgish"], ["my", "Burmese"], ["bo", "Tibetan"],
+  ["tl", "Tagalog"], ["mg", "Malagasy"], ["as", "Assamese"], ["tt", "Tatar"], ["haw", "Hawaiian"], ["ln", "Lingala"], ["ha", "Hausa"],
+  ["ba", "Bashkir"], ["jw", "Javanese"], ["su", "Sundanese"], ["yue", "Cantonese"],
+];
+export const PARAKEET_CODES = ["bg", "cs", "da", "de", "el", "en", "es", "et", "fi", "fr", "hr", "hu", "it", "lt", "lv", "mt", "nl", "pl", "pt", "ro", "ru", "sk", "sl", "sv", "uk"];
+const byName = (codes) => SPEECH_LANGUAGES.filter(([code]) => codes.includes(code)).map(([, name]) => name).sort((a, b) => a.localeCompare(b));
+const PARAKEET_NAMES = byName(PARAKEET_CODES);
+const WHISPER_NAMES = byName(SPEECH_LANGUAGES.map(([code]) => code));
+
 /** When the pages last changed in substance, for the sitemap. */
 const UPDATED = "2026-10-28";
 
@@ -141,6 +168,7 @@ export const PAGES = [
           "Suggested cuts for retakes, stumbles, filler and long pauses wait under the preview with a reason and a confidence. Accept or reject each one.",
           "Every edit can be undone and redone, and the preview always plays the edit with the cuts skipped.",
           "Ask for one-off changes in plain words, like \"cut the part about pricing\".",
+          "ClipCat transcribes on your computer in 100 languages. Set the language for new projects in Settings, or transcribe one project again in another. [See every language](/languages).",
           "Keep a list of the names and terms you use, and \"Fix transcript\" corrects only the words it's sure of.",
         ],
       },
@@ -271,6 +299,48 @@ export const PAGES = [
     ],
   },
   {
+    path: "/languages",
+    nav: "Languages",
+    title: "Languages ClipCat transcribes, on your computer",
+    description:
+      "ClipCat transcribes speech in 100 languages on your computer. Parakeet hears 25 European languages on Apple Silicon, and whisper.cpp hears the rest.",
+    h1: "Languages ClipCat transcribes",
+    lede: `ClipCat hears speech in ${WHISPER_NAMES.length} languages, on your computer, with nothing uploaded. Which engine hears yours depends on the language and on your computer.`,
+    updated: "2026-10-29",
+    sections: [
+      {
+        h2: "Which engine hears your speech",
+        list: [
+          "**Parakeet** (NVIDIA Parakeet TDT 0.6B v3) runs on the Neural Engine of Apple Silicon Macs. It hears the 25 European languages below, tells by itself which one you speak, and is the fastest.",
+          "**Whisper** (whisper.cpp, with the Large v3 Turbo model unless you pick Base) runs on every Mac and Windows PC. It hears every language on this page, and on Apple Silicon it takes any language Parakeet doesn't know.",
+          "Intel Macs and Windows PCs always use whisper. It's slower there, since it runs on the processor.",
+        ],
+      },
+      {
+        h2: "Parakeet: 25 languages on Apple Silicon",
+        columns: true,
+        list: PARAKEET_NAMES,
+      },
+      {
+        h2: `Whisper: ${WHISPER_NAMES.length} languages on every computer`,
+        body: [
+          "Whisper is most accurate in the languages it heard most in training, such as English, Spanish, German, French, Portuguese, Japanese and Chinese. It makes more mistakes in languages with little recorded speech online. You can fix any word in the transcript.",
+        ],
+        columns: true,
+        list: WHISPER_NAMES,
+      },
+      {
+        h2: "Choose the language",
+        list: [
+          "Set the language for new projects in **Settings**, under Transcription. It starts as English.",
+          "Choose **Detect automatically** to have whisper guess the language from the first seconds of speech. That skips Parakeet, so it takes longer on Apple Silicon.",
+          "To change one project's language, open its transcript, pick the language under **Language** and choose **Transcribe again**.",
+          "Settings also picks the whisper model (Large v3 Turbo, or the faster and less accurate Base), can turn Parakeet off, and downloads a model ahead of time or deletes one to free the space. A model only takes memory while it transcribes.",
+        ],
+      },
+    ],
+  },
+  {
     path: "/download",
     nav: "Download",
     title: "Download ClipCat for Mac and Windows, free",
@@ -291,7 +361,7 @@ export const PAGES = [
         h2: "After installing",
         list: [
           "For AI cuts, install [Claude Code](https://claude.com/claude-code) and sign in, or install the Codex CLI and sign in, or paste a Claude API key in ClipCat.",
-          "The first transcription downloads the speech model once, a few hundred megabytes, from Hugging Face.",
+          "The first transcription downloads the speech model once, a few hundred megabytes, from Hugging Face. To download it sooner, open Settings, then Transcription. See [which languages it hears](/languages).",
           "ClipCat checks for updates every few hours and installs them when you restart.",
         ],
       },

@@ -16,6 +16,7 @@ import { Proposals } from "./Proposals";
 import { PunchInsPanel } from "./PunchInsPanel";
 import { ShortsPanel } from "./ShortsPanel";
 import { SoundPanel } from "./SoundPanel";
+import { Language } from "./Language";
 import { Spelling } from "./Spelling";
 import { Tools } from "./Tools";
 import { Waveform } from "./Waveform";
@@ -87,11 +88,17 @@ export function ProjectView({ projectId, jobs, onBack, onOpen, onRecord }: Props
       <DockPanel key={id} id={id} title="Transcript" dock={layout.dock[id]} onMove={(d) => move(id, d)} grow={grow}>
         {project && hasWords ? (
           <>
+            <Language project={project} jobs={jobs} />
             <Spelling project={project} jobs={jobs} ai={ai} />
             <Transcript project={project} playhead={playhead} onSeek={seek} onEdit={edit} />
           </>
+        ) : project && transcribed ? (
+          <>
+            <p className="empty__body">No speech found. If it's in another language, pick it and transcribe again.</p>
+            <Language project={project} jobs={jobs} />
+          </>
         ) : (
-          <p className="empty__body">{transcribed ? "No speech found." : "The transcript appears here once it's ready."}</p>
+          <p className="empty__body">The transcript appears here once it's ready.</p>
         )}
       </DockPanel>
     ) : (

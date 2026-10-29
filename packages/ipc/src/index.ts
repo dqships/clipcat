@@ -4,7 +4,7 @@
 // of reaching the file system.
 
 import { z } from "zod";
-import { EditOp, Project } from "@clipcat/core";
+import { EditOp, Project, isSpeechLanguage } from "@clipcat/core";
 import { CHANNEL_PREFIX, EVENT_PREFIX } from "./channels";
 
 export const ToolInfo = z.object({
@@ -61,6 +61,32 @@ export const AiStatus = z.object({
   models: z.object({ claude: AgentModels, codex: AgentModels }),
 });
 
+/** A speech language code ClipCat knows, or "auto". */
+export const SpeechLanguageCode = z.string().refine(isSpeechLanguage, "Pick a language from the list.");
+
+/** "auto" uses Parakeet for the languages it knows on Apple Silicon and whisper for the rest; "whisper" always uses whisper. */
+export const SpeechEngine = z.enum(["auto", "whisper"]);
+
+/** The whisper models ClipCat offers. */
+export const WhisperModel = z.enum(["large-v3-turbo-q5_0", "base"]);
+
+/** Every speech model ClipCat can download: Parakeet and the whisper models. */
+export const SpeechModelId = z.enum(["parakeet", "large-v3-turbo-q5_0", "base"]);
+
+/** One speech model and whether it's on this computer. */
+export const SpeechModel = z.object({
+  id: SpeechModelId,
+  label: z.string(),
+  /** Roughly how big the download is. */
+  approxMB: z.number(),
+  /** Bytes on disk; 0 when it isn't downloaded. */
+  bytes: z.number().nonnegative(),
+  downloaded: z.boolean(),
+});
+
+/** The speech models this computer can use (Parakeet only on Apple Silicon). */
+export const SpeechModels = z.array(SpeechModel);
+
 /** App-wide settings. */
 const Term = z.string().trim().min(1).max(60);
 
@@ -75,6 +101,11 @@ export const Settings = z.object({
   claudeModel: AgentModel.default(null),
   /** The model Codex runs; null is the default in the user's ~/.codex/config.toml. */
   codexModel: AgentModel.default(null),
+  /** The language new projects are transcribed in. */
+  speechLanguage: SpeechLanguageCode.default("en"),
+  speechEngine: SpeechEngine.default("auto"),
+  /** The whisper model, for the languages Parakeet doesn't know and for Intel Macs and Windows. */
+  whisperModel: WhisperModel.default("large-v3-turbo-q5_0"),
 });
 
 export const ProjectSummary = z.object({
@@ -218,7 +249,18 @@ export const methods = {
   /** Changes app-wide settings; resolves with all of them. */
   "settings:get": { input: z.void(), output: Settings },
   "settings:set": {
-    input: z.object({ agent: AgentName, dictionary: z.array(Term).max(200), apiModel: ApiModel, claudeModel: AgentModel, codexModel: AgentModel }).partial(),
+    input: z
+      .object({
+        agent: AgentName,
+        dictionary: z.array(Term).max(200),
+        apiModel: ApiModel,
+        claudeModel: AgentModel,
+        codexModel: AgentModel,
+        speechLanguage: SpeechLanguageCode,
+        speechEngine: SpeechEngine,
+        whisperModel: WhisperModel,
+      })
+      .partial(),
     output: Settings,
   },
   /** Checks and saves a Claude API key (encrypted), or removes it with null. */
@@ -240,6 +282,14 @@ export const methods = {
   },
   /** Queues designing the project's slides that have no design yet (one that failed, say). */
   "project:design-slides": { input: ProjectRef, output: z.void() },
+  /** Sets the project's speech language and transcribes every recording in it again. */
+  "project:language": { input: ProjectRef.extend({ language: SpeechLanguageCode }), output: Project },
+  /** The speech models this computer can use, and which are downloaded. */
+  "speech:models": { input: z.void(), output: SpeechModels },
+  /** Downloads a speech model now rather than on first use; progress comes as speech:progress events. */
+  "speech:download": { input: z.object({ id: SpeechModelId }), output: SpeechModels },
+  /** Deletes a downloaded speech model to free the space; it downloads again when it's next needed. */
+  "speech:remove": { input: z.object({ id: SpeechModelId }), output: SpeechModels },
   /** Queues a pass that fixes misheard names and terms, using the dictionary. */
   "project:correct": { input: ProjectRef, output: z.void() },
   /** Queues an AI pass that picks up to `count` shorts of at most `seconds` each, each saved as its own vertical project. */
@@ -318,6 +368,8 @@ export const events = {
   update: UpdateStatus,
   /** The latest line from a running CLI install or update. */
   "cli:progress": z.object({ id: CliId, line: z.string() }),
+  /** How far a speech model download has got, 0 to 1 (null while Parakeet compiles). */
+  "speech:progress": z.object({ id: SpeechModelId, fraction: z.number().nullable() }),
   /** An agent opened or closed an MCP session: every agent's state. */
   "mcp:agents": z.array(McpAgent),
 } as const;
@@ -350,6 +402,8 @@ export type AppInfoValue = z.output<typeof AppInfo>;
 export type ToolInfoValue = z.output<typeof ToolInfo>;
 export type ProjectSummaryValue = z.output<typeof ProjectSummary>;
 export type JobEventValue = z.output<typeof JobEvent>;
+export type SpeechModelValue = z.output<typeof SpeechModel>;
+export type SpeechModelIdValue = z.output<typeof SpeechModelId>;
 export type AgentStatusValue = z.output<typeof AgentStatus>;
 export type AiStatusValue = z.output<typeof AiStatus>;
 export type AgentNameValue = z.output<typeof AgentName>;

@@ -8,6 +8,8 @@ export type Section = {
   body?: string[];
   note?: string;
   list?: string[];
+  /** Lay the list out in columns: for long lists of short items, like languages. */
+  columns?: boolean;
   steps?: { title: string; text: string }[];
   /** Things to type into an agent, shown one per line. */
   prompts?: string[];

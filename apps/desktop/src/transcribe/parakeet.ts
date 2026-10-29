@@ -11,11 +11,7 @@ import type { WhisperJson } from "./whisper";
 
 export const PARAKEET_MODEL = "parakeet-tdt-0.6b-v3";
 
-/** The languages Parakeet v3 was trained on (it finds which one by itself). Everything else goes to whisper. */
-export const PARAKEET_LANGUAGES = new Set([
-  "bg", "cs", "da", "de", "el", "en", "es", "et", "fi", "fr", "hr", "hu", "it",
-  "lt", "lv", "mt", "nl", "pl", "pt", "ro", "ru", "sk", "sl", "sv", "uk",
-]);
+export { PARAKEET_LANGUAGES } from "@clipcat/core";
 
 /** Where the helper keeps its models, inside the app's models folder. */
 export const parakeetDir = (modelsDir: string): string => join(modelsDir, "parakeet");
@@ -52,11 +48,10 @@ export type RunParakeet = {
   signal: AbortSignal;
 };
 
-/** Runs the helper and returns its words as whisper-style JSON. */
-export function runParakeet({ binary, modelsDir, wav, outBase, onProgress, signal }: RunParakeet): Promise<WhisperJson> {
-  const out = `${outBase}.parakeet.json`;
+/** Runs the helper with `args`, passing its progress lines on; rejects with the end of its stderr. */
+function runHelper(binary: string, args: string[], onProgress: (p: ParakeetProgress) => void, signal: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
-    const child = spawn(binary, parakeetArgs({ modelsDir, wav, out }), { windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(binary, args, { windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
     let tail = "";
     let partial = "";
     const abort = () => child.kill();
@@ -75,15 +70,23 @@ export function runParakeet({ binary, modelsDir, wav, outBase, onProgress, signa
       tail = (tail + chunk).slice(-4000);
     });
     child.on("error", reject);
-    child.on("close", async (code) => {
+    child.on("close", (code) => {
       signal.removeEventListener("abort", abort);
       if (signal.aborted) return reject(new Error("cancelled"));
       if (code !== 0) return reject(new Error(`clipcat-parakeet exited with ${code}: ${tail.trim().split("\n").slice(-3).join(" ")}`));
-      try {
-        resolve(parakeetSegments(JSON.parse(await readFile(out, "utf8")) as ParakeetJson));
-      } catch (e) {
-        reject(e);
-      }
+      resolve();
     });
   });
+}
+
+/** Runs the helper and returns its words as whisper-style JSON. */
+export async function runParakeet({ binary, modelsDir, wav, outBase, onProgress, signal }: RunParakeet): Promise<WhisperJson> {
+  const out = `${outBase}.parakeet.json`;
+  await runHelper(binary, parakeetArgs({ modelsDir, wav, out }), onProgress, signal);
+  return parakeetSegments(JSON.parse(await readFile(out, "utf8")) as ParakeetJson);
+}
+
+/** Downloads and compiles the Parakeet model ahead of the first transcription. */
+export function downloadParakeet(opts: { binary: string; modelsDir: string; onProgress: (p: ParakeetProgress) => void; signal: AbortSignal }): Promise<void> {
+  return runHelper(opts.binary, ["download", "--models", parakeetDir(opts.modelsDir)], opts.onProgress, opts.signal);
 }

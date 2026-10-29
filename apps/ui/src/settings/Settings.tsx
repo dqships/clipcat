@@ -5,6 +5,7 @@ import { bridge } from "../bridge";
 import { ICON_STROKE } from "../icons";
 import { AgentGuide } from "./AgentGuide";
 import { Agents } from "./Agents";
+import { Transcription } from "./Transcription";
 
 type Props = { update: UpdateStatusValue | null; onBack: () => void };
 
@@ -34,7 +35,8 @@ function updateText(u: UpdateStatusValue | null): string {
 /**
  * Settings: hooking ClipCat into the coding agents on this computer, so
  * Claude Code, Codex or the Claude app can read a project's transcript and
- * make edits while ClipCat is open.
+ * make edits while ClipCat is open; how speech is transcribed; updates and
+ * diagnostics.
  */
 export function Settings({ update, onBack }: Props) {
   const [agents, setAgents] = useState<McpAgentValue[] | null>(null);
@@ -85,6 +87,7 @@ export function Settings({ update, onBack }: Props) {
           <Agents agents={agents} onAgents={setAgents} />
         </section>
         <AgentGuide agents={agents} />
+        <Transcription />
         <section className="settings__section" aria-labelledby="updates-title">
           <h2 id="updates-title" className="section-title">
             Updates

@@ -36,7 +36,7 @@ function PageSection({ s }: { s: Section }) {
           </ul>
         )}
         {s.list && (
-          <ul className="doc-list">
+          <ul className={s.columns ? "doc-list doc-list--columns" : "doc-list"}>
             {s.list.map((i) => (
               <li key={i}>
                 <Inline text={i} />
