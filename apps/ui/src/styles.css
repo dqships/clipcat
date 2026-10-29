@@ -293,6 +293,43 @@ body {
 }
 
 /* Connect asks first: the entry it will write, on a strip of surface. */
+/* An AI provider in Settings: a radio and its name, its model, and its key. */
+.provider__pick {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  cursor: pointer;
+}
+
+.provider__pick input {
+  flex: none;
+  width: var(--icon-size-sm);
+  height: var(--icon-size-sm);
+  margin: calc((var(--leading-callout) - var(--icon-size-sm)) / 2) 0 0;
+  accent-color: var(--color-accent);
+}
+
+/* What's under a provider's name lines up with the name, clear of the radio. */
+.provider__more {
+  display: grid;
+  gap: var(--space-3);
+  padding-left: calc(var(--icon-size-sm) + var(--space-3));
+}
+
+.provider__state--off {
+  color: var(--color-danger);
+}
+
+.provider__key {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.provider__key-input {
+  flex: 1;
+  min-width: 0;
+}
+
 .agents__confirm {
   display: grid;
   gap: var(--space-3);
@@ -1426,11 +1463,6 @@ body {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: var(--space-2);
-}
-
-.ai__api {
-  display: grid;
   gap: var(--space-2);
 }
 

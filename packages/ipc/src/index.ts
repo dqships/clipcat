@@ -34,8 +34,11 @@ export const AgentStatus = z.object({
   detail: z.string().nullable(),
 });
 
-/** The AI editors ClipCat can drive: Claude Code, Codex, or the Claude API with the user's key. */
-export const AgentName = z.enum(["claude", "codex", "api"]);
+/** The AI editors ClipCat can drive: Claude Code, Codex, or the Claude, OpenAI or OpenRouter API with the user's key. */
+export const AgentName = z.enum(["claude", "codex", "api", "openai", "openrouter"]);
+
+/** The APIs besides Claude's that run on the user's own key, each with a model picked from its list. */
+export const KeyedProvider = z.enum(["openai", "openrouter"]);
 
 /** Claude models for the API; Opus first. */
 export const ApiModel = z.enum(["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"]);
@@ -52,11 +55,16 @@ export const ModelChoice = z.object({ id: z.string(), label: z.string() });
 /** The models an agent CLI offers, the one it runs when none is picked (null when it doesn't say), and the pick. */
 export const AgentModels = z.object({ choices: z.array(ModelChoice), fallback: z.string().nullable(), selected: AgentModel });
 
+/** An OpenAI or OpenRouter key's state: whether one is saved, the model picked (null when none is), and the models the key can use. */
+export const ProviderStatus = z.object({ hasKey: z.boolean(), model: AgentModel, choices: z.array(ModelChoice) });
+
 /** Each agent's state, its models, and which one finds cuts. */
 export const AiStatus = z.object({
   claude: AgentStatus,
   codex: AgentStatus,
   api: ApiStatus,
+  openai: ProviderStatus,
+  openrouter: ProviderStatus,
   agent: AgentName,
   models: z.object({ claude: AgentModels, codex: AgentModels }),
 });
@@ -101,6 +109,10 @@ export const Settings = z.object({
   claudeModel: AgentModel.default(null),
   /** The model Codex runs; null is the default in the user's ~/.codex/config.toml. */
   codexModel: AgentModel.default(null),
+  /** The OpenAI model, from the key's list; null until one is picked. */
+  openaiModel: AgentModel.default(null),
+  /** The OpenRouter model, like "anthropic/claude-sonnet-5.5"; null until one is picked. */
+  openrouterModel: AgentModel.default(null),
   /** The language new projects are transcribed in. */
   speechLanguage: SpeechLanguageCode.default("en"),
   speechEngine: SpeechEngine.default("auto"),
@@ -307,6 +319,8 @@ export const methods = {
         apiModel: ApiModel,
         claudeModel: AgentModel,
         codexModel: AgentModel,
+        openaiModel: AgentModel,
+        openrouterModel: AgentModel,
         speechLanguage: SpeechLanguageCode,
         speechEngine: SpeechEngine,
         whisperModel: WhisperModel,
@@ -316,6 +330,8 @@ export const methods = {
   },
   /** Checks and saves a Claude API key (encrypted), or removes it with null. */
   "settings:api-key": { input: z.object({ key: z.string().trim().min(10).max(500).nullable() }), output: ApiStatus },
+  /** Checks and saves an OpenAI or OpenRouter key (encrypted), or removes it with null; resolves with its models. */
+  "settings:provider-key": { input: z.object({ provider: KeyedProvider, key: z.string().trim().min(10).max(500).nullable() }), output: ProviderStatus },
   /** Saves the brief and queues an AI pass that proposes retake, cleanup and tighten cuts. */
   "project:analyze": { input: ProjectRef.extend({ brief: z.string().max(4000) }), output: z.void() },
   /** Queues cuts for one request ("cut the part about pricing"), added to the ones waiting. */
@@ -472,6 +488,8 @@ export type SpeechModelIdValue = z.output<typeof SpeechModelId>;
 export type AgentStatusValue = z.output<typeof AgentStatus>;
 export type AiStatusValue = z.output<typeof AiStatus>;
 export type AgentNameValue = z.output<typeof AgentName>;
+export type KeyedProviderValue = z.output<typeof KeyedProvider>;
+export type ProviderStatusValue = z.output<typeof ProviderStatus>;
 export type ApiModelValue = z.output<typeof ApiModel>;
 export type ApiStatusValue = z.output<typeof ApiStatus>;
 export type AgentModelsValue = z.output<typeof AgentModels>;

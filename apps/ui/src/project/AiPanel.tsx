@@ -1,41 +1,34 @@
 import type { Project, Proposal } from "@clipcat/core";
-import type { AgentNameValue, AiStatusValue, ApiModelValue } from "@clipcat/ipc";
-import { Copy, KeyRound, MessageSquare, Scissors } from "lucide-react";
+import type { AgentNameValue, AiStatusValue } from "@clipcat/ipc";
+import { Copy, MessageSquare, Scissors, Settings2 } from "lucide-react";
 import { useState } from "react";
 import { bridge } from "../bridge";
 import { ICON_STROKE } from "../icons";
+import { API_MODEL_LABEL, PROVIDER_LABEL } from "../settings/AiModels";
 import type { ProjectJobs } from "../useJobs";
 import { AGENT_LABEL, type Ai, readiness } from "./useAi";
 
 const AI_TYPES = new Set<Proposal["type"]>(["retake", "cleanup", "tighten"]);
 
-const MODEL_LABEL: Record<ApiModelValue, string> = {
-  "claude-opus-5-5": "Opus 5.5 (best)",
-  "claude-sonnet-5-5": "Sonnet 5.5",
-  "claude-haiku-5-5": "Haiku 5.5 (cheapest)",
-};
-
-/** What the empty choice means: the CLI's own default, named when the CLI says which. */
-function defaultModelLabel(ai: AiStatusValue, name: "claude" | "codex"): string {
-  const fallback = ai.models[name].fallback;
-  return `${AGENT_LABEL[name]} default${fallback ? ` (${fallback})` : ""}`;
+/** The model the picked AI runs, as the Settings page names it. */
+function modelText(ai: AiStatusValue, name: AgentNameValue): string {
+  if (name === "api") return API_MODEL_LABEL[ai.api.model];
+  if (name === "openai" || name === "openrouter") return ai[name].model ?? "none picked";
+  const { selected, choices, fallback } = ai.models[name];
+  if (!selected) return fallback ? `default (${fallback})` : "default";
+  return choices.find((c) => c.id === selected)?.label ?? selected;
 }
 
-/** The models to offer, with a picked one that has since left the list kept in it. */
-function modelChoices(ai: AiStatusValue, name: "claude" | "codex"): { id: string; label: string }[] {
-  const { choices, selected } = ai.models[name];
-  return selected && !choices.some((c) => c.id === selected) ? [...choices, { id: selected, label: selected }] : choices;
-}
-
-type Props = { project: Project; jobs: ProjectJobs; ai: Ai };
+type Props = { project: Project; jobs: ProjectJobs; ai: Ai; onSettings: () => void };
 
 /**
  * Asks the user's Claude Code, Codex or Claude API key for a first edit:
- * which one, an optional brief and one button. What comes back is listed
+ * which one, an optional brief and one button. Models and keys are set up
+ * in Settings; this only picks among them. What comes back is listed
  * with the other suggested edits to accept or reject.
  */
-export function AiPanel({ project, jobs, ai: shared }: Props) {
-  const { status: ai, setStatus: setAi, check } = shared;
+export function AiPanel({ project, jobs, ai: shared, onSettings }: Props) {
+  const { status: ai, setStatus: setAi } = shared;
   const [brief, setBrief] = useState(project.brief);
   const [failure, setError] = useState<string | null>(null);
   const error = failure ?? shared.error;
@@ -47,40 +40,12 @@ export function AiPanel({ project, jobs, ai: shared }: Props) {
   const status = ai ? readiness(ai, agent) : null;
   const ready = status?.ready ?? false;
   const label = AGENT_LABEL[agent];
-  const [key, setKey] = useState("");
-  const [savingKey, setSavingKey] = useState(false);
 
   const choose = (next: AgentNameValue) => {
     setError(null);
     setAi((prev) => (prev ? { ...prev, agent: next } : prev));
     bridge()
       ?.invoke("settings:set", { agent: next })
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
-  };
-  const saveKey = (next: string | null) => {
-    setError(null);
-    setSavingKey(true);
-    bridge()
-      ?.invoke("settings:api-key", { key: next })
-      .then(
-        (api) => {
-          setAi((prev) => (prev ? { ...prev, api } : prev));
-          setKey("");
-        },
-        (e: unknown) => setError(e instanceof Error ? e.message : String(e)),
-      )
-      .finally(() => setSavingKey(false));
-  };
-  const chooseModel = (model: ApiModelValue) => {
-    setAi((prev) => (prev ? { ...prev, api: { ...prev.api, model } } : prev));
-    bridge()
-      ?.invoke("settings:set", { apiModel: model })
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
-  };
-  const chooseAgentModel = (name: "claude" | "codex", model: string | null) => {
-    setAi((prev) => (prev ? { ...prev, models: { ...prev.models, [name]: { ...prev.models[name], selected: model } } } : prev));
-    bridge()
-      ?.invoke("settings:set", name === "codex" ? { codexModel: model } : { claudeModel: model })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
   };
   const hasWords = project.transcript.length > 0;
@@ -121,71 +86,16 @@ export function AiPanel({ project, jobs, ai: shared }: Props) {
           ))}
         </select>
       </label>
-      {ai && agent !== "api" && (
-        <label className="field">
-          <span className="field__label">Model</span>
-          <select
-            className="field__control"
-            value={ai.models[agent].selected ?? ""}
-            disabled={running}
-            onChange={(e) => chooseAgentModel(agent, e.target.value || null)}
-          >
-            <option value="">{defaultModelLabel(ai, agent)}</option>
-            {modelChoices(ai, agent).map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.label}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
-      {status && !ready && agent !== "api" && (
-        <div className="notice ai__notice" role="status">
+      {ai && (
+        <p className="ai__hint ai__row">
           <span>
-            {status.installed ? `${label} isn't ready.` : `ClipCat uses your ${label} to suggest edits.`} {status.detail}
+            {ready ? `Model: ${modelText(ai, agent)}.` : `${PROVIDER_LABEL[agent]} isn't ${status?.installed ? "ready" : "set up"}. ${status?.detail ?? ""}`}
           </span>
-          <button type="button" className="button" onClick={check}>
-            Check again
+          <button type="button" className="button" onClick={onSettings}>
+            <Settings2 className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
+            {ready ? "AI settings" : `Set up ${PROVIDER_LABEL[agent]}`}
           </button>
-        </div>
-      )}
-      {ai && agent === "api" && (
-        <div className="ai__api">
-          <label className="field">
-            <span className="field__label">Model</span>
-            <select className="field__control" value={ai.api.model} disabled={running} onChange={(e) => chooseModel(e.target.value as ApiModelValue)}>
-              {(Object.keys(MODEL_LABEL) as ApiModelValue[]).map((m) => (
-                <option key={m} value={m}>
-                  {MODEL_LABEL[m]}
-                </option>
-              ))}
-            </select>
-          </label>
-          {ai.api.hasKey ? (
-            <p className="ai__hint ai__row">
-              <span>Your API key is saved, encrypted, on this computer. Each run is billed to it.</span>
-              <button type="button" className="button" disabled={savingKey || running} onClick={() => saveKey(null)}>
-                Remove key
-              </button>
-            </p>
-          ) : (
-            <div className="ai__row">
-              <input
-                className="ai__brief"
-                type="password"
-                autoComplete="off"
-                aria-label="Claude API key"
-                placeholder="sk-ant-…"
-                value={key}
-                onChange={(e) => setKey(e.target.value)}
-              />
-              <button type="button" className="button" disabled={savingKey || key.trim().length < 10} onClick={() => saveKey(key.trim())}>
-                <KeyRound className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
-                {savingKey ? "Checking…" : "Save key"}
-              </button>
-            </div>
-          )}
-        </div>
+        </p>
       )}
       <label className="ai__label" htmlFor="ai-brief">
         What should the edit do? (optional)
@@ -207,7 +117,7 @@ export function AiPanel({ project, jobs, ai: shared }: Props) {
         {!hasWords ? (
           <span className="ai__hint">Available once the transcript is ready.</span>
         ) : (
-          status && !ready && <span className="ai__hint">Set up {label} above first.</span>
+          status && !ready && <span className="ai__hint">Set up {label} in Settings first.</span>
         )}
       </div>
       <label className="ai__label" htmlFor="ai-request">

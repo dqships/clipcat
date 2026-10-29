@@ -5,6 +5,7 @@ import { bridge } from "../bridge";
 import { ICON_STROKE } from "../icons";
 import { JobLine } from "../JobLine";
 import { NameField } from "../NameField";
+import type { SectionId } from "../settings/Settings";
 import { type ProjectJobs, useProjectChanges } from "../useJobs";
 import { typing, useMenuCommand } from "../useMenu";
 import { AiPanel } from "./AiPanel";
@@ -40,6 +41,8 @@ type Props = {
   onOpen: (id: string) => void;
   /** Records another take into this project. */
   onRecord: (name: string | null) => void;
+  /** Opens Settings on a page, for setting up the AI. */
+  onSettings: (section: SectionId) => void;
 };
 
 /**
@@ -50,7 +53,7 @@ type Props = {
  * dock they share. Cuts can be hidden from both the strip and the
  * transcript, to read and see only what's kept.
  */
-export function ProjectView({ projectId, jobs, onBack, onOpen, onRecord }: Props) {
+export function ProjectView({ projectId, jobs, onBack, onOpen, onRecord, onSettings }: Props) {
   const [project, setProjectState] = useState<Project | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [playhead, setPlayhead] = useState<Playhead | null>(null);
@@ -189,7 +192,7 @@ export function ProjectView({ projectId, jobs, onBack, onOpen, onRecord }: Props
             edit={
               <>
                 {project.origin && <ShortsPanel project={project} jobs={jobs} ai={ai} onOpen={onOpen} />}
-                <AiPanel project={project} jobs={jobs} ai={ai} />
+                <AiPanel project={project} jobs={jobs} ai={ai} onSettings={() => onSettings("ai")} />
                 <Proposals project={project} onSeek={seek} onEdit={edit} />
                 <PunchInsPanel project={project} onSeek={seek} onEdit={edit} />
                 <MediaPanel project={project} onSeek={seek} onEdit={edit} />
