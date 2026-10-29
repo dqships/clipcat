@@ -1,4 +1,5 @@
 import type { Captions, EditOp, Project } from "@clipcat/core";
+import { ColorField } from "./ColorField";
 
 type Props = { project: Project; onEdit: (op: EditOp) => void };
 
@@ -44,6 +45,13 @@ export function CaptionsPanel({ project, onEdit }: Props) {
             <option value="rounded">A box</option>
           </select>
         </label>
+        <ColorField label="Text colour" value={c.color} disabled={!c.enabled} onChange={(color) => set({ color })} />
+        <ColorField
+          label="Box colour"
+          value={c.boxColor}
+          disabled={!c.enabled || c.background !== "rounded"}
+          onChange={(boxColor) => set({ boxColor })}
+        />
         <label className="field">
           <span className="field__label">Size</span>
           <input

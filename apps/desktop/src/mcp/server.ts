@@ -276,7 +276,7 @@ export function createMcpServer(deps: McpDeps): McpServer {
 - {type:"slide", from, to, brief, look:"paper"|"ink"|"overlay"}: a motion slide ClipCat's AI editor designs from the brief
 - {type:"sound", word, effect}: a sound effect on that word; effects: ${SOUND_EFFECTS.map((e) => e.id).join(", ")}
 - {type:"chapter", word, title} / {type:"remove-chapter", word}
-- {type:"captions", captions:{enabled, mode:"word"|"sentence", font, size, color:"#RRGGBB", effect:"none"|"shadow", case:"regular"|"upper"|"lower", background:"none"|"rounded", position:0..1}} (any subset)
+- {type:"captions", captions:{enabled, mode:"word"|"sentence", font, size, color:"#RRGGBB", effect:"none"|"shadow", case:"regular"|"upper"|"lower", background:"none"|"rounded", boxColor:"#RRGGBB", position:0..1}} (any subset)
 - {type:"speed", speed:0.5..2} / {type:"aspect", aspectRatio:"16:9"|"9:16"|"1:1"}
 - {type:"music", volume?:0..1, duck?:boolean} / {type:"remove-music"}
 - {type:"writeup", description?, articleTitle?, article?}

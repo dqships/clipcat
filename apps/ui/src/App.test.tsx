@@ -55,7 +55,7 @@ const project = {
   proposals: [
     { id: "x1", type: "silence", sourceId: "s1", cuts: [[1, 2.5]], wordIds: [], keepWordIds: [], reason: "", confidence: 1, status: "pending" },
   ],
-  captions: { enabled: true, mode: "sentence", font: "Jost", size: 54, color: "#FFFFFF", effect: "shadow", case: "regular", background: "none", position: 0.82 },
+  captions: { enabled: true, mode: "sentence", font: "Jost", size: 54, color: "#FFFFFF", effect: "shadow", case: "regular", background: "none", boxColor: "#000000", position: 0.82 },
   createdAt: "",
   updatedAt: "",
 };
@@ -265,6 +265,27 @@ describe("App", () => {
     await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:edit", { id: "p1", revision: 4, op: { type: "undo" } }));
   });
 
+  it("keeps a history of decided suggestions, where a decision can be changed", async () => {
+    const decided = {
+      ...project,
+      proposals: [
+        ...project.proposals,
+        { id: "x2", type: "retake", sourceId: "s1", cuts: [[0.4, 1]], wordIds: ["s1-0"], keepWordIds: [], reason: "Said twice", confidence: 0.9, status: "rejected" },
+        { id: "x3", type: "silence", sourceId: "s1", cuts: [[2.5, 2.9]], wordIds: [], keepWordIds: [], reason: "", confidence: 1, status: "accepted" },
+        // Added by hand, not suggested: not in the history.
+        { id: "x4", type: "punch-in", sourceId: "s1", cuts: [], wordIds: ["s1-1"], keepWordIds: [], reason: "", confidence: 1, status: "accepted", punch: { range: [3, 3.5], style: "cut", scale: 1.25 } },
+      ],
+    };
+    const { invoke } = fakeBridge({ "app:info": info(), "library:list": [summary], "project:get": decided, "project:edit": { ...decided, revision: 4 } });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "talk" }));
+    const history = (await screen.findByText("History: 1 accepted, 1 rejected")).closest("details")!;
+    expect(within(history).getAllByRole("listitem")).toHaveLength(2);
+    expect(history.textContent).toContain("Rejected: Retake");
+    fireEvent.click(within(history).getByRole("button", { name: "Accept retake: Said twice instead" }));
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:edit", { id: "p1", revision: 3, op: { type: "decide", ids: ["x2"], status: "accepted" } }));
+  });
+
   it("styles captions, shows them over the preview and exports", async () => {
     const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude", models };
     const exported = { ...project, lastExport: { path: "/Movies/talk.mp4", format: "16:9", at: "" } };
@@ -287,6 +308,19 @@ describe("App", () => {
     await vi.waitFor(() =>
       expect(invoke).toHaveBeenCalledWith("project:edit", { id: "p1", revision: 3, op: { type: "captions", captions: { case: "upper" } } }),
     );
+    await openTab("Look");
+    const textColour = screen.getByRole("group", { name: "Text colour" });
+    expect(within(textColour).getByRole("button", { name: "White" }).getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(within(textColour).getByRole("button", { name: "Splice tape" }));
+    await vi.waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("project:edit", { id: "p1", revision: 4, op: { type: "captions", captions: { color: "#F2B705" } } }),
+    );
+    fireEvent.change(within(textColour).getByLabelText("Another text colour"), { target: { value: "#3366cc" } });
+    await vi.waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("project:edit", { id: "p1", revision: 4, op: { type: "captions", captions: { color: "#3366CC" } } }),
+    );
+    // The box colour waits until there's a box.
+    expect((screen.getByRole("group", { name: "Box colour" }) as HTMLFieldSetElement).disabled).toBe(true);
 
     await openTab("Export");
     fireEvent.click(screen.getByRole("button", { name: /Export 9:16/ }));
@@ -673,10 +707,63 @@ describe("App", () => {
     expect(await screen.findByRole("heading", { level: 1, name: "talk" })).toBeTruthy();
   });
 
+  it("renames a project and shows its folder from the right-click menu", async () => {
+    let name = "talk";
+    const { invoke } = fakeBridge({
+      "app:info": info(),
+      "library:list": () => [{ ...summary, name }],
+      "project:rename": (input: { name: string }) => {
+        name = input.name;
+        return { ...project, name };
+      },
+      "project:reveal": undefined,
+    });
+    render(<App />);
+    const card = (await screen.findByRole("button", { name: "talk" })).closest("article")!;
+    fireEvent.contextMenu(card, { clientX: 40, clientY: 60 });
+    const menu = screen.getByRole("menu", { name: "Options for talk" });
+    expect(within(menu).getAllByRole("menuitem").map((m) => m.textContent)).toEqual(["Open", "Rename", "Show in Finder", "Delete"]);
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "Rename" }));
+    expect(screen.queryByRole("menu")).toBeNull();
+    const field = screen.getByLabelText("Project name");
+    fireEvent.change(field, { target: { value: "  Launch talk " } });
+    fireEvent.keyDown(field, { key: "Enter" });
+    expect(invoke).toHaveBeenCalledWith("project:rename", { id: "p1", name: "Launch talk" });
+    expect(await screen.findByRole("button", { name: "Launch talk" })).toBeTruthy();
+
+    fireEvent.contextMenu(screen.getByRole("button", { name: "Launch talk" }).closest("article")!);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Show in Finder" }));
+    expect(invoke).toHaveBeenCalledWith("project:reveal", { id: "p1" });
+
+    // Escape leaves the name as it was.
+    fireEvent.click(screen.getByRole("button", { name: "Options for Launch talk" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Rename" }));
+    fireEvent.keyDown(screen.getByLabelText("Project name"), { key: "Escape" });
+    expect(invoke.mock.calls.filter(([m]) => m === "project:rename")).toHaveLength(1);
+  });
+
+  it("renames the open project from its title", async () => {
+    const { invoke } = fakeBridge({
+      "app:info": info(),
+      "library:list": [summary],
+      "project:get": project,
+      "project:rename": { ...project, name: "Launch talk", revision: 4 },
+    });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "talk" }));
+    fireEvent.click(await screen.findByRole("button", { name: "talk" }));
+    const field = screen.getByLabelText("Project name");
+    fireEvent.change(field, { target: { value: "Launch talk" } });
+    fireEvent.blur(field);
+    expect(invoke).toHaveBeenCalledWith("project:rename", { id: "p1", name: "Launch talk" });
+    expect(await screen.findByRole("heading", { level: 1, name: "Launch talk" })).toBeTruthy();
+  });
+
   it("asks before deleting a project", async () => {
     const { invoke } = fakeBridge({ "app:info": info(), "library:list": [summary], "project:remove": undefined });
     render(<App />);
-    fireEvent.click(await screen.findByRole("button", { name: "Delete talk" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Options for talk" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
     expect(invoke).not.toHaveBeenCalledWith("project:remove", expect.anything());
     fireEvent.click(screen.getByRole("button", { name: "Delete project" }));
     await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:remove", { id: "p1" }));

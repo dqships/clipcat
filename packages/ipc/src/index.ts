@@ -213,6 +213,10 @@ export const methods = {
   "project:import": { input: z.object({ projectId: z.string().regex(/^[a-zA-Z0-9-]+$/).nullable(), files: Files }), output: Project },
   "project:get": { input: ProjectRef, output: Project },
   "project:remove": { input: ProjectRef, output: z.void() },
+  /** Renames a project; a short's entry in its long video, and a long video's name on its shorts, follow. */
+  "project:rename": { input: ProjectRef.extend({ name: z.string().trim().min(1).max(200) }), output: Project },
+  /** Shows the project's folder in Finder or Explorer. */
+  "project:reveal": { input: ProjectRef, output: z.void() },
   /** Whether the user's AI editor is installed and signed in. Probing runs the CLI, so it takes a moment. */
   "ai:status": { input: z.void(), output: AiStatus },
   /** Changes app-wide settings; resolves with all of them. */

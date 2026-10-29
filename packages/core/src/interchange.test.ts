@@ -26,7 +26,7 @@ function project(over: Partial<Project> = {}): Project {
     transcript: words("a", "one two three four five six seven eight nine ten", 0),
     segments,
     proposals: [],
-    captions: { enabled: true, mode: "sentence", font: "Jost", size: 54, color: "#FFFFFF", effect: "shadow", case: "regular", background: "none", position: 0.82 },
+    captions: { enabled: true, mode: "sentence", font: "Jost", size: 54, color: "#FFFFFF", effect: "shadow", case: "regular", background: "none", boxColor: "#000000", position: 0.82 },
     history: { past: [], future: [] },
     lastExport: null,
     origin: null,
