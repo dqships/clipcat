@@ -34,7 +34,7 @@ export function ExportPanel({ project, jobs, onEdit }: Props) {
   const start = (format: "16:9" | "9:16") => {
     setError(null);
     // A thumbnail that can't be drawn leaves the video without cover art rather than stopping the export.
-    coverPng(project)
+    coverPng(project, format)
       .catch(() => null)
       .then((cover) => bridge()?.invoke("project:export", { id: project.id, format, cover }))
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));

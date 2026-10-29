@@ -16,8 +16,8 @@ function picture(url: string): Promise<HTMLImageElement> {
   });
 }
 
-/** The project's thumbnail as a base64 PNG, or null when it has none or it can't be drawn here. */
-export async function coverPng(project: Project): Promise<string | null> {
+/** The project's thumbnail drawn for an export in `_format`, as a base64 PNG; null when it has none or it can't be drawn here. */
+export async function coverPng(project: Project, _format: "16:9" | "9:16"): Promise<string | null> {
   const t = project.thumbnail;
   if (!t) return null;
   const canvas = document.createElement("canvas");
