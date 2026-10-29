@@ -234,23 +234,16 @@ export function ThumbnailPanel({ project, playhead, jobs, onEdit }: Props) {
               }}
             />
           </label>
-          <fieldset className="field color-field" aria-label="Thumbnail text colour">
-            <legend className="field__label">Text colour</legend>
-            <div className="color-field__swatches">
-              {(Object.entries(COLORS) as [ThumbnailColor, string][]).map(([value, label]) => (
-                <button
-                  key={value}
-                  type="button"
-                  className="color-field__swatch"
-                  style={{ background: `var(--thumbnail-${value})` }}
-                  aria-label={label}
-                  aria-pressed={t.textColor === value}
-                  title={label}
-                  onClick={() => style({ textColor: value })}
-                />
+          <label className="field">
+            <span className="field__label">Text colour</span>
+            <select className="field__control" value={t.textColor} onChange={(e) => style({ textColor: e.target.value as ThumbnailColor })}>
+              {Object.entries(COLORS).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
               ))}
-            </div>
-          </fieldset>
+            </select>
+          </label>
           <label className="field">
             <span className="field__label">Behind the text</span>
             <select className="field__control" value={t.background} onChange={(e) => style({ background: e.target.value as ThumbnailBackground })}>
