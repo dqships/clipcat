@@ -321,6 +321,10 @@ describe("App", () => {
     emit("menu", { command: "settings" });
     expect(await screen.findByRole("heading", { level: 1, name: "Settings" })).toBeTruthy();
     await vi.waitFor(() => expect(invoke).toHaveBeenLastCalledWith("menu:state", { project: null }));
+
+    // Check for Updates opens Settings on the Updates page.
+    emit("menu", { command: "settings-updates" });
+    expect(await screen.findByRole("heading", { level: 2, name: "Updates" })).toBeTruthy();
   });
 
   it("leaves Undo to a text box that has focus", async () => {
@@ -995,6 +999,7 @@ describe("App", () => {
     });
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Transcription/ }));
     const language = (await screen.findByLabelText("Language for new projects")) as HTMLSelectElement;
     await vi.waitFor(() => expect(language.disabled).toBe(false));
     fireEvent.change(language, { target: { value: "ja" } });
@@ -1010,6 +1015,31 @@ describe("App", () => {
     expect((screen.getByRole("button", { name: "Delete Whisper Base" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
+  it("lists each settings page with where it stands, and opens on the last one", async () => {
+    fakeBridge({
+      "app:info": info(),
+      "library:list": [],
+      "mcp:status": [
+        { id: "codex", label: "Codex", detected: true, connected: true, config: "/Users/me/.codex/config.toml", unavailable: null, entry: "", session: { live: false, lastAt: null, client: null } },
+        { id: "claude-code", label: "Claude Code", detected: false, connected: false, config: "/Users/me/.claude.json", unavailable: null, entry: "", session: { live: false, lastAt: null, client: null } },
+      ],
+      "settings:get": { agent: "claude", dictionary: [], speechLanguage: "ja", speechEngine: "auto", whisperModel: "base" },
+      "speech:models": [],
+    });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
+    const list = screen.getByRole("navigation", { name: "Settings" });
+    expect(await within(list).findByText("1 of 2 connected")).toBeTruthy();
+    expect(await within(list).findByText("Japanese")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Coding agents" })).toBeTruthy();
+
+    fireEvent.click(within(list).getByRole("button", { name: /^Transcription/ }));
+    expect(within(list).getByRole("button", { name: /^Transcription/ }).getAttribute("aria-current")).toBe("page");
+    fireEvent.click(screen.getByRole("button", { name: "Back to library" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
+    expect(screen.getByRole("heading", { name: "Transcription" })).toBeTruthy();
+  });
+
   it("offers a downloaded update, checks for one from settings and saves diagnostics", async () => {
     const status = (over: object) => ({ state: "idle", version: null, detail: null, page: "https://github.com/o/r/releases/latest", checkedAt: null, ...over });
     const { invoke, emit } = fakeBridge({
@@ -1022,14 +1052,20 @@ describe("App", () => {
     });
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
+    // The list says where each page stands without opening it.
+    expect(within(screen.getByRole("navigation", { name: "Settings" })).getByText("Up to date")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^Updates/ }));
     expect(await screen.findByText("You have the newest version.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Check now" }));
     expect(invoke).toHaveBeenCalledWith("update:check");
 
+    fireEvent.click(screen.getByRole("button", { name: /^Troubleshooting/ }));
     fireEvent.click(screen.getByRole("button", { name: "Save diagnostics" }));
     expect(await screen.findByText("Saved ClipCat diagnostics 2026-10-28.zip.")).toBeTruthy();
 
     emit("update", status({ state: "ready", version: "0.2.0" }));
+    expect(screen.getByText("0.2.0 ready to install")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^Updates/ }));
     expect(screen.getByText("ClipCat 0.2.0 is downloaded. Restart to use it.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Restart to update to 0.2.0" }));
     expect(invoke).toHaveBeenCalledWith("update:install");

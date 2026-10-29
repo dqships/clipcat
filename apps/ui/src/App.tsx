@@ -4,7 +4,7 @@ import { bridge } from "./bridge";
 import { Library } from "./library/Library";
 import { ProjectView } from "./project/ProjectView";
 import { Recorder } from "./record/Recorder";
-import { Settings } from "./settings/Settings";
+import { type SectionId, Settings } from "./settings/Settings";
 import { StatusBar } from "./StatusBar";
 import { useJobs } from "./useJobs";
 import { typing, useMenuCommand } from "./useMenu";
@@ -14,7 +14,8 @@ export function App() {
   const [info, setInfo] = useState<AppInfoValue | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
-  const [settings, setSettings] = useState(false);
+  // Settings, open on a page (or the last one opened).
+  const [settings, setSettings] = useState<{ section?: SectionId } | null>(null);
   // Recording a take, into the open project or a new one.
   const [recording, setRecording] = useState<{ projectId: string | null; name: string | null } | null>(null);
   const jobsFor = useJobs();
@@ -43,7 +44,7 @@ export function App() {
       const files = await api.invoke("files:pick");
       if (!files.length) return;
       const project = await api.invoke("project:import", { projectId: null, files });
-      setSettings(false);
+      setSettings(null);
       setOpen(project.id);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -58,15 +59,15 @@ export function App() {
     }
     // A take being recorded keeps the window until it's saved or discarded.
     if (recording) return;
-    if (command === "settings") {
+    if (command === "settings" || command === "settings-updates") {
       setOpen(null);
-      setSettings(true);
+      setSettings(command === "settings" ? {} : { section: "updates" });
     } else if (command === "new-recording") {
       setRecording({ projectId: null, name: null });
     } else if (command === "import") {
       void importVideos();
     } else if (command === "open-project" && projectId) {
-      setSettings(false);
+      setSettings(null);
       setOpen(projectId);
     }
   });
@@ -93,9 +94,9 @@ export function App() {
           onRecord={(name) => setRecording({ projectId: open, name })}
         />
       ) : settings ? (
-        <Settings update={update} onBack={() => setSettings(false)} />
+        <Settings update={update} section={settings.section} onBack={() => setSettings(null)} />
       ) : (
-        <Library jobsFor={jobsFor} onOpen={setOpen} onSettings={() => setSettings(true)} onRecord={() => setRecording({ projectId: null, name: null })} />
+        <Library jobsFor={jobsFor} onOpen={setOpen} onSettings={() => setSettings({})} onRecord={() => setRecording({ projectId: null, name: null })} />
       )}
       <StatusBar info={info} error={error} update={update} />
     </div>

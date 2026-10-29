@@ -20,7 +20,7 @@ The agent asks before it uses each ClipCat tool, unless you tell it to always al
 ## Connect your agent
 
 1. In ClipCat, open **Settings** (the gear in the library).
-2. Under **Edit from your coding agent**, choose **Connect** next to your agent. Agents ClipCat can't find on this computer are listed under **Not found on this computer**, and you can connect them there before you install them. A desktop app has **Get** (the app's name), which opens its maker's download page, and a command-line tool has **Install** (its name).
+2. On the **Coding agents** page, choose **Connect** next to your agent. Agents ClipCat can't find on this computer are listed under **Not found on this computer**, and you can connect them there before you install them. A desktop app has **Get** (the app's name), which opens its maker's download page, and a command-line tool has **Install** (its name).
 3. Check the entry ClipCat shows you, then choose **Add to** (the agent's name).
 
 ClipCat writes its entry here:
