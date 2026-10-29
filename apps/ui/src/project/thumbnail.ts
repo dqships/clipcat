@@ -17,14 +17,22 @@ const TALL: Size = { width: 1080, height: 1920 };
 export const thumbnailSize = (format: AspectRatio): Size => (format === "9:16" ? TALL : WIDE);
 
 /** The palette, the same in either theme: a thumbnail doesn't change with the app's. */
-export const THUMBNAIL_COLORS: Record<ThumbnailColor, string> = {
-  paper: tokens.light["color-background"],
-  ink: tokens.light["color-text"],
-  tape: tokens.light["color-accent"],
-};
+export const THUMBNAIL_COLORS: Record<ThumbnailColor, string> = tokens.thumbnail;
 
-/** The outline that keeps each text colour readable on a busy frame. */
-const OUTLINE: Record<ThumbnailColor, ThumbnailColor> = { paper: "ink", ink: "paper", tape: "ink" };
+/** The outline that keeps each text colour readable on a busy frame: paper around the dark ones, ink around the rest. */
+const OUTLINE: Record<ThumbnailColor, "paper" | "ink"> = {
+  paper: "ink",
+  ink: "paper",
+  tape: "ink",
+  red: "paper",
+  orange: "ink",
+  lime: "ink",
+  green: "paper",
+  sky: "ink",
+  blue: "paper",
+  pink: "ink",
+  violet: "paper",
+};
 
 const FONT = "Jost";
 const WEIGHT = 800;

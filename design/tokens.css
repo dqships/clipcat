@@ -12,6 +12,19 @@
   --color-on-accent: #17150F;
   --color-danger: #C8361D;
 
+  /* Thumbnail text colours: the same in either theme, since a thumbnail doesn't follow the app's. */
+  --thumbnail-paper: #FAF8F3;
+  --thumbnail-ink: #17150F;
+  --thumbnail-tape: #F2B705;
+  --thumbnail-red: #E5372A;
+  --thumbnail-orange: #FF7A1F;
+  --thumbnail-lime: #B8E62E;
+  --thumbnail-green: #1FA866;
+  --thumbnail-sky: #35B6F0;
+  --thumbnail-blue: #2B4FE0;
+  --thumbnail-pink: #FF4FA3;
+  --thumbnail-violet: #8A4DF0;
+
   --font-family: "Jost", "Futura", "Century Gothic", system-ui, sans-serif;
   --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --font-weight-regular: 400;
