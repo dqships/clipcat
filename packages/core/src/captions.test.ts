@@ -67,6 +67,14 @@ describe("formats", () => {
     expect(words[1]).toContain("{\\c&H0005B7F2}YOU{\\c&H00FFFFFF}");
   });
 
+  it("draws the box in its colour, and highlights accent-coloured words in white", () => {
+    const cues = [{ start: 0, end: 1, words: [{ text: "Hi", start: 0, end: 0.4 }, { text: "you", start: 0.5, end: 0.9 }] }];
+    const boxed = toAss(cues, Captions.parse({ background: "rounded", boxColor: "#17150F" }), wide);
+    expect(boxed).toMatch(/Style: Default,Jost SemiBold,\d+,&H00FFFFFF,&H00FFFFFF,&H600F1517,/);
+    const words = toAss(cues, Captions.parse({ mode: "word", color: "#F2B705" }), wide).split("\n").filter((l) => l.startsWith("Dialogue"));
+    expect(words[1]).toContain("{\\c&H00FFFFFF}you{\\c&H0005B7F2}");
+  });
+
   it("writes numbered SRT cues", () => {
     const srt = toSrt([{ start: 1, end: 2.5, words: [{ text: "Hi.", start: 1, end: 1.4 }] }], "regular");
     expect(srt).toBe("1\n00:00:01,000 --> 00:00:02,500\nHi.\n");

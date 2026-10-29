@@ -118,8 +118,19 @@ const assText = (text: string) => text.replace(/[{}]/g, "").replace(/\\/g, "/").
 /** The font name libass looks up in the bundled fonts directory. */
 export const CAPTION_FONTS: Record<string, string> = { Jost: "Jost SemiBold" };
 
+/** Ready-made caption colours for the text and the box; any other hex works too. */
+export const CAPTION_SWATCHES = [
+  { name: "White", color: "#FFFFFF" },
+  { name: "Black", color: "#000000" },
+  { name: "Splice tape", color: "#F2B705" },
+  { name: "Red", color: "#C8361D" },
+] as const;
+
 /** Highlight for the word being spoken in word-by-word captions (the brand accent). */
 export const CAPTION_HIGHLIGHT = "#F2B705";
+
+/** The highlight for captions in `color`: white when the text is already the accent, so the spoken word still stands out. */
+export const captionHighlight = (color: string) => (color.toUpperCase() === CAPTION_HIGHLIGHT ? "#FFFFFF" : CAPTION_HIGHLIGHT);
 
 /**
  * An ASS script for the cues, laid out for `frame`. In word-by-word mode each
@@ -151,7 +162,7 @@ export function toAss(cues: Cue[], style: Captions, frame: Frame): string {
       size,
       primary,
       primary,
-      box ? assColor("#000000", 0x60) : assColor("#000000", 0x40),
+      box ? assColor(style.boxColor, 0x60) : assColor("#000000", 0x40),
       assColor("#000000", shadow ? 0x80 : 0xff),
       0, 0, 0, 0, 100, 100, 0, 0,
       box ? 3 : 1,
@@ -169,7 +180,7 @@ export function toAss(cues: Cue[], style: Captions, frame: Frame): string {
   ];
   const line = (start: number, end: number, text: string) => `Dialogue: 0,${assTime(start)},${assTime(end)},Default,,0,0,0,,${text}`;
   const events: string[] = [];
-  const highlight = assColor(CAPTION_HIGHLIGHT);
+  const highlight = assColor(captionHighlight(style.color));
   for (const cue of cues) {
     const words = cue.words.map((w) => assText(applyCase(w.text, style.case)));
     if (style.mode === "word") {

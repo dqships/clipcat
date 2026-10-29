@@ -179,6 +179,8 @@ const captionFields = {
   effect: z.enum(["none", "shadow"]),
   case: z.enum(["regular", "upper", "lower"]),
   background: z.enum(["none", "rounded"]),
+  /** The box's colour behind the text, when there is one. */
+  boxColor: z.string().regex(/^#[0-9a-fA-F]{6}$/),
   /** Vertical position of the caption block's baseline, 0 (top) .. 1 (bottom). */
   position: z.number().min(0).max(1),
 };
@@ -192,6 +194,7 @@ export const Captions = z.object({
   effect: captionFields.effect.default("shadow"),
   case: captionFields.case.default("regular"),
   background: captionFields.background.default("none"),
+  boxColor: captionFields.boxColor.default("#000000"),
   position: captionFields.position.default(0.82),
 });
 
