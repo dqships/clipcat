@@ -41,13 +41,14 @@ export function registerIpc(handlers: Handlers, devUrl: string | null): void {
 /** Pushes an event to every window, after checking it against the contract. */
 export function broadcast<E extends EventName>(event: E, payload: EventPayload<E>): void {
   const checked = events[event].parse(payload);
-  for (const win of BrowserWindow.getAllWindows()) {
-    if (!win.isDestroyed()) win.webContents.send(eventChannelFor(event), checked);
-  }
+  for (const win of BrowserWindow.getAllWindows()) sendChecked(win, event, checked);
 }
 
 /** Pushes an event to one window, after checking it against the contract. */
 export function send<E extends EventName>(win: BrowserWindow, event: E, payload: EventPayload<E>): void {
-  const checked = events[event].parse(payload);
+  sendChecked(win, event, events[event].parse(payload));
+}
+
+function sendChecked(win: BrowserWindow, event: EventName, checked: unknown): void {
   if (!win.isDestroyed()) win.webContents.send(eventChannelFor(event), checked);
 }

@@ -11,6 +11,15 @@ function placeOf(location: Location): Place {
   return { slug: DOCS.some((d) => d.slug === slug) ? slug : "", hash: location.hash };
 }
 
+/** The heading id a #part names; a malformed escape is taken as written. */
+const decodeHash = (hash: string) => {
+  try {
+    return decodeURIComponent(hash.slice(1));
+  } catch {
+    return hash.slice(1);
+  }
+};
+
 const longDate = (day: string) => new Date(`${day}T00:00:00`).toLocaleDateString("en-US", { dateStyle: "long" });
 
 /**
@@ -50,7 +59,7 @@ export function HelpWindow() {
 
   useEffect(() => {
     document.title = doc.slug ? `${doc.h1} · ClipCat Help` : "ClipCat Help";
-    const target = place.hash ? document.getElementById(decodeURIComponent(place.hash.slice(1))) : null;
+    const target = place.hash ? document.getElementById(decodeHash(place.hash)) : null;
     if (target) target.scrollIntoView();
     else if (page.current) page.current.scrollTop = 0;
   }, [doc, place]);

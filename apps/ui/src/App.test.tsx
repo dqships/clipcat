@@ -301,7 +301,7 @@ describe("App", () => {
 
     emit("menu", { command: "open-project", projectId: "p1" });
     expect(await screen.findByRole("heading", { level: 1, name: "talk" })).toBeTruthy();
-    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("menu:state", { project: { id: "p1", canUndo: true, canRedo: false, hideCuts: false } }));
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("menu:state", { project: { id: "p1", hideCuts: false } }));
 
     emit("menu", { command: "export" });
     expect(screen.getByRole("tab", { name: "Export" }).getAttribute("aria-selected")).toBe("true");
@@ -310,7 +310,7 @@ describe("App", () => {
 
     emit("menu", { command: "hide-cuts" });
     expect(screen.getByRole("button", { name: "Hide cuts" }).getAttribute("aria-pressed")).toBe("true");
-    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("menu:state", { project: { id: "p1", canUndo: true, canRedo: false, hideCuts: true } }));
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("menu:state", { project: { id: "p1", hideCuts: true } }));
 
     emit("menu", { command: "undo" });
     await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:edit", { id: "p1", revision: 4, op: { type: "undo" } }));

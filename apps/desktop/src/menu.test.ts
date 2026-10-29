@@ -7,7 +7,7 @@ vi.mock("electron", () => ({ BrowserWindow: class {}, nativeTheme: {}, shell: {}
 import { helpUrl, issueUrl } from "./help";
 import { type MenuDeps, menuTemplate } from "./menu";
 
-const PROJECT = { id: "p1", canUndo: true, canRedo: false, hideCuts: true };
+const PROJECT = { id: "p1", hideCuts: true };
 
 const deps = (platform: NodeJS.Platform, more: Partial<MenuDeps> = {}): MenuDeps & { calls: string[] } => {
   const calls: string[] = [];

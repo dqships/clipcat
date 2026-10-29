@@ -531,17 +531,24 @@ if (!squirrelLaunch && !app.requestSingleInstanceLock()) {
     const recent = new RecentProjects(join(app.getPath("userData"), "recent-projects.json"));
     let menuState: MenuStateValue = { project: null };
     let pendingCommand: { command: MenuCommandValue; projectId?: string } | null = null;
+    // Windows whose page has loaded and listens for menu commands.
+    const listening = new WeakSet<Electron.WebContents>();
     const sendCommand = (command: MenuCommandValue, projectId?: string) => {
-      const win = mainWindow;
-      if (win) {
-        showWindow();
-        send(win, "menu", { command, ...(projectId ? { projectId } : {}) });
-      } else {
-        pendingCommand = { command, ...(projectId ? { projectId } : {}) };
-        showWindow();
+      // Undo and Redo belong to the window in front: the Help window's search box undoes its own typing.
+      const focused = BrowserWindow.getFocusedWindow();
+      if ((command === "undo" || command === "redo") && focused !== mainWindow) {
+        if (focused) focused.webContents[command]();
+        return;
       }
+      const win = mainWindow;
+      if (win && listening.has(win.webContents)) send(win, "menu", { command, ...(projectId ? { projectId } : {}) });
+      else pendingCommand = { command, ...(projectId ? { projectId } : {}) };
+      showWindow();
     };
-    const refreshMenu = async () => {
+    // One build at a time, so a slow one can't put back an older Open Recent.
+    let menuBuild: Promise<void> = Promise.resolve();
+    const refreshMenu = () => (menuBuild = menuBuild.then(buildMenu, buildMenu));
+    const buildMenu = async () => {
       const [ids, projects] = await Promise.all([recent.list(), store.list().catch(() => [])]);
       const names = new Map(projects.map((p) => [p.id, p.name]));
       Menu.setApplicationMenu(
@@ -582,6 +589,7 @@ if (!squirrelLaunch && !app.requestSingleInstanceLock()) {
           const waiting = pendingCommand;
           pendingCommand = null;
           const win = BrowserWindow.fromWebContents(event.sender);
+          if (win === mainWindow) listening.add(event.sender);
           if (waiting && win) send(win, "menu", waiting);
           if (!isSmokeRun()) return;
           const info = await appInfo();
@@ -820,6 +828,7 @@ if (!squirrelLaunch && !app.requestSingleInstanceLock()) {
         "help:open": ({ page }) => openHelp(page, { appOrigin: APP_ORIGIN, devUrl: DEV_URL }),
         "menu:state": async (state) => {
           const opened = state.project && state.project.id !== menuState.project?.id ? state.project.id : null;
+          if (!opened && JSON.stringify(state) === JSON.stringify(menuState)) return;
           menuState = state;
           if (opened) await recent.opened(opened);
           await refreshMenu();

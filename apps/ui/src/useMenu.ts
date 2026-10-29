@@ -13,7 +13,11 @@ export function useMenuCommand(handler: (command: MenuCommandValue, projectId?: 
   }, []);
 }
 
+/** Inputs that hold typing; a checkbox, slider or button doesn't. */
+const TEXT_BOX =
+  "input:not([type='checkbox'], [type='radio'], [type='range'], [type='button'], [type='submit'], [type='reset'], [type='color'], [type='file']), textarea, [contenteditable]:not([contenteditable='false'])";
+
 /** Whether a text box has focus. Undo and Redo then undo the typing, not the project. */
 export function typing(): boolean {
-  return document.activeElement?.closest("input, textarea, [contenteditable]:not([contenteditable='false'])") != null;
+  return document.activeElement?.closest(TEXT_BOX) != null;
 }

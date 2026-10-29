@@ -97,8 +97,8 @@ export function ProjectView({ projectId, jobs, onBack, onOpen, onRecord }: Props
   const canRedo = (project?.history.future.length ?? 0) > 0;
   // The menu bar's project items follow this project.
   useEffect(() => {
-    void bridge()?.invoke("menu:state", { project: { id: projectId, canUndo, canRedo, hideCuts } });
-  }, [projectId, canUndo, canRedo, hideCuts]);
+    void bridge()?.invoke("menu:state", { project: { id: projectId, hideCuts } });
+  }, [projectId, hideCuts]);
 
   const addVideos = async () => {
     const api = bridge();

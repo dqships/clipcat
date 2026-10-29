@@ -184,7 +184,6 @@ export const McpCheckStep = z.object({
   text: z.string(),
 });
 
-/** Where updating stands: off (a dev copy, or no feed), checking, downloading, ready to restart, or a newer version to download by hand. */
 /** What a menu bar item asks the window to do. */
 export const MenuCommand = z.enum([
   "settings",
@@ -213,10 +212,11 @@ export const MenuCommand = z.enum([
 /** What the window shows, so the menu bar can match it: the open project, or null on any other screen. */
 export const MenuState = z.object({
   project: z
-    .object({ id: z.string().regex(/^[a-zA-Z0-9-]+$/), canUndo: z.boolean(), canRedo: z.boolean(), hideCuts: z.boolean() })
+    .object({ id: z.string().regex(/^[a-zA-Z0-9-]+$/), hideCuts: z.boolean() })
     .nullable(),
 });
 
+/** Where updating stands: off (a dev copy, or no feed), checking, downloading, ready to restart, or a newer version to download by hand. */
 export const UpdateStatus = z.object({
   state: z.enum(["off", "idle", "checking", "downloading", "ready", "available", "error"]),
   /** The newer version, once known. */
