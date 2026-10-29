@@ -20,6 +20,7 @@ import {
   SlideLook,
   type Snapshot,
   ThumbnailBackground,
+  ThumbnailBox,
   ThumbnailColor,
   type Word,
   Writeup,
@@ -77,6 +78,8 @@ export const EditOp = z.discriminatedUnion("type", [
     textColor: ThumbnailColor.optional(),
     background: ThumbnailBackground.optional(),
     textSide: z.enum(["left", "right"]).optional(),
+    /** Where the text goes; null puts it back in its half. */
+    textBox: ThumbnailBox.nullable().optional(),
     behind: z.boolean().optional(),
   }),
   /** Where and how b-roll shows. Not an undo step: the list shows it. */
@@ -235,6 +238,7 @@ export function applyEdit(project: Project, op: EditOp, id: IdFactory): Project 
     if (op.textColor !== undefined) p.thumbnail.textColor = op.textColor;
     if (op.background !== undefined) p.thumbnail.background = op.background;
     if (op.textSide !== undefined) p.thumbnail.textSide = op.textSide;
+    if (op.textBox !== undefined) p.thumbnail.textBox = op.textBox;
     if (op.behind !== undefined) p.thumbnail.behind = op.behind;
     return p;
   }
