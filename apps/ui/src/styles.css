@@ -1038,6 +1038,30 @@ body {
   line-height: var(--leading-caption);
 }
 
+/* Transport: the preview's own play, shuttle and frame-step controls, with the time in the edit. */
+.transport {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+}
+
+.transport__time,
+.transport__rate {
+  font-size: var(--text-caption);
+  line-height: var(--leading-caption);
+  font-variant-numeric: tabular-nums;
+}
+
+.transport__time {
+  margin-left: var(--space-3);
+  color: var(--color-text-muted);
+}
+
+.transport__rate {
+  font-weight: var(--font-weight-semibold);
+}
+
 /* Waveform: the waveform under the preview, cuts shaded, suggestions outlined. */
 .wave {
   position: relative;

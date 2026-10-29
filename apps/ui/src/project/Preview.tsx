@@ -17,6 +17,7 @@ import {
   sourceToOutput,
   timedOverlays,
   timedPunches,
+  outputToSource,
   timedSounds,
 } from "@clipcat/core";
 import { type CSSProperties, type Ref, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
@@ -28,13 +29,41 @@ import { EFFECTS, effectUrl, playQuietly } from "./SoundPanel";
 /** A moment in one recording. */
 export type Playhead = { sourceId: string; time: number };
 
-export type PreviewHandle = { seek: (sourceId: string, time: number) => void };
+export type PreviewHandle = {
+  seek: (sourceId: string, time: number) => void;
+  /** Plays at the export's speed, or pauses. */
+  toggle: () => void;
+  pause: () => void;
+  /** J and L: plays that way, faster on each press in the same direction. */
+  shuttle: (direction: 1 | -1) => void;
+  /** Pauses and moves `frames` frames of the edit (negative goes back). */
+  step: (frames: number) => void;
+};
+
+/** How playback is going: `rate` is a multiple of the export's speed, negative backwards, 0 when paused. */
+export type Transport = { rate: number };
 
 type Props = {
   project: Project;
   onTime: (playhead: Playhead) => void;
+  onTransport?: (transport: Transport) => void;
   ref?: Ref<PreviewHandle>;
 };
+
+/** Shuttle speeds J and L step through, as multiples of the export's speed. */
+export const SHUTTLE = [1, 2, 4, 8];
+
+/** The next shuttle rate after a J (-1) or L (1) press at `rate`. */
+export function nextShuttle(rate: number, direction: 1 | -1): number {
+  if (Math.sign(rate) !== direction) return direction;
+  const i = SHUTTLE.indexOf(Math.abs(rate));
+  return direction * (SHUTTLE[Math.min(SHUTTLE.length - 1, i + 1)] ?? 1);
+}
+
+/** Where `time` in `sourceId` sits in the edit; a moment inside a cut counts as the next kept frame. */
+export function outputAt(timeline: Timeline, sourceId: string, time: number, order: Map<string, number>): number {
+  return sourceToOutput(timeline, sourceId, time) ?? nextKept(timeline, sourceId, time, order)?.outputStart ?? timeline.duration;
+}
 
 /** Seconds of slack before a cut counts as reached, so a jump never lands a frame short of it and loops. */
 const EDGE = 0.01;
@@ -106,7 +135,7 @@ export function nextKept(timeline: Timeline, sourceId: string, time: number, ord
  * A paused seek may land inside a cut, so struck words can still be looked
  * at; playback leaves it at the next kept frame.
  */
-export function Preview({ project, onTime, ref }: Props) {
+export function Preview({ project, onTime, onTransport, ref }: Props) {
   const video = useRef<HTMLVideoElement>(null);
   const sources = useMemo(() => [...project.sources].filter((s) => s.prep).sort((a, b) => a.order - b.order), [project.sources]);
   const order = useMemo(() => new Map(sources.map((s) => [s.id, s.order])), [sources]);
@@ -131,8 +160,9 @@ export function Preview({ project, onTime, ref }: Props) {
   /** Output time at the last check while playing; effects between it and now play. */
   const heard = useRef<number | null>(null);
   const transcript = project.transcript;
-  const live = useRef({ timeline, order, sourceId, onTime, sources, tall, punches, overlays, sounds, music, transcript });
-  live.current = { timeline, order, sourceId, onTime, sources, tall, punches, overlays, sounds, music, transcript };
+  const speed = project.speed;
+  const live = useRef({ timeline, order, sourceId, onTime, sources, tall, punches, overlays, sounds, music, transcript, speed });
+  live.current = { timeline, order, sourceId, onTime, sources, tall, punches, overlays, sounds, music, transcript, speed };
 
   useEffect(() => {
     if (!sourceId && sources[0]) setSourceId(sources[0].id);
@@ -149,7 +179,103 @@ export function Preview({ project, onTime, ref }: Props) {
     if (play) void v.play().catch(() => {});
   };
 
-  useImperativeHandle(ref, () => ({ seek: (target, time) => go(target, time, false) }));
+  /** The shuttle rate playing forward, or backwards while `reverse` runs; 1 is the export's speed. */
+  const rate = useRef(1);
+  const reverse = useRef<number | null>(null);
+  const [transport, setTransport] = useState<Transport>({ rate: 0 });
+  const report = (next: number) => setTransport((t) => (t.rate === next ? t : { rate: next }));
+
+  const stopReverse = () => {
+    if (reverse.current !== null) cancelAnimationFrame(reverse.current);
+    reverse.current = null;
+  };
+
+  const setForward = (r: number) => {
+    rate.current = r;
+    const v = video.current;
+    if (v) v.playbackRate = speed * r;
+  };
+
+  const pause = () => {
+    stopReverse();
+    setForward(1);
+    video.current?.pause();
+    report(0);
+  };
+
+  // Video can't play backwards, so J seeks back through the edit a step at a time, over the cuts, as fast as the proxy keeps up.
+  const playBackwards = (r: number) => {
+    const v = video.current;
+    if (!v) return;
+    stopReverse();
+    v.pause();
+    setForward(1);
+    rate.current = r;
+    let last = performance.now();
+    const tick = (now: number) => {
+      const el = video.current;
+      const { timeline: tl, order: ord, sourceId: sid } = live.current;
+      if (!el || !sid) return;
+      if (el.seeking || pending.current) {
+        reverse.current = requestAnimationFrame(tick);
+        return;
+      }
+      const at = outputAt(tl, sid, el.currentTime, ord) - ((now - last) / 1000) * Math.abs(rate.current);
+      last = now;
+      const dest = outputToSource(tl, Math.max(0, at));
+      if (!dest) return pause();
+      go(dest.sourceId, dest.time, false);
+      if (at <= 0) return pause();
+      reverse.current = requestAnimationFrame(tick);
+    };
+    reverse.current = requestAnimationFrame(tick);
+    report(r);
+  };
+
+  const playForward = (r: number) => {
+    const v = video.current;
+    if (!v) return;
+    stopReverse();
+    setForward(r);
+    // From the end of the edit, play starts again from the top.
+    const { timeline: tl, sourceId: sid, order: ord } = live.current;
+    if (sid && tl.items.length > 0 && !nextKept(tl, sid, v.currentTime, ord)) {
+      const first = tl.items[0]!;
+      go(first.sourceId, first.sourceStart, true);
+    } else void v.play().catch(() => {});
+    report(r);
+  };
+
+  const step = (frames: number) => {
+    const v = video.current;
+    const { timeline: tl, sourceId: sid, sources: all } = live.current;
+    if (!v || !sid) return;
+    pause();
+    const fps = all.find((s) => s.id === sid)?.media.fps || 30;
+    const out = sourceToOutput(tl, sid, v.currentTime);
+    // Inside a cut there is no edit to step through, so it steps through the recording.
+    if (out === null) {
+      v.currentTime = Math.max(0, v.currentTime + (frames / fps) * tl.speed);
+      return;
+    }
+    const dest = outputToSource(tl, Math.min(Math.max(0, out + frames / fps), Math.max(0, tl.duration - 1 / fps)));
+    if (dest) go(dest.sourceId, dest.time, false);
+  };
+
+  useImperativeHandle(ref, () => ({
+    seek: (target, time) => go(target, time, false),
+    toggle: () => (transport.rate === 0 ? playForward(1) : pause()),
+    pause,
+    shuttle: (direction) => {
+      const next = nextShuttle(transport.rate, direction);
+      if (next > 0) playForward(next);
+      else playBackwards(next);
+    },
+    step,
+  }));
+
+  useEffect(() => onTransport?.(transport), [transport, onTransport]);
+  useEffect(() => stopReverse, []);
 
   useEffect(() => {
     const v = video.current;
@@ -233,6 +359,9 @@ export function Preview({ project, onTime, ref }: Props) {
       const next = nextKept(tl, sid, t, ord);
       if (!next) {
         v.pause();
+        rate.current = 1;
+        v.playbackRate = live.current.speed;
+        setTransport({ rate: 0 });
         return;
       }
       go(next.sourceId, next.sourceStart, true);
@@ -272,13 +401,12 @@ export function Preview({ project, onTime, ref }: Props) {
     if (roll && out !== null) slideTime.current = overlayTime(roll, out);
   }, [overlays, timeline, sourceId]);
 
-  // The preview plays at the export's speed; loading another recording resets the rate, so it is set again then.
-  const speed = project.speed;
+  // The preview plays at the export's speed times the shuttle rate; loading another recording resets the rate, so it is set again then.
   useEffect(() => {
     const v = video.current;
     if (!v) return;
     v.defaultPlaybackRate = speed;
-    v.playbackRate = speed;
+    v.playbackRate = speed * (reverse.current === null ? rate.current : 1);
   }, [speed, sourceId]);
 
   const source = sources.find((s) => s.id === sourceId);
@@ -293,10 +421,11 @@ export function Preview({ project, onTime, ref }: Props) {
         // The vertical export's crop, shown by covering a 9:16 box and sliding the picture.
         style={tall ? { objectPosition: `${offset * 100}% 50%` } : undefined}
         src={mediaUrl(project.id, source.prep.proxy)}
-        controls
         preload="auto"
+        playsInline
+        onClick={() => (transport.rate === 0 ? playForward(1) : pause())}
         onLoadedMetadata={(e) => {
-          e.currentTarget.playbackRate = speed;
+          e.currentTarget.playbackRate = speed * (reverse.current === null ? rate.current : 1);
           const next = pending.current;
           pending.current = null;
           if (!next) return;
