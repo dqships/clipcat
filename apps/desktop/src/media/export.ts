@@ -7,6 +7,7 @@
 // however many cuts there are.
 
 import {
+  type Bars,
   MUSIC,
   PUNCH,
   type Project,
@@ -113,7 +114,7 @@ export function exportChunks(timeline: FramedTimeline, size: number): Chunk[] {
 }
 
 type Shape = {
-  project: Pick<Project, "sources" | "speed">;
+  project: Pick<Project, "sources" | "speed" | "bars">;
   /** The punch-ins in effect, timed on the framed timeline (see timedPunches). */
   punches?: TimedPunch[];
   /** The b-roll in effect, timed the same way (see timedOverlays), and the file each one's media is read from. */
@@ -151,6 +152,33 @@ export function fitFilter(s: Source, item: Pick<FramedItem, "sourceStart" | "sou
   }
   // Fit inside the frame, letterboxed if the recording has another shape.
   return `scale=${W}:${H}:force_original_aspect_ratio=decrease:flags=lanczos,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:color=black`;
+}
+
+/** How much the blurred fill behind a recording of another shape is blurred, as a share of the export's height. */
+const BAR_BLUR = 0.02;
+
+/**
+ * Whether a recording is shown whole over itself blurred, instead of with
+ * black bars: in a wide export, when the project asks for it and the
+ * recording isn't the export's shape.
+ */
+export function blurredBars(s: Source, format: ExportFormat, bars: Bars, size: Size): boolean {
+  return format === "16:9" && bars === "blur" && Math.abs(sourceAspect(s) - size.width / size.height) > 0.01;
+}
+
+/**
+ * The graph lines that fit `input` into the frame over the same picture
+ * scaled to cover it and blurred, ending in `output` (with `after` applied).
+ */
+export function blurredFit(input: string, output: string, after: string, size: Size, k: number): string[] {
+  const { width: W, height: H } = size;
+  const radius = Math.max(2, Math.round(H * BAR_BLUR));
+  return [
+    `${input}split=2[fa${k}][fb${k}]`,
+    `[fa${k}]scale=${W}:${H}:force_original_aspect_ratio=increase:flags=bilinear,crop=${W}:${H},boxblur=${radius}:2[fg${k}]`,
+    `[fb${k}]scale=${W}:${H}:force_original_aspect_ratio=decrease:flags=lanczos[fc${k}]`,
+    `[fg${k}][fc${k}]overlay=x=(W-w)/2:y=(H-h)/2${after}${output}`,
+  ];
 }
 
 const sourceAspect = (s: Source) => (s.media.width > 0 && s.media.height > 0 ? s.media.width / s.media.height : 16 / 9);
@@ -282,8 +310,12 @@ export function chunkCommand(plan: ChunkPlan): { graph: string; args: string[] }
     const a = item.from - first.get(item.sourceId)!;
     const source = sources.get(item.sourceId)!;
     const zoom = item.punch ? `,${punchFilter(source, item, item.punch, size, fps, rate)}` : "";
-    const fit = `${fitFilter(source, item, format, size)}${zoom}`;
-    lines.push(`[s${i}v${b}]trim=start_frame=${a}:end_frame=${a + item.frames},setpts=PTS-STARTPTS,${fit},setsar=1,format=yuv420p[v${k}]`);
+    const cut = `[s${i}v${b}]trim=start_frame=${a}:end_frame=${a + item.frames},setpts=PTS-STARTPTS`;
+    if (blurredBars(source, format, project.bars, size)) {
+      lines.push(`${cut}[t${k}]`, ...blurredFit(`[t${k}]`, `[v${k}]`, `${zoom},setsar=1,format=yuv420p`, size, k));
+    } else {
+      lines.push(`${cut},${fitFilter(source, item, format, size)}${zoom},setsar=1,format=yuv420p[v${k}]`);
+    }
     parts.push(`[v${k}]`);
   });
   lines.push(`${parts.join("")}concat=n=${parts.length}:v=1:a=0[cv]`);
@@ -423,15 +455,25 @@ export function audioCommand(plan: AudioPlan): { graph: string; args: string[] }
 /** The concat list for the chunks, relative to the folder it sits in. */
 export const chunkList = (files: string[]) => `ffconcat version 1.0\n${files.map((f) => `file '${f}'`).join("\n")}\n`;
 
-/** Joins the chunks and the sound without re-encoding, with the index up front for streaming. */
-export function muxArgs(list: string, audio: string, out: string, meta: string | null = null): string[] {
+/**
+ * Joins the chunks and the sound without re-encoding, with the index up
+ * front for streaming. The title and chapters
+ * come from `meta`; `cover`, a picture, goes in as the file's cover art (an
+ * attached picture), which players and file browsers show for the video.
+ */
+export function muxArgs(list: string, audio: string, out: string, meta: string | null = null, cover: string | null = null): string[] {
+  const coverInput = meta ? 3 : 2;
   return [
     ...BASE_ARGS,
     "-f", "concat", "-safe", "0", "-i", list,
     "-i", audio,
-    ...(meta ? ["-f", "ffmetadata", "-i", meta, "-map_metadata", "2", "-map_chapters", "2"] : []),
+    ...(meta ? ["-f", "ffmetadata", "-i", meta] : []),
+    ...(cover ? ["-i", cover] : []),
+    ...(meta ? ["-map_metadata", "2", "-map_chapters", "2"] : []),
     "-map", "0:v:0", "-map", "1:a:0",
+    ...(cover ? ["-map", `${coverInput}:v:0`] : []),
     "-c", "copy",
+    ...(cover ? ["-c:v:1", "png", "-disposition:v:1", "attached_pic"] : []),
     "-movflags", "+faststart",
     out,
   ];

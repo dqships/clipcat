@@ -104,6 +104,13 @@ describe("applyEdit framing", () => {
     expect(set.history.past).toHaveLength(0);
     expect(() => applyEdit(p, { type: "frame", sourceId: "nope", x: 0.5 }, counter("g"))).toThrow("Unknown source");
   });
+
+  it("fills the sides of another shape with black bars or the picture blurred", () => {
+    const p = project();
+    expect(p.bars).toBe("black");
+    expect(applyEdit(p, { type: "bars", bars: "blur" }, counter("g")).bars).toBe("blur");
+    expect(EditOp.safeParse({ type: "bars", bars: "blue" }).success).toBe(false);
+  });
 });
 
 describe("applyEdit punch-ins", () => {
@@ -182,6 +189,22 @@ describe("applyEdit slides", () => {
     expect(rebriefed.assets.at(-1)).toMatchObject({ name: "Four steps", prep: null, slide: { brief: "Four steps", html: "" } });
     const same = applyEdit(designed, { type: "describe", assetId: slide.id, description: "Three steps\nPlan, cut, ship" }, counter("m"));
     expect(same.assets.at(-1)!.slide!.html).toBe("<h1>Three steps</h1>");
+  });
+
+  it("retypes a misheard word, keeps what was heard, and drops the note when it is typed back", () => {
+    let p = applyEdit(project(), { type: "words", wordIds: ["a-w1"], included: false }, id);
+    p = applyEdit(p, { type: "fix-word", wordId: "a-w3", text: " started " }, id);
+    const word = p.transcript.find((w) => w.id === "a-w3")!;
+    expect(word).toMatchObject({ text: "started", heard: "start", end: 2.3 });
+    expect(kept(p)).toEqual(["so", "we", "started", "now"]);
+    expect(p.history.past).toHaveLength(1);
+    p = applyEdit(p, { type: "fix-word", wordId: "a-w3", text: "Start" }, id);
+    expect(p.transcript.find((w) => w.id === "a-w3")).toMatchObject({ text: "Start", heard: "start" });
+    p = applyEdit(p, { type: "fix-word", wordId: "a-w3", text: "start" }, id);
+    expect(p.transcript.find((w) => w.id === "a-w3")!.heard).toBeUndefined();
+    expect(() => applyEdit(p, { type: "fix-word", wordId: "nope", text: "x" }, id)).toThrow(/Unknown words/);
+    expect(EditOp.safeParse({ type: "fix-word", wordId: "a-w3", text: "two words" }).success).toBe(false);
+    expect(EditOp.safeParse({ type: "fix-word", wordId: "a-w3", text: "  " }).success).toBe(false);
   });
 });
 

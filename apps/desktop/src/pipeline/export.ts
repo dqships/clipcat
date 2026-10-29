@@ -82,9 +82,9 @@ export const srtPath = (out: string) => join(dirname(out), `${basename(out, extn
 export class ExportRunner {
   constructor(private readonly deps: ExportDeps) {}
 
-  /** Queues an export after whatever the project is already doing. */
-  export(projectId: string, format: ExportFormat, out: string): void {
-    this.deps.queue.add(projectId, "export", `Exporting ${format}`, (ctx) => this.run(projectId, format, out, ctx)).catch(() => {});
+  /** Queues an export after whatever the project is already doing; `cover`, a PNG, becomes the file's cover art. */
+  export(projectId: string, format: ExportFormat, out: string, cover: Buffer | null = null): void {
+    this.deps.queue.add(projectId, "export", `Exporting ${format}`, (ctx) => this.run(projectId, format, out, ctx, cover)).catch(() => {});
   }
 
   /** The video file of each slide the edit shows, rendering the ones not rendered for this shape yet. */
@@ -118,7 +118,7 @@ export class ExportRunner {
     return files;
   }
 
-  async run(projectId: string, format: ExportFormat, out: string, ctx: JobContext): Promise<void> {
+  async run(projectId: string, format: ExportFormat, out: string, ctx: JobContext, cover: Buffer | null = null): Promise<void> {
     const { store } = this.deps;
     const project = await store.get(projectId);
     const fps = exportFps(project.sources);
@@ -130,7 +130,7 @@ export class ExportRunner {
     await mkdir(join(work, "fonts"), { recursive: true });
 
     // What the log records once the file is out.
-    const done = { cues: 0, chunks: 0, encoder: "libx264" as Encoder };
+    const done = { cues: 0, chunks: 0, encoder: "libx264" as Encoder, cover: cover !== null };
     try {
       const cues = captionCues(outputWords(project, timeline), project.captions.mode, size);
       done.cues = cues.length;
@@ -200,11 +200,13 @@ export class ExportRunner {
       const chapters = timedChapters(project, buildTimeline(project)).filter((c) => c.start < timeline.duration);
       const title = project.suggestedTitle.trim();
       if (title || chapters.length > 0) await writeFile(join(work, "meta.txt"), ffmetadata(title, chapters, timeline.duration));
+      // The thumbnail goes in as cover art, which players and file browsers show for the video.
+      if (cover) await writeFile(join(work, "cover.png"), cover);
 
       // Joined beside the target under a temporary name, so a failed export never leaves half a file under the real one.
       const partial = join(dirname(out), `.${basename(out, extname(out))}.clipcat-partial.mp4`);
       try {
-        await this.deps.ffmpeg(muxArgs("chunks.txt", "audio.m4a", partial, title || chapters.length > 0 ? "meta.txt" : null), {
+        await this.deps.ffmpeg(muxArgs("chunks.txt", "audio.m4a", partial, title || chapters.length > 0 ? "meta.txt" : null, cover ? "cover.png" : null), {
           cwd: work,
           duration: timeline.duration,
           ctx: { signal: ctx.signal, progress: (f) => ctx.progress(1 - MUX_SHARE + (f ?? 0) * MUX_SHARE) },

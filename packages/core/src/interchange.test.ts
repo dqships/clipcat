@@ -16,6 +16,7 @@ function project(over: Partial<Project> = {}): Project {
     name: "Launch",
     language: "en",
     aspectRatio: "16:9",
+    bars: "black",
     speed: 1.5,
     revision: 1,
     brief: "",

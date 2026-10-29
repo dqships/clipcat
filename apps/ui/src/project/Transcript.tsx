@@ -1,6 +1,6 @@
 import { type EditOp, type Project, SOUND_EFFECTS, type SlideLook, type Word, isWordKept, orderedWords } from "@clipcat/core";
-import { AudioLines, Bookmark, Image, Presentation, Scissors, Undo2, ZoomIn } from "lucide-react";
-import { useMemo, useState } from "react";
+import { AudioLines, Bookmark, Image, Pencil, Presentation, Scissors, Undo2, ZoomIn } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
 import { ICON_STROKE } from "../icons";
 import type { Playhead } from "./Preview";
 
@@ -15,20 +15,32 @@ type Props = {
   playhead: Playhead | null;
   onSeek: (sourceId: string, time: number) => void;
   onEdit: (op: EditOp) => void;
+  /** Leaves cut words out, so the transcript reads as the edit plays. */
+  hideCuts?: boolean;
 };
 
 /**
  * The transcript as the edit: struck words are cut, and cutting words cuts
- * the video. Click a word to jump there, shift-click to select a run, then
+ * the video. Click a word to jump there, double-click it to retype a word
+ * speech recognition misheard, shift-click to select a run, then
  * Delete to cut it (or to restore it, when it is all cut already), zoom in on
  * it, show b-roll over it, have the AI editor
  * design a slide for it, or land a sound effect or start a chapter on its
- * first word.
+ * first word. With cuts hidden, struck words drop out and only what's kept
+ * shows.
  */
-export function Transcript({ project, playhead, onSeek, onEdit }: Props) {
-  const words = useMemo(() => orderedWords(project), [project]);
+export function Transcript({ project, playhead, onSeek, onEdit, hideCuts = false }: Props) {
+  const words = useMemo(() => {
+    const all = orderedWords(project);
+    return hideCuts ? all.filter((w) => isWordKept(project.segments, w)) : all;
+  }, [project, hideCuts]);
   const [anchor, setAnchor] = useState<number | null>(null);
   const [focus, setFocus] = useState<number | null>(null);
+  // The word being retyped, and its draft; the word button takes focus back when it is done.
+  const [fixing, setFixing] = useState<{ index: number; text: string } | null>(null);
+  const refocus = useRef<number | null>(null);
+  // Set the moment a fix ends, so a blur from the input leaving can't save a fix Esc dropped.
+  const fixLive = useRef(false);
   const proposed = useMemo(
     // Only suggested cuts: a suggested zoom, b-roll or sound leaves its words in.
     () => new Set(project.proposals.filter((p) => p.cuts.length > 0 && p.type !== "silence" && p.status === "pending").flatMap((p) => p.wordIds)),
@@ -58,6 +70,7 @@ export function Transcript({ project, playhead, onSeek, onEdit }: Props) {
     setSeen({ length: words.length, anchor: null, focus: null });
     setAnchor(null);
     setFocus(null);
+    setFixing(null);
   } else if (seen.anchor !== anchor || seen.focus !== focus) {
     setSeen({ length: words.length, anchor, focus });
     setSlide(null);
@@ -72,6 +85,23 @@ export function Transcript({ project, playhead, onSeek, onEdit }: Props) {
   const apply = (included: boolean) => {
     if (selected.length === 0) return;
     onEdit({ type: "words", wordIds: selected.map((w) => w.id), included });
+  };
+
+  const draft = fixing?.text.trim() ?? "";
+  const draftOk = draft.length > 0 && !/\s/.test(draft);
+  const startFix = (i: number) => {
+    setAnchor(i);
+    setFocus(i);
+    setFixing({ index: i, text: words[i]!.text });
+    fixLive.current = true;
+  };
+  const endFix = (save: boolean) => {
+    if (!fixing || !fixLive.current) return;
+    fixLive.current = false;
+    const word = words[fixing.index];
+    if (save && word && draftOk && draft !== word.text) onEdit({ type: "fix-word", wordId: word.id, text: draft });
+    refocus.current = fixing.index;
+    setFixing(null);
   };
 
   const current =
@@ -92,7 +122,14 @@ export function Transcript({ project, playhead, onSeek, onEdit }: Props) {
       }}
     >
       <div className="editor__actions" aria-live="polite">
-        {selected.length > 0 ? (
+        {fixing ? (
+          <span className="editor__count">
+            {draftOk || !draft
+              ? "Type the word as it was said. Enter saves it everywhere, from the captions to the write-up. Esc leaves it."
+              : "One word only. Cut the extra words, or fix each one on its own."}
+            {words[fixing.index]?.heard && ` Heard as “${words[fixing.index]!.heard}”.`}
+          </span>
+        ) : selected.length > 0 ? (
           <>
             <span className="editor__count">
               {selected.length} {selected.length === 1 ? "word" : "words"} selected
@@ -108,6 +145,12 @@ export function Transcript({ project, playhead, onSeek, onEdit }: Props) {
                   <Scissors className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
                   Cut
                 </button>
+                {selected.length === 1 && !slide && (
+                  <button type="button" className="button" onClick={() => startFix(from)}>
+                    <Pencil className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
+                    Fix word
+                  </button>
+                )}
                 <button
                   type="button"
                   className="button"
@@ -207,7 +250,7 @@ export function Transcript({ project, playhead, onSeek, onEdit }: Props) {
           </>
         ) : (
           <span className="editor__count">
-            Click a word to jump to it. Shift-click to select words, then cut them or add a zoom, b-roll, slide, chapter or sound.
+            Click a word to jump to it, or double-click to fix a misheard word. Shift-click to select words, then cut them or add a zoom, b-roll, slide, chapter or sound.
           </span>
         )}
       </div>
@@ -221,10 +264,46 @@ export function Transcript({ project, playhead, onSeek, onEdit }: Props) {
           if (kept[i] && covered.has(w.id)) classes.push("word--broll");
           if (i === current) classes.push("word--current");
           if (i >= from && i <= to) classes.push("word--selected");
+          if (fixing?.index === i) {
+            return (
+              <span key={w.id}>
+                {heading && <span className="transcript__source">{names.get(w.sourceId)}</span>}
+                <input
+                  className="word__input"
+                  aria-label={`Fix “${w.text}”`}
+                  aria-invalid={!draftOk}
+                  value={fixing.text}
+                  size={Math.max(fixing.text.length, 1)}
+                  maxLength={60}
+                  spellCheck
+                  autoFocus
+                  onFocus={(e) => e.currentTarget.select()}
+                  onChange={(e) => setFixing({ index: i, text: e.target.value })}
+                  onKeyDown={(e) => {
+                    // Keys typed here are the word's, not the transcript's: Backspace mustn't cut it.
+                    e.stopPropagation();
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      if (draftOk || !draft) endFix(true);
+                    } else if (e.key === "Escape") {
+                      endFix(false);
+                    }
+                  }}
+                  onBlur={() => endFix(true)}
+                />
+              </span>
+            );
+          }
           return (
             <span key={w.id}>
               {heading && <span className="transcript__source">{names.get(w.sourceId)}</span>}
               <button
+                ref={(el) => {
+                  if (el && refocus.current === i) {
+                    refocus.current = null;
+                    el.focus();
+                  }
+                }}
                 type="button"
                 className={classes.join(" ")}
                 aria-pressed={i >= from && i <= to}
@@ -238,6 +317,7 @@ export function Transcript({ project, playhead, onSeek, onEdit }: Props) {
                   }
                   onSeek(w.sourceId, w.start);
                 }}
+                onDoubleClick={() => startFix(i)}
               >
                 {w.text}
               </button>

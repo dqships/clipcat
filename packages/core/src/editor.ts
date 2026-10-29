@@ -4,9 +4,11 @@
 // revision check, so the UI and the agent can't overwrite each other.
 
 import { z } from "zod";
+import { respell } from "./corrections";
 import { type IdFactory, setRange, wordSpanRange } from "./edits";
 import {
   AspectRatio,
+  Bars,
   Captions,
   CaptionsPatch,
   type Project,
@@ -42,6 +44,8 @@ export const EditOp = z.discriminatedUnion("type", [
   z.object({ type: z.literal("speed"), speed: z.number().min(0.5).max(2) }),
   /** The shape the preview shows and the project is made for. Not an undo step. */
   z.object({ type: z.literal("aspect"), aspectRatio: AspectRatio }),
+  /** What fills the sides of a recording that doesn't fill a wide video. Not an undo step. */
+  z.object({ type: z.literal("bars"), bars: Bars }),
   /** Where a recording's speaker is (0..1 across), set by hand; null goes back to following the faces found. Not an undo step. */
   z.object({ type: z.literal("frame"), sourceId: z.string(), x: z.number().min(0).max(1).nullable() }),
   /** Punch in on these words (one recording's). An undo step, like accepting a suggested punch-in. */
@@ -60,6 +64,12 @@ export const EditOp = z.discriminatedUnion("type", [
   z.object({ type: z.literal("music"), volume: z.number().min(0).max(1).optional(), duck: z.boolean().optional() }),
   /** Takes the music out. Not an undo step. */
   z.object({ type: z.literal("remove-music") }),
+  /** Retypes a word speech recognition got wrong. Its timing and the cuts stay; captions, the write-up and the AI editor read the new text. Not an undo step: the transcript shows it. */
+  z.object({
+    type: z.literal("fix-word"),
+    wordId: z.string(),
+    text: z.string().trim().min(1).max(60).regex(/^\S+$/, "Type one word, without spaces"),
+  }),
   /** Starts a chapter on this word with this title, or renames the one there. Not an undo step: the write-up shows it. */
   z.object({ type: z.literal("chapter"), wordId: z.string(), title: z.string().trim().min(1).max(100) }),
   /** Takes out the chapter that starts on this word. Not an undo step. */
@@ -166,6 +176,11 @@ export function applyEdit(project: Project, op: EditOp, id: IdFactory): Project 
     return p;
   }
 
+  if (op.type === "bars") {
+    p.bars = op.bars;
+    return p;
+  }
+
   if (op.type === "frame") {
     const source = p.sources.find((s) => s.id === op.sourceId);
     if (!source) throw new Error(`Unknown source: ${op.sourceId}`);
@@ -205,6 +220,13 @@ export function applyEdit(project: Project, op: EditOp, id: IdFactory): Project 
 
   if (op.type === "remove-music") {
     p.music = null;
+    return p;
+  }
+
+  if (op.type === "fix-word") {
+    const at = p.transcript.findIndex((w) => w.id === op.wordId);
+    if (at < 0) throw new Error(`Unknown words: ${op.wordId}`);
+    p.transcript[at] = respell(p.transcript[at]!, op.text.trim());
     return p;
   }
 

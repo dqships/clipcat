@@ -144,9 +144,18 @@ describe.skipIf(!binDir)("prep with real ffmpeg", () => {
     const probe = realDeps({ ffmpeg: "", ffprobe: exe("ffprobe"), whisper: "", parakeet: null, modelsDir: "", model: async () => "base", encoder: sw }).probe;
 
     const wide = join(root, "wide.mp4");
-    await exporter.run(projectId, "16:9", wide, ctx);
+    const cover = join(root, "cover.png");
+    await run(exe("ffmpeg"), ["-hide_banner", "-y", "-f", "lavfi", "-i", "color=c=yellow:s=1280x720", "-frames:v", "1", cover]);
+    await exporter.run(projectId, "16:9", wide, ctx, await readFile(cover));
     const w = await probe(wide);
     expect([w.width, w.height]).toEqual([1280, 720]);
+    // The thumbnail rides along as cover art, after the picture and the sound.
+    const { stdout: covered } = await run(exe("ffprobe"), ["-v", "error", "-show_entries", "stream=codec_name,width:stream_disposition=attached_pic", "-of", "json", wide]);
+    expect((JSON.parse(covered) as { streams: unknown[] }).streams).toEqual([
+      expect.objectContaining({ codec_name: "h264", disposition: { attached_pic: 0 } }),
+      expect.objectContaining({ codec_name: "aac", disposition: { attached_pic: 0 } }),
+      expect.objectContaining({ codec_name: "png", width: 1280, disposition: { attached_pic: 1 } }),
+    ]);
     // 6 s with the 2.1 s pause cut.
     expect(w.duration).toBeGreaterThan(3.4);
     expect(w.duration).toBeLessThan(4.4);

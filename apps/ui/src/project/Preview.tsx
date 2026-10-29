@@ -110,6 +110,17 @@ export function brollStyle(o: TimedOverlay, frame: { width: number; height: numb
   return { left: at(box.x), top: at(box.y), width: at(box.width), height: at(box.height), borderRadius: at(box.radius) };
 }
 
+/** The blurred fill is drawn this small and stretched, which blurs it; CSS softens it further. */
+const FILL = { width: 32, height: 18 };
+
+/** Draws the frame covering the fill canvas. */
+function drawFill(g: CanvasRenderingContext2D, v: HTMLVideoElement): void {
+  const scale = Math.max(FILL.width / v.videoWidth, FILL.height / v.videoHeight);
+  const w = v.videoWidth * scale;
+  const h = v.videoHeight * scale;
+  g.drawImage(v, (FILL.width - w) / 2, (FILL.height - h) / 2, w, h);
+}
+
 /** Seconds b-roll video or music may drift from where it should be while playing before it is set right. */
 const DRIFT = 0.3;
 /** How far the music dips under speech in the preview: a stand-in for the export's compressor. */
@@ -144,10 +155,12 @@ export function Preview({ project, onTime, onTransport, ref }: Props) {
   /** Where to go once a newly loaded proxy can seek, and whether to keep playing. */
   const pending = useRef<{ time: number; play: boolean } | null>(null);
   const tall = project.aspectRatio === "9:16";
+  const blur = !tall && project.bars === "blur";
   const [offset, setOffset] = useState(0.5);
   const punches = useMemo(() => timedPunches(project, timeline), [project, timeline]);
   const overlays = useMemo(() => timedOverlays(project, timeline), [project, timeline]);
   const broll = useRef<HTMLVideoElement>(null);
+  const fill = useRef<HTMLCanvasElement>(null);
   const slide = useRef<HTMLIFrameElement>(null);
   /** Where the slide showing should be, for a page that has only just loaded. */
   const slideTime = useRef(0);
@@ -288,6 +301,9 @@ export function Preview({ project, onTime, onTransport, ref }: Props) {
       const t = v.currentTime;
       const here = all.find((s) => s.id === sid);
       if (here && narrow) setOffset(previewOffset(tl, here, t));
+      // A recording of another shape shows over itself blurred, the way the export fills its sides.
+      const g = fill.current?.getContext("2d");
+      if (g && v.videoWidth > 0) drawFill(g, v);
       // A punch-in zooms the picture, the way the export will.
       const out = sourceToOutput(tl, sid, t);
       const punch = out === null ? undefined : zooms.find((p) => out >= p.start && out < p.end);
@@ -374,14 +390,23 @@ export function Preview({ project, onTime, onTransport, ref }: Props) {
     if ("requestVideoFrameCallback" in v) handle = v.requestVideoFrameCallback(frame);
     v.addEventListener("timeupdate", check);
     v.addEventListener("seeked", check);
+    v.addEventListener("loadeddata", check);
     v.addEventListener("pause", check);
     return () => {
       if (handle && "cancelVideoFrameCallback" in v) v.cancelVideoFrameCallback(handle);
       v.removeEventListener("timeupdate", check);
       v.removeEventListener("seeked", check);
+      v.removeEventListener("loadeddata", check);
       v.removeEventListener("pause", check);
     };
   }, [sourceId]);
+
+  // Turning the blurred fill on draws it at once, even while paused.
+  useEffect(() => {
+    const v = video.current;
+    const g = fill.current?.getContext("2d");
+    if (blur && v && g && v.videoWidth > 0) drawFill(g, v);
+  }, [blur, sourceId]);
 
   // A new shape or framing moves the crop at once, even while paused.
   useEffect(() => {
@@ -415,9 +440,10 @@ export function Preview({ project, onTime, onTransport, ref }: Props) {
   const shownPrep = shown?.asset.prep;
   return (
     <>
+      {blur && <canvas ref={fill} className="project__fill" width={FILL.width} height={FILL.height} aria-hidden />}
       <video
         ref={video}
-        className={`project__video${shape}`}
+        className={`project__video${shape}${blur ? " project__video--over-fill" : ""}`}
         // The vertical export's crop, shown by covering a 9:16 box and sliding the picture.
         style={tall ? { objectPosition: `${offset * 100}% 50%` } : undefined}
         src={mediaUrl(project.id, source.prep.proxy)}
