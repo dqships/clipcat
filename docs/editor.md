@@ -1,6 +1,6 @@
 ---
 title: Find your way around the ClipCat editor
-description: The parts of ClipCat's editor: the library, the preview and its playback controls, the strip, the transcript and tools panels, undo and hiding cuts.
+description: The parts of ClipCat: the library, the preview and its playback controls, the strip, the transcript and tools panels, hiding cuts, and the menu bar.
 order: 2
 updated: 2026-10-29
 ---
@@ -72,3 +72,22 @@ Drag the thin line between a panel and the preview to make it bigger or smaller.
   - **Export**: the speed, video export and timelines for other editors.
 
 Use the Left and Right arrows to move between the tabs when one has focus. Whatever you type on a tab stays when you switch to another.
+
+## The menu bar
+
+On a Mac the menus are at the top of the screen; on Windows they're at the top of the window. Items for a project are off until you open one. The keys are listed in [Keyboard shortcuts](shortcuts.md).
+
+- **ClipCat** (Mac only): About ClipCat, Check for Updates, Settings, and Quit.
+- **File**:
+  - **New Recording** opens the recorder for a new project.
+  - **Import Videos** makes a new project from the files you pick and opens it.
+  - **Add Videos to Project** adds the files you pick to the open project.
+  - **Open Recent** lists the last 10 projects you opened. **Clear Menu** empties the list and keeps the projects.
+  - **Export** opens the Export tab.
+  - **Show in Finder** (Show in File Explorer on Windows) opens the project's folder. See [Where your files are](files-and-privacy.md).
+  - On Windows, **Settings** and **Exit** are here too.
+- **Edit**: **Undo** and **Redo** undo the last change to the project, or your typing when you're in a text box. Cut, Copy, Paste and Select All work in text boxes.
+- **View**: the four tools tabs, **Hide Cuts**, the zoom of the whole window, and full screen.
+- **Playback**: play, pause, play backwards or forwards, and step a frame or a second.
+- **Window**: minimize the window, or on a Mac zoom it and bring it to the front.
+- **Help**: see [Help in the app](README.md#help-in-the-app).

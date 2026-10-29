@@ -54,7 +54,6 @@ export function openHelp(page: string, origin: { appOrigin: string; devUrl: stri
     height: 720,
     minWidth: 640,
     minHeight: 480,
-    show: false,
     title: "ClipCat Help",
     backgroundColor: tokens[nativeTheme.shouldUseDarkColors ? "dark" : "light"]["color-background"],
     webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true },
@@ -69,7 +68,6 @@ export function openHelp(page: string, origin: { appOrigin: string; devUrl: stri
     event.preventDefault();
     if (link.startsWith("https://")) void shell.openExternal(link);
   });
-  win.once("ready-to-show", () => win.show());
   win.on("closed", () => {
     helpWindow = null;
   });

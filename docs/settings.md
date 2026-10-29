@@ -53,7 +53,7 @@ A model is loaded only while it transcribes. See [Add videos and transcribe them
 
 ## Updates
 
-ClipCat checks for a new version when it opens and every four hours after. The Updates page says what it found.
+ClipCat checks for a new version when it opens and every four hours after. The Updates page says what it found. **Check for Updates** in the ClipCat menu (in the Help menu on Windows) checks now and opens this page.
 
 - **Check now** checks again.
 - **Restart to update** shows when a new version has downloaded. The status line at the foot of the window shows it too.
