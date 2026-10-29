@@ -49,6 +49,6 @@ See [If it doesn't work](agents.md#if-it-doesnt-work) on the agents page.
 
 ## Report a bug
 
-1. In ClipCat, open **Settings** and choose **Save diagnostics**. It saves one zip with ClipCat's log, versions and recent jobs, and no video, sound or transcript.
-2. Open an issue on [GitHub](https://github.com/dqships/clipcat/issues). Say what you did, what you expected and what happened.
+1. In ClipCat, choose **Help > Save Diagnostics**, or open **Settings** and choose **Save diagnostics**. It saves one zip with ClipCat's log, versions and recent jobs, and no video, sound or transcript.
+2. Choose **Help > Report an Issue**. It opens a new issue on [GitHub](https://github.com/dqships/clipcat/issues) with your ClipCat version and system filled in. Say what you did, what you expected and what happened.
 3. Attach the zip.

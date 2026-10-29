@@ -1,0 +1,262 @@
+/* The Help window. Every value is a token from design/tokens.css (DESIGN.md);
+   the page itself is set like the site's /docs pages. */
+@import "../../../../design/tokens.css";
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--color-background);
+  color: var(--color-text);
+  font-family: var(--font-family);
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+  font-weight: var(--font-weight-regular);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+p,
+ol,
+ul,
+table {
+  margin: 0;
+}
+
+a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: var(--space-1);
+}
+
+a:hover {
+  text-decoration-color: var(--color-accent);
+}
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--radius-control);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* The list of pages beside the open one, each scrolling on its own. */
+.help {
+  display: grid;
+  grid-template-columns: var(--panel-min) 1fr;
+  height: 100%;
+}
+
+.help__side {
+  display: grid;
+  align-content: start;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  overflow-y: auto;
+  border-right: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.help__search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-height);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-raised);
+  color: var(--color-text-muted);
+}
+
+.help__search:focus-within {
+  box-shadow: var(--focus-ring);
+}
+
+.help__search-icon {
+  flex: none;
+  width: var(--icon-size-sm);
+  height: var(--icon-size-sm);
+}
+
+.help__search input {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-text);
+  font: inherit;
+}
+
+/* The box around the field shows the focus ring, so the field doesn't; Esc clears it. */
+.help__search input:focus,
+.help__search input:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.help__search input::-webkit-search-cancel-button {
+  appearance: none;
+}
+
+.help__list {
+  display: grid;
+  padding: 0;
+  list-style: none;
+  border-left: 1px solid var(--color-border);
+}
+
+.help__list a {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  color: var(--color-text-muted);
+  text-decoration: none;
+}
+
+.help__list a:hover {
+  color: var(--color-text);
+}
+
+.help__list a[aria-current="page"] {
+  color: var(--color-text);
+  font-weight: var(--font-weight-semibold);
+  box-shadow: inset var(--space-1) 0 0 var(--color-accent);
+}
+
+.help__excerpt {
+  padding-bottom: var(--space-2);
+  font-size: var(--text-caption);
+  line-height: var(--leading-caption);
+  font-weight: var(--font-weight-regular);
+  color: var(--color-text-muted);
+}
+
+.help__empty {
+  color: var(--color-text-muted);
+}
+
+.help__page {
+  overflow-y: auto;
+}
+
+.help__article {
+  max-width: 68ch;
+  padding: var(--space-6) var(--space-6) var(--space-7);
+}
+
+.help__article h1 {
+  font-size: var(--text-display);
+  line-height: var(--leading-display);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--tracking-tight);
+}
+
+.help__body {
+  padding-top: var(--space-5);
+}
+
+.help__body > * + * {
+  margin-top: var(--space-4);
+}
+
+.help__body h2 {
+  margin-top: var(--space-7);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--color-border);
+  font-size: var(--text-title);
+  line-height: var(--leading-title);
+  font-weight: var(--font-weight-semibold);
+}
+
+.help__body > h2:first-child {
+  margin-top: 0;
+}
+
+.help__body h3 {
+  margin-top: var(--space-6);
+  font-size: var(--text-callout);
+  line-height: var(--leading-callout);
+  font-weight: var(--font-weight-semibold);
+}
+
+.help__body h2 + *,
+.help__body h3 + * {
+  margin-top: var(--space-3);
+}
+
+.help__body ul,
+.help__body ol {
+  display: grid;
+  gap: var(--space-2);
+  padding-left: var(--space-5);
+}
+
+.help__body li > ul,
+.help__body li > ol {
+  margin-top: var(--space-2);
+}
+
+.help__body li::marker {
+  color: var(--color-text-muted);
+}
+
+.help__body code {
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
+.help__body table {
+  display: block;
+  overflow-x: auto;
+  border-collapse: collapse;
+}
+
+.help__body th,
+.help__body td {
+  padding: var(--space-2) var(--space-4) var(--space-2) 0;
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.help__body th {
+  font-weight: var(--font-weight-semibold);
+}
+
+.help__next {
+  margin-top: var(--space-7);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--color-border);
+  font-size: var(--text-callout);
+  line-height: var(--leading-callout);
+}
+
+.help__updated {
+  margin-top: var(--space-4);
+  font-size: var(--text-caption);
+  line-height: var(--leading-caption);
+  color: var(--color-text-muted);
+}

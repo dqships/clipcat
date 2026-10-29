@@ -11,6 +11,18 @@ ClipCat is a desktop app for Mac and Windows that edits videos of one person tal
 
 These pages cover every screen, button, setting and shortcut. They're the same pages you see under Help in the app.
 
+## Help in the app
+
+Choose **Help > ClipCat Help**, or press Cmd+? on a Mac or F1 on Windows. The Help window opens beside the editor with these pages and a search box at the top of the list. Links to other pages open in the same window, and links to websites open in your browser.
+
+The Help menu also has:
+
+- **Keyboard Shortcuts**, **Use ClipCat from Claude or Codex**, **Questions People Ask** and **Fix a Problem**, which open those pages.
+- **Release Notes**, which opens the list of versions on GitHub.
+- **Report an Issue**, which opens a new GitHub issue with your ClipCat version and system filled in.
+- **Save Diagnostics**, which saves a zip for a bug report and shows it in Finder or File Explorer.
+- **Show Log Folder**, which opens the folder with ClipCat's log.
+
 ## Start here
 
 - [Make your first video](getting-started.md): install ClipCat, set up your AI and go from a raw take to an exported video.

@@ -7,7 +7,7 @@ updated: 2026-10-29
 
 # Keyboard shortcuts
 
-On Windows, use Ctrl where a Mac uses Cmd.
+On Windows, use Ctrl where a Mac uses Cmd. The one exception is help, which is F1 on Windows.
 
 ## Playback
 
@@ -50,3 +50,10 @@ These work anywhere in the editor, except while you type in a box.
 | Enter, while renaming a project | Save the name |
 | Esc, while renaming a project | Keep the old name |
 | Up and Down arrows, in a project's menu | Move through the menu. Esc closes it. |
+
+## Help
+
+| Key | What it does |
+| --- | --- |
+| Cmd+? on a Mac, F1 on Windows | Open ClipCat Help |
+| Cmd+F, in the Help window | Search the help |

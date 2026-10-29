@@ -1,9 +1,10 @@
 import type { McpAgentIdValue, McpAgentValue } from "@clipcat/ipc";
-import { Check, Copy, ExternalLink } from "lucide-react";
+import { BookOpen, Check, Copy } from "lucide-react";
 import { useState } from "react";
+import { bridge } from "../bridge";
 import { ICON_STROKE } from "../icons";
 
-/** The site's longer version of this guide. */
+/** The longer version of this guide, on the site; in the app, the link opens the same page in the Help window. */
 export const GUIDE_URL = "https://clipcat.followusai.com/docs/agents";
 
 /** How to get from Connect to a first edit, per agent: restart it, check ClipCat is there, ask. */
@@ -156,9 +157,20 @@ export function AgentGuide({ agents }: { agents: McpAgentValue[] | null }) {
           <li>Still stuck: choose Test next to the agent above to see which step fails, disconnect and connect again, or save diagnostics below and attach them to an issue.</li>
         </ul>
       </details>
-      <a className="guide__link" href={GUIDE_URL} target="_blank" rel="noreferrer">
-        Read the full guide on the ClipCat site
-        <ExternalLink className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
+      <a
+        className="guide__link"
+        href={GUIDE_URL}
+        target="_blank"
+        rel="noreferrer"
+        onClick={(e) => {
+          const api = bridge();
+          if (!api) return;
+          e.preventDefault();
+          void api.invoke("help:open", { page: "agents" });
+        }}
+      >
+        Read the full guide
+        <BookOpen className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
       </a>
     </section>
   );
