@@ -1058,6 +1058,23 @@ body {
   background: var(--color-surface-raised);
 }
 
+/* A word being retyped: the same type, set into the line like the word it replaces. */
+.word__input {
+  margin: 0 var(--space-1) 0 0;
+  padding: 0 var(--space-1);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  font: inherit;
+  box-shadow: var(--focus-ring);
+  outline: none;
+}
+
+.word__input[aria-invalid="true"] {
+  box-shadow: inset 0 0 0 1px var(--color-danger);
+}
+
 .word--proposed {
   color: var(--color-text-muted);
   text-decoration: line-through;
@@ -1112,11 +1129,21 @@ body {
   gap: var(--space-3);
 }
 
+/* One row that scrolls sideways when the panel is narrow: wrapping would move the
+   words down between the two clicks of a double-click. */
 .editor__actions {
   display: flex;
   align-items: center;
   gap: var(--space-3);
   min-height: var(--control-height);
+  padding: var(--space-1);
+  margin: calc(-1 * var(--space-1));
+  overflow-x: auto;
+}
+
+.editor__actions > :not(.editor__count) {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .editor__broll {

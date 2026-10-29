@@ -113,7 +113,7 @@ export function projectSummary(project: Project) {
 // Ops that name words take word numbers here instead of ids: `from`/`to`
 // (inclusive) for the ones over a stretch, `word` for the ones on one word.
 const SPAN_OPS = new Set(["words", "punch", "overlay", "slide"]);
-const WORD_OPS = new Set(["sound", "chapter", "remove-chapter"]);
+const WORD_OPS = new Set(["sound", "chapter", "remove-chapter", "fix-word"]);
 
 /** The agent's op, with word numbers turned into the word ids applyEdit takes, then checked against EditOp. */
 export function resolveOp(project: Project, raw: Record<string, unknown>): EditOp {
@@ -276,6 +276,7 @@ export function createMcpServer(deps: McpDeps): McpServer {
 - {type:"slide", from, to, brief, look:"paper"|"ink"|"overlay"}: a motion slide ClipCat's AI editor designs from the brief
 - {type:"sound", word, effect}: a sound effect on that word; effects: ${SOUND_EFFECTS.map((e) => e.id).join(", ")}
 - {type:"chapter", word, title} / {type:"remove-chapter", word}
+- {type:"fix-word", word, text}: retype one misheard word (one word, no spaces); captions, the write-up and find_cuts read the new text
 - {type:"captions", captions:{enabled, mode:"word"|"sentence", font, size, color:"#RRGGBB", effect:"none"|"shadow", case:"regular"|"upper"|"lower", background:"none"|"rounded", boxColor:"#RRGGBB", position:0..1}} (any subset)
 - {type:"speed", speed:0.5..2} / {type:"aspect", aspectRatio:"16:9"|"9:16"|"1:1"} / {type:"bars", bars:"black"|"blur"} (what fills the sides when a recording of another shape is shown whole in a wide video)
 - {type:"music", volume?:0..1, duck?:boolean} / {type:"remove-music"}
