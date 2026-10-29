@@ -6,6 +6,7 @@ import { ICON_STROKE } from "../icons";
 import { JobLine } from "../JobLine";
 import { NameField } from "../NameField";
 import { type ProjectJobs, useProjectChanges } from "../useJobs";
+import { typing, useMenuCommand } from "../useMenu";
 import { AiPanel } from "./AiPanel";
 import { CaptionOverlay } from "./CaptionOverlay";
 import { CaptionsPanel } from "./CaptionsPanel";
@@ -20,7 +21,7 @@ import { ShortsPanel } from "./ShortsPanel";
 import { SoundPanel } from "./SoundPanel";
 import { Language } from "./Language";
 import { Spelling } from "./Spelling";
-import { Tools } from "./Tools";
+import { type TabId, Tools } from "./Tools";
 import { TransportBar } from "./TransportBar";
 import { Waveform } from "./Waveform";
 import { Transcript } from "./Transcript";
@@ -86,6 +87,72 @@ export function ProjectView({ projectId, jobs, onBack, onOpen, onRecord }: Props
   const fps = project?.sources.find((s) => s.id === playhead?.sourceId)?.media.fps || 30;
   usePlaybackKeys(preview, fps);
 
+  const [tab, setTab] = useState<TabId>("edit");
+  const showTab = (next: TabId) => {
+    setTab(next);
+    document.getElementById(`tools-tab-${next}`)?.focus();
+  };
+
+  const canUndo = (project?.history.past.length ?? 0) > 0;
+  const canRedo = (project?.history.future.length ?? 0) > 0;
+  // The menu bar's project items follow this project.
+  useEffect(() => {
+    void bridge()?.invoke("menu:state", { project: { id: projectId, hideCuts } });
+  }, [projectId, hideCuts]);
+
+  const addVideos = async () => {
+    const api = bridge();
+    if (!api) return;
+    try {
+      const files = await api.invoke("files:pick");
+      if (files.length) setProject(await api.invoke("project:import", { projectId, files }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  useMenuCommand((command) => {
+    const p = preview.current;
+    const second = Math.max(1, Math.round(fps));
+    switch (command) {
+      case "undo":
+        if (!typing() && canUndo) edit({ type: "undo" });
+        return;
+      case "redo":
+        if (!typing() && canRedo) edit({ type: "redo" });
+        return;
+      case "export":
+      case "tab-export":
+        return showTab("export");
+      case "tab-edit":
+        return showTab("edit");
+      case "tab-look":
+        return showTab("look");
+      case "tab-publish":
+        return showTab("publish");
+      case "hide-cuts":
+        return toggleHideCuts();
+      case "add-videos":
+        return void addVideos();
+      case "play-pause":
+        return p?.toggle();
+      case "play-backwards":
+        return p?.shuttle(-1);
+      case "pause":
+        return p?.pause();
+      case "play-forwards":
+        return p?.shuttle(1);
+      case "back-frame":
+        return p?.step(-1);
+      case "forward-frame":
+        return p?.step(1);
+      case "back-second":
+        return p?.step(-second);
+      case "forward-second":
+        return p?.step(second);
+    }
+  });
+
   const hasWords = (project?.transcript.length ?? 0) > 0;
   const transcribed = project?.sources.some((s) => s.transcription) ?? false;
 
@@ -116,6 +183,8 @@ export function ProjectView({ projectId, jobs, onBack, onOpen, onRecord }: Props
       <DockPanel key={id} id={id} title="Tools" dock={layout.dock[id]} onMove={(d) => move(id, d)} grow={grow}>
         {project && (
           <Tools
+            tab={tab}
+            onTab={setTab}
             pending={project.proposals.filter((p) => p.status === "pending").length}
             edit={
               <>
@@ -255,7 +324,7 @@ export function ProjectView({ projectId, jobs, onBack, onOpen, onRecord }: Props
             className="button button--icon"
             aria-label="Undo"
             title="Undo"
-            disabled={!project?.history.past.length}
+            disabled={!canUndo}
             onClick={() => edit({ type: "undo" })}
           >
             <Undo2 className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
@@ -265,7 +334,7 @@ export function ProjectView({ projectId, jobs, onBack, onOpen, onRecord }: Props
             className="button button--icon"
             aria-label="Redo"
             title="Redo"
-            disabled={!project?.history.future.length}
+            disabled={!canRedo}
             onClick={() => edit({ type: "redo" })}
           >
             <Redo2 className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />

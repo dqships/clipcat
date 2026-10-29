@@ -7,6 +7,7 @@ import { Recorder } from "./record/Recorder";
 import { Settings } from "./settings/Settings";
 import { StatusBar } from "./StatusBar";
 import { useJobs } from "./useJobs";
+import { typing, useMenuCommand } from "./useMenu";
 import { useUpdate } from "./useUpdate";
 
 export function App() {
@@ -28,6 +29,47 @@ export function App() {
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
     void api.invoke("app:ready", { screen: "library" });
   }, []);
+
+  // Off the editor, the menu bar's project items are off.
+  useEffect(() => {
+    if (!open || recording) void bridge()?.invoke("menu:state", { project: null });
+  }, [open, recording]);
+
+  /** File > Import Videos: a new project from the picked files, opened. */
+  const importVideos = async () => {
+    const api = bridge();
+    if (!api) return;
+    try {
+      const files = await api.invoke("files:pick");
+      if (!files.length) return;
+      const project = await api.invoke("project:import", { projectId: null, files });
+      setSettings(false);
+      setOpen(project.id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  useMenuCommand((command, projectId) => {
+    // In a text box, Undo and Redo are the box's own; the editor handles them everywhere else.
+    if (command === "undo" || command === "redo") {
+      if (typing()) document.execCommand(command);
+      return;
+    }
+    // A take being recorded keeps the window until it's saved or discarded.
+    if (recording) return;
+    if (command === "settings") {
+      setOpen(null);
+      setSettings(true);
+    } else if (command === "new-recording") {
+      setRecording({ projectId: null, name: null });
+    } else if (command === "import") {
+      void importVideos();
+    } else if (command === "open-project" && projectId) {
+      setSettings(false);
+      setOpen(projectId);
+    }
+  });
 
   return (
     <div className="app">
