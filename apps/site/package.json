@@ -1,6 +1,6 @@
 {
   "name": "@clipcat/site",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "type": "module",
   "description": "ClipCat's marketing site: a Next.js app with Markdown for agents, served by Vercel.",
