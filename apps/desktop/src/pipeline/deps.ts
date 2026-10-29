@@ -29,7 +29,10 @@ export type Tools = {
   /** clipcat-parakeet, or null where it isn't bundled (anything but Apple Silicon) or is turned off. */
   parakeet: string | null;
   modelsDir: string;
-  model: ModelId;
+  /** The whisper model to use, read on each run so a change in Settings applies to the next transcription. */
+  model: () => Promise<ModelId>;
+  /** "whisper" skips Parakeet even where it's bundled; read on each run. */
+  engine?: () => Promise<"auto" | "whisper">;
   /** The H.264 encoder to try first (probed once); libx264 is the fallback. */
   encoder: () => Promise<Encoder>;
   /** The user's names and terms, passed to whisper as its initial prompt. */
@@ -63,7 +66,9 @@ export function realDeps(tools: Tools): Omit<PipelineDeps, "store" | "queue" | "
     },
     transcribe: async (opts, ctx) => {
       let fallback: string | undefined;
-      if (tools.parakeet && PARAKEET_LANGUAGES.has(opts.language)) {
+      const engine = (await tools.engine?.()) ?? "auto";
+      // Parakeet can't be told the language and doesn't know "auto", so only a language it knows goes to it.
+      if (tools.parakeet && engine === "auto" && PARAKEET_LANGUAGES.has(opts.language)) {
         try {
           const json = await runParakeet({
             binary: tools.parakeet,
@@ -85,15 +90,16 @@ export function realDeps(tools: Tools): Omit<PipelineDeps, "store" | "queue" | "
           ctx.progress(0, opts.label);
         }
       }
-      if (!(await hasModel(tools.modelsDir, tools.model))) {
-        ctx.progress(0, `Downloading the speech model (${MODELS[tools.model].approxMB} MB, once)`);
-        await downloadModel(tools.modelsDir, tools.model, (f) => ctx.progress(f), ctx.signal);
+      const model = await tools.model();
+      if (!(await hasModel(tools.modelsDir, model))) {
+        ctx.progress(0, `Downloading the speech model (${MODELS[model].approxMB} MB, once)`);
+        await downloadModel(tools.modelsDir, model, (f) => ctx.progress(f), ctx.signal);
         ctx.progress(0, opts.label);
       }
       const json = await runWhisper({
         binary: tools.whisper,
         args: whisperArgs({
-          model: modelPath(tools.modelsDir, tools.model),
+          model: modelPath(tools.modelsDir, model),
           wav: opts.wav,
           outBase: opts.outBase,
           language: opts.language,
@@ -104,7 +110,7 @@ export function realDeps(tools: Tools): Omit<PipelineDeps, "store" | "queue" | "
         onProgress: (f) => ctx.progress(f),
         signal: ctx.signal,
       });
-      return { json, backend: "whisper.cpp", model: tools.model, ...(fallback ? { fallback } : {}) } satisfies Heard;
+      return { json, backend: "whisper.cpp", model, ...(fallback ? { fallback } : {}) } satisfies Heard;
     },
     faces: async ({ proxy, duration, dir }, ctx) => {
       const detect = (await tools.faceDetector?.()) ?? null;

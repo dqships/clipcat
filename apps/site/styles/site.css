@@ -820,6 +820,17 @@ strong {
   padding-left: var(--space-5);
 }
 
+.doc-list--columns {
+  display: block;
+  columns: 3 calc(var(--space-9) * 1.5);
+  column-gap: var(--space-6);
+}
+
+.doc-list--columns li {
+  break-inside: avoid;
+  padding-bottom: var(--space-1);
+}
+
 .doc-list li::marker {
   color: var(--color-text-muted);
 }

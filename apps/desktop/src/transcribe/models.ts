@@ -3,7 +3,7 @@
 // and the ggml magic number before a download replaces anything.
 
 import { createWriteStream } from "node:fs";
-import { mkdir, open, rename, stat, unlink } from "node:fs/promises";
+import { mkdir, open, readdir, rename, rm, stat, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
@@ -11,8 +11,8 @@ import { pipeline } from "node:stream/promises";
 export type ModelId = "large-v3-turbo-q5_0" | "base";
 
 export const MODELS: Record<ModelId, { file: string; label: string; approxMB: number }> = {
-  "large-v3-turbo-q5_0": { file: "ggml-large-v3-turbo-q5_0.bin", label: "Large v3 Turbo (best, 550 MB)", approxMB: 550 },
-  base: { file: "ggml-base.bin", label: "Base (fast, 150 MB)", approxMB: 150 },
+  "large-v3-turbo-q5_0": { file: "ggml-large-v3-turbo-q5_0.bin", label: "Whisper Large v3 Turbo (most accurate, every language)", approxMB: 550 },
+  base: { file: "ggml-base.bin", label: "Whisper Base (fastest, less accurate)", approxMB: 150 },
 };
 
 const BASE_URL = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main";
@@ -67,4 +67,19 @@ export async function downloadModel(
     await unlink(part).catch(() => {});
     throw e;
   }
+}
+
+/** Deletes a downloaded whisper model; it downloads again when it's next needed. */
+export async function removeModel(dir: string, id: ModelId): Promise<void> {
+  await rm(modelPath(dir, id), { force: true });
+}
+
+/** The bytes under a file or folder, 0 when it isn't there. */
+export async function diskBytes(path: string): Promise<number> {
+  const info = await stat(path).catch(() => null);
+  if (!info) return 0;
+  if (!info.isDirectory()) return info.size;
+  const entries = await readdir(path, { withFileTypes: true }).catch(() => []);
+  const sizes = await Promise.all(entries.map((e) => diskBytes(join(path, e.name))));
+  return sizes.reduce((a, b) => a + b, 0);
 }

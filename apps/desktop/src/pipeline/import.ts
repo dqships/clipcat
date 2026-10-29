@@ -45,6 +45,8 @@ export type PipelineDeps = {
   transcribe: (opts: { wav: string; outBase: string; language: string; label: string }, ctx: JobContext) => Promise<Heard>;
   /** The speaker's centre (0..1 across) every few seconds of `proxy`; null when the face detector can't run. */
   faces: (opts: { proxy: string; duration: number; dir: string }, ctx: JobContext) => Promise<{ t: number; x: number }[] | null>;
+  /** The language a new project is transcribed in (Settings); English when unset. */
+  language?: () => Promise<string>;
   readWav: (path: string) => Promise<Pcm>;
   writeWav: (path: string, pcm: Pcm) => Promise<void>;
   changed: (project: Project) => void;
@@ -80,8 +82,10 @@ export class ImportPipeline {
     const { store } = this.deps;
     const first = files[0]!;
     const target = projectId ?? (await store.create(basename(first, extname(first)))).id;
+    const language = projectId ? null : ((await this.deps.language?.()) ?? null);
     const added: string[] = [];
     const project = await store.update(target, null, (p) => {
+      if (language) p.language = language;
       let order = p.sources.reduce((n, s) => Math.max(n, s.order + 1), 0);
       for (const { path, media } of probed) {
         const id = `s${shortId()}`;
@@ -123,6 +127,22 @@ export class ImportPipeline {
         else if (faces) this.enqueue(p.id, s, { prep, transcribe, silence: false, faces });
       }
     }
+  }
+
+  /**
+   * Sets the project's language and transcribes every recording again. Edits
+   * waiting for review point at the old words, so they're dropped; accepted
+   * ones stay, since they cut by time.
+   */
+  async setLanguage(projectId: string, language: string): Promise<Project> {
+    const project = await this.deps.store.update(projectId, null, (p) => {
+      p.language = language;
+      p.proposals = p.proposals.filter((x) => x.status !== "pending");
+    });
+    this.deps.changed(project);
+    await this.deps.store.log(projectId, { type: "language", language });
+    for (const s of project.sources.filter((x) => x.prep)) await this.retranscribe(projectId, s.id);
+    return project;
   }
 
   /** Runs transcription and silence analysis again, e.g. after changing the language. */

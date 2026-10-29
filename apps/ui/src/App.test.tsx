@@ -696,6 +696,16 @@ describe("App", () => {
     expect(invoke).toHaveBeenCalledWith("project:correct", { id: "p1" });
   });
 
+  it("transcribes a project again in another language", async () => {
+    const { invoke } = fakeBridge({ "app:info": info(), "library:list": [summary], "project:get": project, "project:language": project });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "talk" }));
+    expect(await screen.findByText("Language: English")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Language of the speech"), { target: { value: "es" } });
+    fireEvent.click(screen.getByRole("button", { name: "Transcribe again" }));
+    expect(invoke).toHaveBeenCalledWith("project:language", { id: "p1", language: "es" });
+  });
+
   it("makes shorts and opens one, which links back to the long video", async () => {
     const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: null, detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude", models };
     const withShort = { ...project, revision: 4, shorts: [{ id: "sh1", title: "The hook", seconds: 42 }] };
@@ -864,6 +874,36 @@ describe("App", () => {
     expect(writeText).toHaveBeenCalledWith(prompts[0]!.textContent);
     expect(await within(prompts[0]!).findByRole("button", { name: "Copied" })).toBeTruthy();
     expect(screen.getByRole("link", { name: /full guide/ }).getAttribute("href")).toMatch(/^https:\/\/.+\/agents$/);
+  });
+
+  it("sets the transcription language and model, and downloads or deletes speech models", async () => {
+    const speech = { agent: "claude", dictionary: [], speechLanguage: "en", speechEngine: "auto", whisperModel: "large-v3-turbo-q5_0" };
+    const parakeet = { id: "parakeet", label: "Parakeet v3", approxMB: 480, bytes: 0, downloaded: false };
+    const base = { id: "base", label: "Whisper Base", approxMB: 150, bytes: 148_000_000, downloaded: true };
+    const { invoke, emit } = fakeBridge({
+      "app:info": info(),
+      "library:list": [],
+      "mcp:status": [],
+      "settings:get": speech,
+      "settings:set": (patch: object) => ({ ...speech, ...patch }),
+      "speech:models": [parakeet, base],
+      "speech:download": () => new Promise(() => {}),
+    });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
+    const language = (await screen.findByLabelText("Language for new projects")) as HTMLSelectElement;
+    await vi.waitFor(() => expect(language.disabled).toBe(false));
+    fireEvent.change(language, { target: { value: "ja" } });
+    expect(invoke).toHaveBeenCalledWith("settings:set", { speechLanguage: "ja" });
+    fireEvent.change(screen.getByLabelText("Engine"), { target: { value: "whisper" } });
+    expect(invoke).toHaveBeenCalledWith("settings:set", { speechEngine: "whisper" });
+
+    expect(await screen.findByText("Downloaded, 148 MB")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Download Parakeet v3" }));
+    expect(invoke).toHaveBeenCalledWith("speech:download", { id: "parakeet" });
+    emit("speech:progress", { id: "parakeet", fraction: 0.4 });
+    expect(screen.getByText("Downloading… 40%")).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Delete Whisper Base" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("offers a downloaded update, checks for one from settings and saves diagnostics", async () => {

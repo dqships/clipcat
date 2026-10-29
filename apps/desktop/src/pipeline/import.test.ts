@@ -34,6 +34,7 @@ function setup(over: Partial<PipelineDeps> = {}) {
   const queue = new JobQueue((e) => events.push(e));
   const changes: Project[] = [];
   const heard: string[] = [];
+  const languages: string[] = [];
   const seconds: number[] = [];
   const deps: PipelineDeps = {
     store,
@@ -46,6 +47,7 @@ function setup(over: Partial<PipelineDeps> = {}) {
     // Times in the speech audio, where 3.2 s to 5.8 s of the quiet stretch was taken out.
     transcribe: async (opts) => {
       heard.push(opts.wav);
+      languages.push(opts.language);
       return {
         backend: "parakeet",
         model: "parakeet-tdt-0.6b-v3",
@@ -66,7 +68,7 @@ function setup(over: Partial<PipelineDeps> = {}) {
     changed: (p) => changes.push(p),
     ...over,
   };
-  return { pipeline: new ImportPipeline(deps), store, events, changes, heard, seconds };
+  return { pipeline: new ImportPipeline(deps), store, events, changes, heard, seconds, languages };
 }
 
 const settle = async (events: JobEvent[], n: number) => {
@@ -155,6 +157,30 @@ describe("ImportPipeline", () => {
     await settle(events, 2);
     const after = await store.get(created.id);
     expect(after.proposals.map((x) => x.status)).toEqual(["rejected"]);
+  });
+
+  it("transcribes a new project in the Settings language, and again after the language changes", async () => {
+    const { pipeline, store, events, languages } = setup({ language: async () => "fr" });
+    const created = await pipeline.import(["/videos/talk.mp4"], null);
+    expect(created.language).toBe("fr");
+    await settle(events, 4);
+    await pipeline.import(["/videos/two.mp4"], created.id);
+    await settle(events, 8);
+    expect(languages).toEqual(["fr", "fr"]);
+
+    const p = await store.update(created.id, null, (d) => {
+      d.proposals[0]!.status = "accepted";
+    });
+    expect(p.proposals.map((x) => x.status)).toEqual(["accepted", "pending"]);
+    events.length = 0;
+    const changed = await pipeline.setLanguage(created.id, "ja");
+    expect(changed.language).toBe("ja");
+    await settle(events, 4);
+    expect(languages.slice(2)).toEqual(["ja", "ja"]);
+    const after = await store.get(created.id);
+    // The accepted cut stays; the second recording's pause was found again.
+    expect(after.proposals.map((x) => x.status)).toEqual(["accepted", "pending"]);
+    expect(after.transcript).toHaveLength(4);
   });
 
   it("looks for faces again on resume only where it never finished, and leaves them unknown without a detector", async () => {
