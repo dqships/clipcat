@@ -1,12 +1,12 @@
 import type { EditOp, Project, Thumbnail, ThumbnailBackground, ThumbnailColor } from "@clipcat/core";
-import { Download, ImagePlus } from "lucide-react";
+import { Download, ImagePlus, Undo2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { bridge } from "../bridge";
 import { formatDuration, mediaUrl } from "../format";
 import { ICON_STROKE } from "../icons";
 import type { ProjectJobs } from "../useJobs";
 import type { Playhead } from "./Preview";
-import { THUMBNAIL, type ThumbnailPictures, drawThumbnail, loadThumbnailFont } from "./thumbnail";
+import { type Box, type ThumbnailPictures, clampBox, drawThumbnail, loadThumbnailFont, thumbnailSize, thumbnailTextBox } from "./thumbnail";
 
 type Props = { project: Project; playhead: Playhead | null; jobs: ProjectJobs; onEdit: (op: EditOp) => void };
 
@@ -24,6 +24,78 @@ function picture(url: string): Promise<HTMLImageElement> {
   });
 }
 
+/** How far an arrow key moves or resizes the text, as a share of the thumbnail; with Shift, five times as far. */
+const NUDGE = 0.01;
+
+const ARROWS: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+
+type TextBoxProps = { box: Box; onMove: (box: Box) => void; onDone: (box: Box) => void };
+
+/**
+ * The text's box over the preview: drag it to move the text, drag its
+ * corner to resize it. Arrow keys do the same on the box and on the corner.
+ */
+function TextBox({ box, onMove, onDone }: TextBoxProps) {
+  const drag = useRef<{ mode: "move" | "resize"; x: number; y: number; from: Box; stage: DOMRect; last: Box } | null>(null);
+  const start = (mode: "move" | "resize") => (e: React.PointerEvent<HTMLElement>) => {
+    const stage = e.currentTarget.closest(".thumbnail__stage")?.getBoundingClientRect();
+    if (!stage || e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    drag.current = { mode, x: e.clientX, y: e.clientY, from: box, stage, last: box };
+  };
+  const move = (e: React.PointerEvent<HTMLElement>) => {
+    const d = drag.current;
+    if (!d) return;
+    const dx = (e.clientX - d.x) / d.stage.width;
+    const dy = (e.clientY - d.y) / d.stage.height;
+    const { from } = d;
+    d.last = clampBox(d.mode === "move" ? { ...from, x: from.x + dx, y: from.y + dy } : { ...from, width: Math.min(1 - from.x, from.width + dx), height: Math.min(1 - from.y, from.height + dy) });
+    onMove(d.last);
+  };
+  const end = () => {
+    const d = drag.current;
+    drag.current = null;
+    if (d && d.last !== d.from) onDone(d.last);
+  };
+  const key = (mode: "move" | "resize") => (e: React.KeyboardEvent<HTMLElement>) => {
+    const arrow = ARROWS[e.key];
+    if (!arrow) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const [dx, dy] = arrow.map((a) => a * NUDGE * (e.shiftKey ? 5 : 1)) as [number, number];
+    onDone(clampBox(mode === "move" ? { ...box, x: box.x + dx, y: box.y + dy } : { ...box, width: Math.min(1 - box.x, box.width + dx), height: Math.min(1 - box.y, box.height + dy) }));
+  };
+  const pct = (n: number) => `${n * 100}%`;
+  return (
+    <div
+      className="thumbnail__text"
+      style={{ left: pct(box.x), top: pct(box.y), width: pct(box.width), height: pct(box.height) }}
+      role="button"
+      tabIndex={0}
+      aria-label="Move the text: drag it, or use the arrow keys"
+      onPointerDown={start("move")}
+      onPointerMove={move}
+      onPointerUp={end}
+      onPointerCancel={end}
+      onKeyDown={key("move")}
+    >
+      <span
+        className="thumbnail__handle"
+        role="button"
+        tabIndex={0}
+        aria-label="Resize the text: drag the corner, or use the arrow keys"
+        onPointerDown={start("resize")}
+        onPointerMove={move}
+        onPointerUp={end}
+        onPointerCancel={end}
+        onKeyDown={key("resize")}
+      />
+    </div>
+  );
+}
+
 /**
  * The thumbnail: a frame from the video with its subject cut out, big text
  * behind them, and a background. The frame comes from wherever the playhead
@@ -36,6 +108,10 @@ export function ThumbnailPanel({ project, playhead, jobs, onEdit }: Props) {
   const [draft, setDraft] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
+  /** The text's box while it's being dragged, until the project has it. */
+  const [moving, setMoving] = useState<Box | null>(null);
+  const size = thumbnailSize(project.aspectRatio);
+  const tall = size.height > size.width;
   const running = jobs.active?.kind === "thumbnail";
   const text = draft ?? (t?.text || project.suggestedTitle);
   const fail = (e: unknown) => setError(e instanceof Error ? e.message : String(e));
@@ -51,10 +127,19 @@ export function ThumbnailPanel({ project, playhead, jobs, onEdit }: Props) {
     };
   }, [project.id, t?.frame, t?.subject]);
 
+  useEffect(() => setMoving(null), [t?.textBox]);
+
   useEffect(() => {
     const g = canvas.current?.getContext("2d");
-    if (g && pictures && t) drawThumbnail(g, pictures, t, text);
-  }, [pictures, t, text]);
+    if (g && pictures && t) drawThumbnail(g, pictures, { ...project, thumbnail: moving ? { ...t, textBox: moving } : t }, text);
+  }, [pictures, t, text, moving, project.aspectRatio, project.sources]);
+
+  const shown = (() => {
+    if (moving) return moving;
+    if (!t) return null;
+    const b = thumbnailTextBox(t, size);
+    return { x: b.x / size.width, y: b.y / size.height, width: b.width / size.width, height: b.height / size.height };
+  })();
 
   const source = project.sources.find((s) => s.id === playhead?.sourceId) ?? [...project.sources].sort((a, b) => a.order - b.order)[0];
   const at = playhead && source?.id === playhead.sourceId ? playhead.time : 0;
@@ -101,7 +186,28 @@ export function ThumbnailPanel({ project, playhead, jobs, onEdit }: Props) {
       )}
       {t && (
         <>
-          <canvas ref={canvas} className="thumbnail__canvas" width={THUMBNAIL.width} height={THUMBNAIL.height} aria-label="Thumbnail preview" role="img" />
+          <div className={tall ? "thumbnail__stage thumbnail__stage--tall" : "thumbnail__stage"}>
+            <canvas ref={canvas} className="thumbnail__canvas" width={size.width} height={size.height} aria-label="Thumbnail preview" role="img" />
+            {pictures && shown && (
+              <TextBox
+                box={shown}
+                onMove={setMoving}
+                onDone={(b) => {
+                  setMoving(b);
+                  style({ textBox: b });
+                }}
+              />
+            )}
+          </div>
+          <p className="project__summary">Drag the text to move it, or its corner to make it bigger or smaller.</p>
+          {t.textBox && (
+            <div>
+              <button type="button" className="button" onClick={() => style({ textBox: null })}>
+                <Undo2 className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
+                Put the text back
+              </button>
+            </div>
+          )}
           <label className="field">
             <span className="field__label">Text</span>
             <input
@@ -138,7 +244,7 @@ export function ThumbnailPanel({ project, playhead, jobs, onEdit }: Props) {
           </label>
           <label className="field">
             <span className="field__label">Text side</span>
-            <select className="field__control" value={t.textSide} onChange={(e) => style({ textSide: e.target.value as Thumbnail["textSide"] })}>
+            <select className="field__control" value={t.textSide} onChange={(e) => style({ textSide: e.target.value as Thumbnail["textSide"], textBox: null })}>
               <option value="left">Left</option>
               <option value="right">Right</option>
             </select>

@@ -56,11 +56,12 @@ describe("ThumbnailPipeline", () => {
     await store.update(id, null, (p) => {
       p.thumbnail!.text = "Big words";
       p.thumbnail!.background = "blur";
+      p.thumbnail!.textBox = { x: 0.2, y: 0.2, width: 0.4, height: 0.3 };
     });
     await pipeline.pick(id, "s1", 99);
     await queue.idle(id);
     const t = (await store.get(id)).thumbnail!;
-    expect(t).toMatchObject({ text: "Big words", background: "blur", time: 59.95 });
+    expect(t).toMatchObject({ text: "Big words", background: "blur", textBox: { x: 0.2, y: 0.2, width: 0.4, height: 0.3 }, time: 59.95 });
     expect(grabbed.at(-1)!.time).toBe(59.95);
     expect((await readdir(join(store.dir(id), THUMBNAIL_DIR))).sort()).toEqual([t.frame, t.subject].map((x) => x!.split("/").at(-1)).sort());
   });
