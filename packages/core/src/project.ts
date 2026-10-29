@@ -224,8 +224,8 @@ export const Writeup = z.object({
   article: Article.default({ title: "", markdown: "" }),
 });
 
-/** The colours a thumbnail can use, from the app's palette. */
-export const ThumbnailColor = z.enum(["paper", "ink", "tape"]);
+/** The colours thumbnail text can use: the brand's paper, ink and tape, then louder ones (DESIGN.md, Thumbnail colours). */
+export const ThumbnailColor = z.enum(["paper", "ink", "tape", "red", "orange", "lime", "green", "sky", "blue", "pink", "violet"]);
 /** What fills the thumbnail behind the text: the frame itself, the frame blurred, or a flat colour. */
 export const ThumbnailBackground = z.enum(["frame", "blur", "paper", "ink", "tape"]);
 

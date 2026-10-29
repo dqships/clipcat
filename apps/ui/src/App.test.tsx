@@ -653,6 +653,11 @@ describe("App", () => {
     await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:edit", expect.objectContaining({ op: { type: "thumbnail", text: "Say it once" } })));
     fireEvent.change(screen.getByLabelText("Behind the text"), { target: { value: "blur" } });
     await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:edit", expect.objectContaining({ op: { type: "thumbnail", background: "blur" } })));
+    const colours = screen.getByRole("group", { name: "Thumbnail text colour" });
+    expect(within(colours).getAllByRole("button")).toHaveLength(11);
+    expect(within(colours).getByRole("button", { name: "Paper" }).getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(within(colours).getByRole("button", { name: "Pink" }));
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:edit", expect.objectContaining({ op: { type: "thumbnail", textColor: "pink" } })));
     // The pictures haven't loaded, so there's nothing to save yet.
     expect((screen.getByRole("button", { name: "Save thumbnail as PNG…" }) as HTMLButtonElement).disabled).toBe(true);
   });
