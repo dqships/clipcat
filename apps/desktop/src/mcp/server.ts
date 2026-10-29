@@ -281,7 +281,7 @@ export function createMcpServer(deps: McpDeps): McpServer {
 - {type:"speed", speed:0.5..2} / {type:"aspect", aspectRatio:"16:9"|"9:16"|"1:1"} / {type:"bars", bars:"black"|"blur"} (what fills the sides when a recording of another shape is shown whole in a wide video)
 - {type:"music", volume?:0..1, duck?:boolean} / {type:"remove-music"}
 - {type:"writeup", description?, articleTitle?, article?}
-- {type:"thumbnail", text?, textColor?:"paper"|"ink"|"tape", background?:"frame"|"blur"|"paper"|"ink"|"tape", textSide?:"left"|"right", textBox?:{x,y,width,height} as 0..1 shares of the thumbnail or null for the side's default, behind?:boolean}
+- {type:"thumbnail", text?, textColor?:"paper"|"ink"|"tape"|"red"|"orange"|"lime"|"green"|"sky"|"blue"|"pink"|"violet", background?:"frame"|"blur"|"paper"|"ink"|"tape", textSide?:"left"|"right", textBox?:{x,y,width,height} as 0..1 shares of the thumbnail or null for the side's default, behind?:boolean}
 - {type:"undo"} / {type:"redo"}
 A mistake in the op comes back as an error saying what to fix.`,
       inputSchema: { projectId: ProjectId, revision: Revision, op: z.record(z.string(), z.unknown()).describe("The op, as listed above.") },

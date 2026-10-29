@@ -62,6 +62,28 @@ light backgrounds (contrast is too low). Text on yellow is always ink.
 | `--color-on-accent` | `#17150F` | `#17150F` | Text and icons on accent |
 | `--color-danger` | `#C8361D` | `#F0674C` | Destructive actions, errors |
 
+### Thumbnail colours
+
+Thumbnail text picks from these, the same in either theme (a thumbnail doesn't
+follow the app's). Paper, ink and tape are the brand's own; the rest are loud
+on purpose, for a few big words on a busy frame. Each gets an ink or paper
+outline, whichever reads on it. Tokens: `--thumbnail-<name>` and `thumbnail`
+in `design/tokens.json`.
+
+| Name | Value | Outline |
+| --- | --- | --- |
+| Paper (`paper`) | `#FAF8F3` | ink |
+| Ink (`ink`) | `#17150F` | paper |
+| Tape yellow (`tape`) | `#F2B705` | ink |
+| Red (`red`) | `#E5372A` | paper |
+| Orange (`orange`) | `#FF7A1F` | ink |
+| Lime (`lime`) | `#B8E62E` | ink |
+| Green (`green`) | `#1FA866` | paper |
+| Sky blue (`sky`) | `#35B6F0` | ink |
+| Blue (`blue`) | `#2B4FE0` | paper |
+| Pink (`pink`) | `#FF4FA3` | ink |
+| Violet (`violet`) | `#8A4DF0` | paper |
+
 ## Type
 
 One family: **Jost** (Google Fonts, OFL), a Futura-style geometric sans.

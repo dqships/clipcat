@@ -216,7 +216,8 @@ describe("thumbnail edits", () => {
     const next = applyEdit(p, { type: "thumbnail", text: "Cut the fluff", background: "blur", textSide: "right" }, counter("t"));
     expect(next.thumbnail).toMatchObject({ text: "Cut the fluff", background: "blur", textSide: "right", textColor: "paper" });
     expect(next.history.past).toHaveLength(0);
-    expect(EditOp.safeParse({ type: "thumbnail", textColor: "red" }).success).toBe(false);
+    expect(EditOp.safeParse({ type: "thumbnail", textColor: "pink" }).success).toBe(true);
+    expect(EditOp.safeParse({ type: "thumbnail", textColor: "#FF0000" }).success).toBe(false);
     // The text can be moved anywhere on the thumbnail, and put back.
     const moved = applyEdit(next, { type: "thumbnail", textBox: { x: 0.1, y: 0.6, width: 0.5, height: 0.3 } }, counter("t"));
     expect(moved.thumbnail?.textBox).toEqual({ x: 0.1, y: 0.6, width: 0.5, height: 0.3 });
