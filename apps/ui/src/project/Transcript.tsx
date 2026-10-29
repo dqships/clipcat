@@ -15,6 +15,8 @@ type Props = {
   playhead: Playhead | null;
   onSeek: (sourceId: string, time: number) => void;
   onEdit: (op: EditOp) => void;
+  /** Leaves cut words out, so the transcript reads as the edit plays. */
+  hideCuts?: boolean;
 };
 
 /**
@@ -23,10 +25,14 @@ type Props = {
  * Delete to cut it (or to restore it, when it is all cut already), zoom in on
  * it, show b-roll over it, have the AI editor
  * design a slide for it, or land a sound effect or start a chapter on its
- * first word.
+ * first word. With cuts hidden, struck words drop out and only what's kept
+ * shows.
  */
-export function Transcript({ project, playhead, onSeek, onEdit }: Props) {
-  const words = useMemo(() => orderedWords(project), [project]);
+export function Transcript({ project, playhead, onSeek, onEdit, hideCuts = false }: Props) {
+  const words = useMemo(() => {
+    const all = orderedWords(project);
+    return hideCuts ? all.filter((w) => isWordKept(project.segments, w)) : all;
+  }, [project, hideCuts]);
   const [anchor, setAnchor] = useState<number | null>(null);
   const [focus, setFocus] = useState<number | null>(null);
   const proposed = useMemo(

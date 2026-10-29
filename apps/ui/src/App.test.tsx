@@ -245,6 +245,23 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "Restore" })).toBeTruthy();
   });
 
+  it("hides cut words and shows them again, and remembers the choice", async () => {
+    const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude", models };
+    const cut = { ...project, segments: [{ ...project.segments[0], sourceEnd: 1.95 }, { id: "g2", sourceId: "s1", sourceStart: 1.95, sourceEnd: 75, included: false }] };
+    fakeBridge({ "app:info": info(), "library:list": [summary], "project:get": cut, "ai:status": ready });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "talk" }));
+    expect((await screen.findByRole("button", { name: "again." })).className).toContain("word--cut");
+    const toggle = screen.getByRole("button", { name: "Hide cuts" });
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.queryByRole("button", { name: "again." })).toBeNull();
+    expect(screen.getByRole("button", { name: "Hello" })).toBeTruthy();
+    expect(localStorage.getItem("clipcat.hideCuts")).toBe("1");
+    fireEvent.click(toggle);
+    expect(screen.getByRole("button", { name: "again." }).className).toContain("word--cut");
+  });
+
   it("accepts a suggested cut and undoes with the keyboard", async () => {
     const ready = { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: false, model: "claude-opus-5-5" }, agent: "claude", models };
     const { invoke } = fakeBridge({

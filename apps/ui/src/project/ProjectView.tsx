@@ -1,5 +1,5 @@
 import type { Project } from "@clipcat/core";
-import { ArrowLeft, Redo2, Undo2, Video } from "lucide-react";
+import { ArrowLeft, Eye, EyeOff, Redo2, Undo2, Video } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { bridge } from "../bridge";
 import { ICON_STROKE } from "../icons";
@@ -11,6 +11,7 @@ import { CaptionOverlay } from "./CaptionOverlay";
 import { CaptionsPanel } from "./CaptionsPanel";
 import { ExportPanel } from "./ExportPanel";
 import { FramingPanel } from "./FramingPanel";
+import { useHideCuts } from "./hiddenCuts";
 import { MediaPanel } from "./MediaPanel";
 import { type Playhead, Preview, type PreviewHandle, type Transport } from "./Preview";
 import { Proposals } from "./Proposals";
@@ -44,7 +45,8 @@ type Props = {
  * are, and the transcript is where they're made. The preview stays put; the
  * transcript and the tools (in tabs: editing, the look, what to publish with
  * it, and export) are panels that dock left, right or below it, and split a
- * dock they share.
+ * dock they share. Cuts can be hidden from both the strip and the
+ * transcript, to read and see only what's kept.
  */
 export function ProjectView({ projectId, jobs, onBack, onOpen, onRecord }: Props) {
   const [project, setProjectState] = useState<Project | null>(null);
@@ -73,6 +75,7 @@ export function ProjectView({ projectId, jobs, onBack, onOpen, onRecord }: Props
   const reload = useCallback(() => load(projectId), [load, projectId]);
   const edit = useEditor(project, setProject, reload, setError);
   const ai = useAi();
+  const [hideCuts, toggleHideCuts] = useHideCuts();
 
   const seek = useCallback((sourceId: string, time: number) => {
     preview.current?.seek(sourceId, time);
@@ -96,7 +99,7 @@ export function ProjectView({ projectId, jobs, onBack, onOpen, onRecord }: Props
         {project && hasWords ? (
           <>
             <Spelling project={project} jobs={jobs} ai={ai} />
-            <Transcript project={project} playhead={playhead} onSeek={seek} onEdit={edit} />
+            <Transcript project={project} playhead={playhead} onSeek={seek} onEdit={edit} hideCuts={hideCuts} />
           </>
         ) : (
           <p className="empty__body">{transcribed ? "No speech found." : "The transcript appears here once it's ready."}</p>
@@ -233,6 +236,16 @@ export function ProjectView({ projectId, jobs, onBack, onOpen, onRecord }: Props
           <button
             type="button"
             className="button button--icon"
+            aria-label="Hide cuts"
+            aria-pressed={hideCuts}
+            title={hideCuts ? "Show cuts in the transcript and the strip" : "Hide cuts from the transcript and the strip"}
+            onClick={toggleHideCuts}
+          >
+            {hideCuts ? <EyeOff className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden /> : <Eye className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />}
+          </button>
+          <button
+            type="button"
+            className="button button--icon"
             aria-label="Undo"
             title="Undo"
             disabled={!project?.history.past.length}
@@ -274,7 +287,7 @@ export function ProjectView({ projectId, jobs, onBack, onOpen, onRecord }: Props
               )}
             </div>
             {project && <TransportBar project={project} playhead={playhead} transport={transport} preview={preview} />}
-            {project && <Waveform project={project} playhead={playhead} onSeek={seek} />}
+            {project && <Waveform project={project} playhead={playhead} onSeek={seek} hideCuts={hideCuts} />}
             <JobLine jobs={jobs} onCancel={() => void bridge()?.invoke("jobs:cancel", { id: projectId })} />
           </section>
           {dockArea("bottom")}

@@ -726,6 +726,14 @@ body {
   color: var(--color-on-primary);
 }
 
+/* A switch that's on, like hiding cuts: filled like a docked panel's button. */
+.button--icon[aria-pressed="true"],
+.button--icon[aria-pressed="true"]:hover {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
 .button--icon {
   width: var(--control-height);
   padding: 0;
@@ -1157,6 +1165,23 @@ body {
   height: 100%;
   object-fit: fill;
   pointer-events: none;
+}
+
+/* With the cuts hidden: kept stretches side by side, a hairline seam where each cut was. */
+.wave__piece {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.wave__piece--seam {
+  border-left: 1px solid var(--color-danger);
+}
+
+.wave__image--slice {
+  max-width: none;
 }
 
 .wave__cut,
