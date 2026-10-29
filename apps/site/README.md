@@ -15,6 +15,7 @@ prerendered HTML with no JavaScript. Vercel serves it, and `proxy.ts` answers
 | `styles/site.css` | The site's styles, using `styles/tokens.css` (a copy of `design/tokens.css`; a test keeps them equal). |
 | `scripts/text-files.mjs` | Writes `robots.txt`, `sitemap.xml`, `llms.txt` and `llms-full.txt` into `public/` before each build. |
 | `scripts/og.mjs` | Renders `public/og.png`, the share card, from the home page's hero. |
+| `scripts/vercel-ignore-build.mjs` | Vercel's `ignoreCommand`: skips a deployment when nothing in `apps/site/` or the root package files changed, and always skips previews on `claude/` and `codex/` branches. |
 
 ```sh
 npm run dev            # http://localhost:3000
