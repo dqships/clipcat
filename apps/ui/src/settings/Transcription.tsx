@@ -4,8 +4,11 @@ import { Download, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { bridge } from "../bridge";
 import { ICON_STROKE } from "../icons";
+import { Group } from "./Group";
 
 type Speech = Pick<SettingsValue, "speechLanguage" | "speechEngine" | "whisperModel">;
+
+type Props = { prefs: Speech | null; onSave: (patch: Partial<Speech>) => void; error: string | null };
 
 const message = (e: unknown) => (e instanceof Error ? e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, "") : String(e));
 
@@ -28,30 +31,22 @@ export function LanguageOptions() {
 /**
  * Transcription settings: the language new projects start in, which engine
  * and whisper model hear the speech, and the models on disk, which can be
- * downloaded ahead of time or deleted to free the space.
+ * downloaded ahead of time or deleted to free the space. Settings owns the
+ * saved choices, so its list shows the language too.
  */
-export function Transcription() {
-  const [prefs, setPrefs] = useState<Speech | null>(null);
+export function Transcription({ prefs, onSave: save, error: saveError }: Props) {
   const [models, setModels] = useState<SpeechModelValue[] | null>(null);
   const [busy, setBusy] = useState<SpeechModelIdValue | null>(null);
   const [progress, setProgress] = useState<number | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [failure, setError] = useState<string | null>(null);
+  const error = failure ?? saveError;
 
   useEffect(() => {
     const api = bridge();
     if (!api) return;
-    api.invoke("settings:get").then(setPrefs, (e: unknown) => setError(message(e)));
     api.invoke("speech:models").then(setModels, (e: unknown) => setError(message(e)));
     return api.on("speech:progress", ({ fraction }) => setProgress(fraction));
   }, []);
-
-  const save = (patch: Partial<Speech>) => {
-    setError(null);
-    setPrefs((p) => (p ? { ...p, ...patch } : p));
-    bridge()
-      ?.invoke("settings:set", patch)
-      .then(setPrefs, (e: unknown) => setError(message(e)));
-  };
 
   const run = (id: SpeechModelIdValue, method: "speech:download" | "speech:remove") => {
     setError(null);
@@ -66,98 +61,98 @@ export function Transcription() {
   const parakeet = models?.some((m) => m.id === "parakeet") ?? false;
 
   return (
-    <section className="settings__section" aria-labelledby="transcription-title">
-      <h2 id="transcription-title" className="section-title">
-        Transcription
-      </h2>
-      <p className="settings__body">
-        ClipCat transcribes on this computer. Nothing is uploaded.{" "}
-        {parakeet
-          ? "Parakeet hears 25 European languages and is the fastest. Whisper hears about 100 languages and takes the rest."
-          : "Whisper hears about 100 languages."}
-      </p>
-      <div className="fields">
-        <label className="field">
-          <span className="field__label">Language for new projects</span>
-          <select
-            className="field__control"
-            value={prefs?.speechLanguage ?? "en"}
-            disabled={!prefs}
-            onChange={(e) => save({ speechLanguage: e.target.value })}
-          >
-            <LanguageOptions />
-          </select>
-        </label>
-        <label className="field">
-          <span className="field__label">Whisper model</span>
-          <select
-            className="field__control"
-            value={prefs?.whisperModel ?? "large-v3-turbo-q5_0"}
-            disabled={!prefs}
-            onChange={(e) => save({ whisperModel: e.target.value as Speech["whisperModel"] })}
-          >
-            <option value="large-v3-turbo-q5_0">Large v3 Turbo (most accurate)</option>
-            <option value="base">Base (fastest, less accurate)</option>
-          </select>
-        </label>
-        {parakeet && (
+    <>
+      <Group id="speech-title" label="New projects">
+        <p className="settings__body">
+          {parakeet
+            ? "Parakeet hears 25 European languages and is the fastest. Whisper hears about 100 languages and takes the rest."
+            : "Whisper hears about 100 languages."}
+        </p>
+        <div className="fields">
           <label className="field">
-            <span className="field__label">Engine</span>
+            <span className="field__label">Language for new projects</span>
             <select
               className="field__control"
-              value={prefs?.speechEngine ?? "auto"}
+              value={prefs?.speechLanguage ?? "en"}
               disabled={!prefs}
-              onChange={(e) => save({ speechEngine: e.target.value as Speech["speechEngine"] })}
+              onChange={(e) => save({ speechLanguage: e.target.value })}
             >
-              <option value="auto">Parakeet when it knows the language</option>
-              <option value="whisper">Always whisper</option>
+              <LanguageOptions />
             </select>
           </label>
-        )}
-      </div>
-      <p className="settings__hint">
-        Detect automatically lets whisper guess the language from the first seconds of speech, so it skips Parakeet. Each project can change its
-        language from the transcript.
-      </p>
-      <ul className="agents" aria-label="Speech models">
-        {models?.map((m) => (
-          <li key={m.id} className="agents__item">
-            <div className="agents__row">
-              <div className="agents__text">
-                <span className="agents__name">{m.label}</span>
-                <span className="agents__path" role="status">
-                  {busy === m.id && m.downloaded === false
-                    ? progress === null
-                      ? "Preparing…"
-                      : `Downloading… ${Math.round(progress * 100)}%`
-                    : m.downloaded
-                      ? `Downloaded, ${size(m.bytes)}`
-                      : `Not downloaded, about ${m.approxMB} MB. It downloads the first time it's needed.`}
-                </span>
-              </div>
-              <div className="agents__actions">
-                {m.downloaded ? (
-                  <button type="button" className="button" disabled={busy !== null} aria-label={`Delete ${m.label}`} onClick={() => run(m.id, "speech:remove")}>
-                    <Trash2 className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
-                    Delete
-                  </button>
-                ) : (
-                  <button type="button" className="button" disabled={busy !== null} aria-label={`Download ${m.label}`} onClick={() => run(m.id, "speech:download")}>
-                    <Download className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
-                    Download
-                  </button>
-                )}
-              </div>
-            </div>
-          </li>
-        ))}
-      </ul>
-      <p className="settings__hint">A model is loaded only while it transcribes and lets go of the memory when it's done.</p>
-      {error && (
-        <p className="notice notice--danger" role="alert">
-          {error}
+          <label className="field">
+            <span className="field__label">Whisper model</span>
+            <select
+              className="field__control"
+              value={prefs?.whisperModel ?? "large-v3-turbo-q5_0"}
+              disabled={!prefs}
+              onChange={(e) => save({ whisperModel: e.target.value as Speech["whisperModel"] })}
+            >
+              <option value="large-v3-turbo-q5_0">Large v3 Turbo (most accurate)</option>
+              <option value="base">Base (fastest, less accurate)</option>
+            </select>
+          </label>
+          {parakeet && (
+            <label className="field">
+              <span className="field__label">Engine</span>
+              <select
+                className="field__control"
+                value={prefs?.speechEngine ?? "auto"}
+                disabled={!prefs}
+                onChange={(e) => save({ speechEngine: e.target.value as Speech["speechEngine"] })}
+              >
+                <option value="auto">Parakeet when it knows the language</option>
+                <option value="whisper">Always whisper</option>
+              </select>
+            </label>
+          )}
+        </div>
+        <p className="settings__hint">
+          Detect automatically lets whisper guess the language from the first seconds of speech, so it skips Parakeet. Each project can change its
+          language from the transcript.
         </p>
-      )}
-    </section>
+      </Group>
+      <Group id="models-title" label="Speech models on this computer">
+        <ul className="agents" aria-label="Speech models">
+          {models?.map((m) => (
+            <li key={m.id} className="agents__item">
+              <div className="agents__row">
+                <div className="agents__text">
+                  <span className="agents__name">{m.label}</span>
+                  <span className="agents__path" role="status">
+                    {busy === m.id && m.downloaded === false
+                      ? progress === null
+                        ? "Preparing…"
+                        : `Downloading… ${Math.round(progress * 100)}%`
+                      : m.downloaded
+                        ? `Downloaded, ${size(m.bytes)}`
+                        : `Not downloaded, about ${m.approxMB} MB. It downloads the first time it's needed.`}
+                  </span>
+                </div>
+                <div className="agents__actions">
+                  {m.downloaded ? (
+                    <button type="button" className="button" disabled={busy !== null} aria-label={`Delete ${m.label}`} onClick={() => run(m.id, "speech:remove")}>
+                      <Trash2 className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
+                      Delete
+                    </button>
+                  ) : (
+                    <button type="button" className="button" disabled={busy !== null} aria-label={`Download ${m.label}`} onClick={() => run(m.id, "speech:download")}>
+                      <Download className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
+                      Download
+                    </button>
+                  )}
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+        <p className="settings__hint">A model is loaded only while it transcribes and lets go of the memory when it's done.</p>
+        {error && (
+          <p className="notice notice--danger" role="alert">
+            {error}
+          </p>
+        )}
+      </Group>
+    </>
   );
 }

@@ -198,6 +198,8 @@ export const McpCheckStep = z.object({
 /** What a menu bar item asks the window to do. */
 export const MenuCommand = z.enum([
   "settings",
+  /** Settings, open on the Updates page. */
+  "settings-updates",
   "new-recording",
   "import",
   "open-project",
