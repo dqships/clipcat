@@ -597,7 +597,7 @@ if (!squirrelLaunch && !app.requestSingleInstanceLock()) {
         },
         "project:shorts": async ({ id, count, seconds }) => analysis.shorts(id, count, seconds),
         "project:edit": ({ id, revision, op }) => edit(id, revision, op),
-        "project:export": async ({ id, format }, event) => {
+        "project:export": async ({ id, format, cover }, event) => {
           const project = await store.get(id);
           const win = BrowserWindow.fromWebContents(event.sender);
           const suffix = format === "9:16" ? " (vertical)" : "";
@@ -609,7 +609,7 @@ if (!squirrelLaunch && !app.requestSingleInstanceLock()) {
           const result = win ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options);
           if (result.canceled || !result.filePath) return { path: null };
           const path = extname(result.filePath).toLowerCase() === ".mp4" ? result.filePath : `${result.filePath}.mp4`;
-          exporter.export(id, format, path);
+          exporter.export(id, format, path, cover ? Buffer.from(cover, "base64") : null);
           return { path };
         },
         "project:export-timeline": async ({ id, format }, event) => {

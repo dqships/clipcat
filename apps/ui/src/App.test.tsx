@@ -290,7 +290,7 @@ describe("App", () => {
 
     await openTab("Export");
     fireEvent.click(screen.getByRole("button", { name: /Export 9:16/ }));
-    expect(invoke).toHaveBeenCalledWith("project:export", { id: "p1", format: "9:16" });
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:export", { id: "p1", format: "9:16", cover: null }));
     expect(screen.getByText("Last export: talk.mp4 (16:9)")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Show file" }));
     expect(invoke).toHaveBeenCalledWith("project:reveal-export", { id: "p1" });

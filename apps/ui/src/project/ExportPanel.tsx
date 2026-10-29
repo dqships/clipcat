@@ -5,6 +5,7 @@ import { bridge } from "../bridge";
 import { formatDuration } from "../format";
 import { ICON_STROKE } from "../icons";
 import type { ProjectJobs } from "../useJobs";
+import { coverPng } from "./cover";
 
 type Props = { project: Project; jobs: ProjectJobs; onEdit: (op: EditOp) => void };
 
@@ -32,8 +33,10 @@ export function ExportPanel({ project, jobs, onEdit }: Props) {
 
   const start = (format: "16:9" | "9:16") => {
     setError(null);
-    bridge()
-      ?.invoke("project:export", { id: project.id, format })
+    // A thumbnail that can't be drawn leaves the video without cover art rather than stopping the export.
+    coverPng(project)
+      .catch(() => null)
+      .then((cover) => bridge()?.invoke("project:export", { id: project.id, format, cover }))
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
   };
 
@@ -81,6 +84,7 @@ export function ExportPanel({ project, jobs, onEdit }: Props) {
           </button>
         ))}
       </div>
+      {project.thumbnail && <p className="export__note">The thumbnail goes into the video as its cover art.</p>}
       <h3 className="export__subtitle">Finish in another editor</h3>
       <p className="export__note">The cut as a timeline of your original recordings, at normal speed, with chapters as markers. Captions and effects stay in ClipCat.</p>
       <div className="export export--timelines">

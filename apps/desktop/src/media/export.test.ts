@@ -290,6 +290,14 @@ describe("ffmetadata", () => {
     expect(muxArgs("c.txt", "a.m4a", "/o.mp4", "meta.txt").join(" ")).toContain("-i a.m4a -f ffmetadata -i meta.txt -map_metadata 2 -map_chapters 2 -map 0:v:0");
     expect(muxArgs("c.txt", "a.m4a", "/o.mp4")).not.toContain("ffmetadata");
   });
+
+  it("adds the thumbnail as cover art after every input, numbered after the metadata when there is some", () => {
+    expect(muxArgs("c.txt", "a.m4a", "/o.mp4", "meta.txt", "cover.png").join(" ")).toContain(
+      "-i meta.txt -i cover.png -map_metadata 2 -map_chapters 2 -map 0:v:0 -map 1:a:0 -map 3:v:0 -c copy -c:v:1 png -disposition:v:1 attached_pic",
+    );
+    expect(muxArgs("c.txt", "a.m4a", "/o.mp4", null, "cover.png").join(" ")).toContain("-i cover.png -map 0:v:0 -map 1:a:0 -map 2:v:0");
+    expect(muxArgs("c.txt", "a.m4a", "/o.mp4")).not.toContain("attached_pic");
+  });
 });
 
 describe("muxArgs", () => {
