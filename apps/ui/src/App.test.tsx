@@ -860,12 +860,41 @@ describe("App", () => {
     expect(screen.getByText("Claude Code is connected now (claude-code 2.1.312).")).toBeTruthy();
 
     // The walkthrough opens on the agent just connected, and switches per agent.
-    expect(screen.getByRole("tab", { name: "Claude Code, connected" }).getAttribute("aria-selected")).toBe("true");
-    expect(screen.getByRole("tabpanel").textContent).toContain("Type /mcp.");
-    fireEvent.click(screen.getByRole("tab", { name: "Claude desktop app" }));
-    expect(screen.getByRole("tabpanel").textContent).toContain("Settings > Developer");
+    const pick = screen.getByRole("combobox", { name: "Steps for" }) as HTMLSelectElement;
+    expect(pick.value).toBe("claude-code");
+    expect(screen.getByRole("option", { name: "Claude Code (connected)" })).toBeTruthy();
+    expect(screen.getByRole("list", { name: "Steps for Claude Code" }).textContent).toContain("Type /mcp.");
+    fireEvent.change(pick, { target: { value: "claude-desktop" } });
+    expect(screen.getByRole("list", { name: "Steps for Claude desktop app" }).textContent).toContain("Settings > Developer");
+    fireEvent.change(pick, { target: { value: "vscode" } });
+    expect(screen.getByRole("list", { name: "Steps for VS Code" }).textContent).toContain("MCP: List Servers");
     fireEvent.click(screen.getByRole("button", { name: "Back to library" }));
     expect(await screen.findByRole("heading", { level: 2, name: "No projects yet" })).toBeTruthy();
+  });
+
+  it("folds away agents that aren't installed, and gives the setup for any other app", async () => {
+    const writeText = vi.fn(async () => {});
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    const never = { live: false, lastAt: null, client: null };
+    const agent = (id: string, label: string, detected: boolean) => ({ id, label, detected, connected: false, config: `/Users/me/${id}.json`, unavailable: null, entry: "{}", session: never });
+    const json = `{\n  "mcpServers": {\n    "clipcat": { "command": "/Applications/ClipCat.app/Contents/MacOS/ClipCat" }\n  }\n}`;
+    fakeBridge({
+      "app:info": info(),
+      "library:list": [],
+      "mcp:status": [agent("claude-code", "Claude Code", true), agent("cursor", "Cursor", false), agent("gemini", "Gemini CLI", false)],
+      "mcp:setup": { command: "/Applications/ClipCat.app/Contents/MacOS/ClipCat", args: ["/x/mcp.cjs"], env: { ELECTRON_RUN_AS_NODE: "1", CLIPCAT_SOCKET: "/s.sock" }, json, unavailable: null },
+    });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
+    expect(await screen.findByText("Not found on this computer: Cursor, Gemini CLI")).toBeTruthy();
+    expect(screen.getByRole("list", { name: "Coding agents" }).textContent).not.toContain("Cursor");
+    expect(screen.getByRole("button", { name: "Connect Cursor" })).toBeTruthy();
+
+    expect(screen.getByText("Set up another MCP app")).toBeTruthy();
+    fireEvent.click(await screen.findByRole("button", { name: "Copy environment" }));
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith("ELECTRON_RUN_AS_NODE=1\nCLIPCAT_SOCKET=/s.sock"));
+    fireEvent.click(screen.getByRole("button", { name: "Copy JSON" }));
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith(json));
   });
 
   it("copies an example prompt from the agent walkthrough", async () => {

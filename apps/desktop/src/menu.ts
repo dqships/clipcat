@@ -28,7 +28,7 @@ function helpMenu(deps: MenuDeps): MenuItemConstructorOptions {
     submenu: [
       page("ClipCat Help", "", deps.platform === "darwin" ? "Cmd+?" : "F1"),
       page("Keyboard Shortcuts", "shortcuts"),
-      page("Use ClipCat from Claude or Codex", "agents"),
+      page("Use ClipCat from your coding agent", "agents"),
       page("Questions People Ask", "faq"),
       page("Fix a Problem", "troubleshooting"),
       { type: "separator" },

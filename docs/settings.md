@@ -16,13 +16,17 @@ Two more kinds of settings live where you use them:
 
 ## Edit from your coding agent
 
-Connect Claude Code, Codex or the Claude desktop app, and it can edit your projects while ClipCat is open. Each agent has a row:
+Connect Claude Code, Codex, the Claude desktop app, Cursor, VS Code, Windsurf, LM Studio or Gemini CLI, and it can edit your projects while ClipCat is open. Agents on this computer are listed first, and the rest are folded under **Not found on this computer**. Each agent has a row:
 
 - The line under its name says whether it's connected, when it last connected, or that it isn't on this computer. You can connect an agent before you install it.
 - The path is the agent's own settings file, where ClipCat adds its entry.
 - **Connect** shows the exact entry ClipCat will add and asks first. **Add to** (the agent's name) adds it, then ClipCat checks the connection.
 - **Test** checks the connection again, step by step: the file is read back, the entry is run through to ClipCat, and the agent's own command is asked. The last step turns to done once the agent really connects.
 - **Disconnect** takes ClipCat's entry out of the file. Nothing else in the file changes.
+
+**Set up another MCP app**, under the list, shows the entry for any other app that runs local MCP servers: the JSON, and the command, arguments and environment, each with a copy button. See [Use ClipCat from your coding agent](agents.md#set-up-another-mcp-app).
+
+Under **How to use it**, **Steps for** picks the agent to show the steps for.
 
 ### Install or update Claude Code and Codex
 
@@ -34,7 +38,7 @@ The Claude Code and Codex rows also show the version of the command-line tool on
 - A copy that came inside another app is left to that app, and the row says how to update it.
 - If your Codex is older than another Codex on your computer (usually the one inside the ChatGPT app), the row warns that the newer one's settings may not work in it.
 
-The **How to use it** section under the agents walks through the first session for each agent, with prompts to copy. See [Use ClipCat from Claude or Codex](agents.md).
+The **How to use it** section under the agents walks through the first session for each agent, with prompts to copy. See [Use ClipCat from your coding agent](agents.md).
 
 ## Transcription
 

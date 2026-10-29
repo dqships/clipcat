@@ -5,8 +5,8 @@
 //   reaches  that entry, run exactly as the agent would run it, completes an
 //            MCP handshake with this ClipCat and lists its tools;
 //   agent    the agent itself agrees: `claude mcp get` connects to it, and
-//            `codex mcp get` lists it switched on. The Claude app has no
-//            command line, so it waits for a restart.
+//            `codex mcp get` lists it switched on. The Claude app and the
+//            editors have no command line to ask, so they wait for a restart.
 //
 // Whether the agent has used it since is the session log's job (sessions.ts).
 
@@ -122,11 +122,22 @@ export function codexVerdict(result: CliResult): Step {
   return { id: "agent", state: "failed", text: `Codex doesn't see it: ${said.replace(/^Error:\s*/, "") || `exit ${result.code}`}` };
 }
 
+/** What each agent without a CLI to ask needs before it loads the file. */
+function restartStep(id: Exclude<AgentId, "claude-code" | "codex">, platform: NodeJS.Platform): Step {
+  const mac = platform === "darwin";
+  const text: Record<typeof id, string> = {
+    "claude-desktop": `The Claude app reads this file only when it opens. ${mac ? "Quit it with ⌘Q" : "Quit it from the tray icon"} and open it again.`,
+    cursor: "Cursor loads it in a new window or after a restart. In Cursor Settings, MCP should list clipcat with its tools.",
+    vscode: "VS Code loads it in a new window. Run MCP: List Servers from the Command Palette and start clipcat if it isn't running.",
+    windsurf: "Windsurf loads it after a restart, or when you refresh the MCP servers in Cascade.",
+    "lm-studio": `LM Studio loads it when it opens. ${mac ? "Quit it with ⌘Q" : "Quit it"} and open it again, then turn on clipcat in a chat's integrations.`,
+    gemini: "Gemini CLI loads it when it starts. Start a new gemini session and type /mcp.",
+  };
+  return { id: "agent", state: "waiting", text: text[id] };
+}
+
 async function agentStep(id: AgentId, deps: Required<CheckDeps>): Promise<Step> {
-  if (id === "claude-desktop") {
-    const quit = deps.platform === "darwin" ? "Quit it with ⌘Q" : "Quit it from the tray icon";
-    return { id: "agent", state: "waiting", text: `The Claude app reads this file only when it opens. ${quit} and open it again.` };
-  }
+  if (id !== "claude-code" && id !== "codex") return restartStep(id, deps.platform);
   const name = id === "claude-code" ? "claude" : "codex";
   const bin = resolveBinary(name, deps.host);
   if (!bin) {

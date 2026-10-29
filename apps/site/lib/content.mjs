@@ -123,7 +123,7 @@ export const PAGES = [
         ],
         h3: "Let Claude Code or Codex make the edits",
         detail:
-          "ClipCat includes an MCP server. Connect it in Settings, and Claude Code, Codex or the Claude app can open your projects, cut words, accept suggestions, make shorts and start exports while ClipCat is open. Each change is one step in ClipCat's undo history.",
+          "ClipCat includes an MCP server. Connect it in Settings, and Claude Code, Codex, the Claude app, Cursor, VS Code, Windsurf, LM Studio or Gemini CLI can open your projects, cut words, accept suggestions, make shorts and start exports while ClipCat is open. Each change is one step in ClipCat's undo history.",
         session: [
           "> cut the part about pricing, then make three shorts",
           "clipcat  get_transcript  launch-video",
@@ -217,7 +217,7 @@ export const PAGES = [
       {
         h2: "Let your coding agent make the edits",
         body: [
-          "Connect Claude Code, Codex or the Claude desktop app from ClipCat's settings, and the agent can read your projects, cut words, accept suggestions, start exports and import recordings while ClipCat is open. Every change goes through the same undo history as the editor.",
+          "Connect Claude Code, Codex, the Claude desktop app, Cursor, VS Code, Windsurf, LM Studio or Gemini CLI from ClipCat's settings, and the agent can read your projects, cut words, accept suggestions, start exports and import recordings while ClipCat is open. Every change goes through the same undo history as the editor.",
           "The [agent guide](/docs/agents) shows how to set it up and what to ask. The [help pages](/docs) cover every other part of the app.",
         ],
       },

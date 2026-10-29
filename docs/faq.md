@@ -53,7 +53,7 @@ Yes. Save a timeline from the **Export** tab. See [Export the video](export.md).
 
 ## Can Claude Code or Codex edit for me?
 
-Yes. Connect it in Settings and ask in plain words. See [Use ClipCat from Claude or Codex](agents.md).
+Yes. Connect it in Settings and ask in plain words. See [Use ClipCat from your coding agent](agents.md).
 
 ## Is ClipCat open source?
 

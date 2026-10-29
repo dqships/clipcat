@@ -17,7 +17,7 @@ Choose **Help > ClipCat Help**, or press Cmd+? on a Mac or F1 on Windows. The He
 
 The Help menu also has:
 
-- **Keyboard Shortcuts**, **Use ClipCat from Claude or Codex**, **Questions People Ask** and **Fix a Problem**, which open those pages.
+- **Keyboard Shortcuts**, **Use ClipCat from your coding agent**, **Questions People Ask** and **Fix a Problem**, which open those pages.
 - **Release Notes**, which opens the list of versions on GitHub.
 - **Report an Issue**, which opens a new GitHub issue with your ClipCat version and system filled in.
 - **Save Diagnostics**, which saves a zip for a bug report and shows it in Finder or File Explorer.
@@ -54,7 +54,7 @@ The Help menu also has:
 ## Set up and get help
 
 - [Settings](settings.md): every setting, from your coding agent to the speech models.
-- [Use ClipCat from Claude or Codex](agents.md): connect an agent and let it make edits for you, with every tool it gets.
+- [Use ClipCat from your coding agent](agents.md): connect an agent and let it make edits for you, with every tool it gets.
 - [Keyboard shortcuts](shortcuts.md): every key ClipCat answers to.
 - [Where your files are](files-and-privacy.md): what's saved where, and what leaves your computer.
 - [Questions people ask](faq.md): short answers about price, accounts, languages and more.

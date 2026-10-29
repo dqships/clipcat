@@ -13,7 +13,7 @@ In the library, choose **Add videos** and pick your recordings, or drag them ont
 
 ClipCat opens MP4, MOV, M4V, MKV, WebM and AVI videos, and MP3, WAV, M4A, AAC and FLAC audio. It reads your files where they are and doesn't copy them, so keep them where they are while you work on the project. The export reads the originals.
 
-To add another take to a project you already have, open it and choose **Record another take**, or ask a connected agent to import the file (see [Use ClipCat from Claude or Codex](agents.md)).
+To add another take to a project you already have, open it and choose **Record another take**, or ask a connected agent to import the file (see [Use ClipCat from your coding agent](agents.md)).
 
 ## What happens next
 

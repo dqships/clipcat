@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { type InstallEnv, connectAgent, healRegistrations, mcpStatus, serverSpec } from "./install";
+import { type InstallEnv, connectAgent, healRegistrations, mcpSetup, mcpStatus, serverSpec } from "./install";
 
 let root: string;
 let env: InstallEnv;
@@ -25,6 +25,11 @@ describe("MCP install", () => {
       ["claude-code", true, false],
       ["codex", false, false],
       ["claude-desktop", false, false],
+      ["cursor", false, false],
+      ["vscode", false, false],
+      ["windsurf", false, false],
+      ["lm-studio", false, false],
+      ["gemini", false, false],
     ]);
     await writeFile(join(env.home, ".claude.json"), JSON.stringify({ theme: "dark" }));
     await connectAgent(env, "claude-code", true);
@@ -38,6 +43,46 @@ describe("MCP install", () => {
 
     await connectAgent(env, "claude-code", false);
     expect(JSON.parse(await readFile(join(env.home, ".claude.json"), "utf8")).mcpServers).toEqual({});
+  });
+
+  it("writes each editor's own file, keeping its other settings", async () => {
+    await mkdir(join(env.appData, "Code", "User"), { recursive: true });
+    await writeFile(join(env.appData, "Code", "User", "mcp.json"), JSON.stringify({ servers: { other: { command: "x" } }, inputs: [] }));
+    await mkdir(join(env.home, ".gemini"), { recursive: true });
+    await writeFile(join(env.home, ".gemini", "settings.json"), JSON.stringify({ theme: "GitHub" }));
+    for (const id of ["cursor", "vscode", "windsurf", "lm-studio", "gemini"] as const) await connectAgent(env, id, true);
+
+    const read = async (...path: string[]) => JSON.parse(await readFile(join(...path), "utf8"));
+    const vscode = await read(env.appData, "Code", "User", "mcp.json");
+    expect(vscode.servers.other).toEqual({ command: "x" });
+    expect(vscode.inputs).toEqual([]);
+    expect(vscode.servers.clipcat).toMatchObject({ type: "stdio", command: "/app/ClipCat" });
+    expect(vscode).not.toHaveProperty("mcpServers");
+    expect((await read(env.home, ".cursor", "mcp.json")).mcpServers.clipcat.command).toBe("/app/ClipCat");
+    expect((await read(env.home, ".codeium", "windsurf", "mcp_config.json")).mcpServers.clipcat.command).toBe("/app/ClipCat");
+    expect((await read(env.home, ".lmstudio", "mcp.json")).mcpServers.clipcat.command).toBe("/app/ClipCat");
+    const gemini = await read(env.home, ".gemini", "settings.json");
+    expect(gemini.theme).toBe("GitHub");
+    expect(gemini.mcpServers.clipcat.env.CLIPCAT_SOCKET).toBe("/data/mcp.sock");
+
+    const status = await mcpStatus(env);
+    expect(status.filter((a) => a.connected).map((a) => a.id)).toEqual(["cursor", "vscode", "windsurf", "lm-studio", "gemini"]);
+    expect(status.find((a) => a.id === "vscode")!.entry).toContain('"servers"');
+    expect(status.find((a) => a.id === "gemini")!.detected).toBe(true);
+  });
+
+  it("won't rewrite a file with comments in it", async () => {
+    await mkdir(join(env.appData, "Code", "User"), { recursive: true });
+    await writeFile(join(env.appData, "Code", "User", "mcp.json"), `{\n  // mine\n  "servers": {}\n}\n`);
+    await expect(connectAgent(env, "vscode", true)).rejects.toThrow(/by hand/);
+  });
+
+  it("gives the setup for any other app", () => {
+    const setup = mcpSetup(env);
+    expect(setup.command).toBe("/app/ClipCat");
+    expect(setup.env.CLIPCAT_SOCKET).toBe("/data/mcp.sock");
+    expect(JSON.parse(setup.json).mcpServers.clipcat).toEqual({ command: setup.command, args: setup.args, env: setup.env });
+    expect(mcpSetup({ ...env, transient: true }).unavailable).toMatch(/Applications/);
   });
 
   it("won't connect from a translocated copy", async () => {

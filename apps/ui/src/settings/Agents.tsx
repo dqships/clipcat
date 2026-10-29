@@ -1,6 +1,6 @@
-import type { McpAgentIdValue, McpAgentValue, McpCheckStepValue } from "@clipcat/ipc";
-import { Check, Clock, LoaderCircle, Minus, Plug, RefreshCw, Unplug, X } from "lucide-react";
-import { useState } from "react";
+import type { McpAgentIdValue, McpAgentValue, McpCheckStepValue, McpSetupValue } from "@clipcat/ipc";
+import { Check, Clock, Copy, LoaderCircle, Minus, Plug, RefreshCw, Unplug, X } from "lucide-react";
+import { type ReactNode, useEffect, useState } from "react";
 import { bridge } from "../bridge";
 import { ICON_STROKE } from "../icons";
 import { AgentCli } from "./AgentCli";
@@ -37,6 +37,11 @@ const ASKS: Record<McpAgentIdValue, string> = {
   "claude-code": "Claude Code asks before it uses each ClipCat tool, unless you tell it to always allow one.",
   codex: "Whether Codex asks before it uses a ClipCat tool follows its approval setting.",
   "claude-desktop": "The Claude app asks before it uses each ClipCat tool, unless you tell it to always allow one.",
+  cursor: "Whether Cursor asks before it uses a ClipCat tool follows its run settings.",
+  vscode: "VS Code asks before it uses each ClipCat tool, unless you tell it to always allow one.",
+  windsurf: "Whether Windsurf asks before it uses a ClipCat tool follows its Cascade settings.",
+  "lm-studio": "LM Studio asks before it uses each ClipCat tool, unless you tell it to always allow one.",
+  gemini: "Gemini CLI asks before it uses each ClipCat tool, unless you tell it to always allow one.",
 };
 
 /** What to do so the agent's first session shows up here. */
@@ -44,6 +49,11 @@ const NEXT: Record<McpAgentIdValue, string> = {
   "claude-code": "Waiting for Claude Code. Start a new session and ask it to list your ClipCat projects.",
   codex: "Waiting for Codex. Start a new session (or reopen the Codex app) and ask it to list your ClipCat projects.",
   "claude-desktop": "Waiting for the Claude app. It connects when it opens again.",
+  cursor: "Waiting for Cursor. Open a new window and ask the agent to list your ClipCat projects.",
+  vscode: "Waiting for VS Code. Open a new window, then ask Copilot's agent mode to list your ClipCat projects.",
+  windsurf: "Waiting for Windsurf. Restart it and ask Cascade to list your ClipCat projects.",
+  "lm-studio": "Waiting for LM Studio. Open it again, turn on clipcat in a chat, and ask it to list your ClipCat projects.",
+  gemini: "Waiting for Gemini CLI. Start a new gemini session and ask it to list your ClipCat projects.",
 };
 
 /** The last step, from what really arrived on ClipCat's socket; it updates on its own. */
@@ -81,6 +91,62 @@ function Steps({ agent, steps }: { agent: McpAgentValue; steps: McpCheckStepValu
         );
       })}
     </ol>
+  );
+}
+
+/** A value from the setup, with a button that copies it. */
+function CopyLine({ label, value, children }: { label: string; value: string; children?: ReactNode }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => void navigator.clipboard.writeText(value).then(() => setCopied(true));
+  const name = label === "JSON" ? label : label.toLowerCase();
+  return (
+    <div className="setup__line">
+      <div className="setup__head">
+        <span className="field__label">{label}</span>
+        <button type="button" className="button button--icon" aria-label={copied ? `Copied ${name}` : `Copy ${name}`} title="Copy" onClick={copy}>
+          {copied ? <Check className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden /> : <Copy className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />}
+        </button>
+      </div>
+      {children ?? <pre className="agents__code">{value}</pre>}
+    </div>
+  );
+}
+
+/**
+ * For an MCP app ClipCat doesn't list: the exact command, arguments and
+ * environment this copy of ClipCat needs, as JSON and as the parts an app's
+ * form asks for.
+ */
+function OtherApp() {
+  const [setup, setSetup] = useState<McpSetupValue | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    bridge()?.invoke("mcp:setup").then(setSetup, (e: unknown) => setError(message(e)));
+  }, []);
+  const env = setup ? Object.entries(setup.env).map(([k, v]) => `${k}=${v}`).join("\n") : "";
+  return (
+    <details className="agents__more">
+      <summary>Set up another MCP app</summary>
+      <p className="settings__body">
+        Any app that runs local (stdio) MCP servers can use ClipCat. Paste the JSON into its MCP settings file, inside its list of servers, or
+        fill in its form with the parts below. Keep ClipCat open while you work. ClipCat doesn't keep this one up to date, so copy it again if
+        you move the app.
+      </p>
+      {error && (
+        <p className="notice notice--danger" role="alert">
+          {error}
+        </p>
+      )}
+      {setup?.unavailable && <p className="settings__hint">{setup.unavailable}</p>}
+      {setup && !setup.unavailable && (
+        <div className="setup__lines">
+          <CopyLine label="JSON" value={setup.json} />
+          <CopyLine label="Command" value={setup.command} />
+          <CopyLine label="Arguments" value={setup.args.join("\n")} />
+          <CopyLine label="Environment" value={env} />
+        </div>
+      )}
+    </details>
   );
 }
 
@@ -133,86 +199,104 @@ export function Agents({ agents, onAgents: setAgents }: { agents: McpAgentValue[
     else setChecks(({ [agent.id]: _gone, ...rest }) => rest);
   };
 
-  return (
-    <ul className="agents" aria-label="Coding agents">
-      {(agents ?? []).map((agent) => {
-        const steps = checks[agent.id];
-        const error = errors[agent.id];
-        const working = busy !== null || steps === "running";
-        return (
-          <li key={agent.id} className="agents__item">
-            <div className="agents__row">
-              <div className="agents__text">
-                <span className="agents__name">{agent.label}</span>
-                <span className="agents__state" role="status">
-                  {summary(agent)}
-                </span>
-                <span className="agents__path" title={agent.config}>
-                  {short(agent.config)}
-                </span>
-              </div>
-              <div className="agents__actions">
-                {agent.connected && (
-                  <button type="button" className="button" disabled={working} aria-label={`Test ${agent.label}`} onClick={() => void check(agent.id)}>
-                    <RefreshCw className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
-                    Test
-                  </button>
-                )}
-                {agent.connected ? (
-                  <button type="button" className="button" disabled={working} aria-label={`Disconnect ${agent.label}`} onClick={() => void connect(agent, false)}>
-                    <Unplug className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
-                    {busy === agent.id ? "Removing…" : "Disconnect"}
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    className="button button--primary"
-                    disabled={working || agent.unavailable !== null || confirming === agent.id}
-                    aria-label={`Connect ${agent.label}`}
-                    aria-expanded={confirming === agent.id}
-                    onClick={() => setConfirming(agent.id)}
-                  >
-                    <Plug className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
-                    {busy === agent.id ? "Adding…" : "Connect"}
-                  </button>
-                )}
-              </div>
+  const row = (agent: McpAgentValue) => {
+    const steps = checks[agent.id];
+    const error = errors[agent.id];
+    const working = busy !== null || steps === "running";
+    return (
+      <li key={agent.id} className="agents__item">
+        <div className="agents__row">
+          <div className="agents__text">
+            <span className="agents__name">{agent.label}</span>
+            <span className="agents__state" role="status">
+              {summary(agent)}
+            </span>
+            <span className="agents__path" title={agent.config}>
+              {short(agent.config)}
+            </span>
+          </div>
+          <div className="agents__actions">
+            {agent.connected && (
+              <button type="button" className="button" disabled={working} aria-label={`Test ${agent.label}`} onClick={() => void check(agent.id)}>
+                <RefreshCw className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
+                Test
+              </button>
+            )}
+            {agent.connected ? (
+              <button type="button" className="button" disabled={working} aria-label={`Disconnect ${agent.label}`} onClick={() => void connect(agent, false)}>
+                <Unplug className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
+                {busy === agent.id ? "Removing…" : "Disconnect"}
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="button button--primary"
+                disabled={working || agent.unavailable !== null || confirming === agent.id}
+                aria-label={`Connect ${agent.label}`}
+                aria-expanded={confirming === agent.id}
+                onClick={() => setConfirming(agent.id)}
+              >
+                <Plug className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
+                {busy === agent.id ? "Adding…" : "Connect"}
+              </button>
+            )}
+          </div>
+        </div>
+        {CLI_OF[agent.id] && <AgentCli cli={CLI_OF[agent.id]!} />}
+        {confirming === agent.id && (
+          <div className="agents__confirm" role="group" aria-labelledby={`confirm-${agent.id}`}>
+            <p id={`confirm-${agent.id}`} className="agents__ask">
+              Add ClipCat to {agent.label}?
+            </p>
+            <p className="settings__body">
+              ClipCat adds this entry to <span className="agents__file">{short(agent.config)}</span>. Nothing else in the file changes, and Disconnect
+              takes it out again.
+            </p>
+            <pre className="agents__code">{agent.entry}</pre>
+            <p className="settings__hint">
+              There's no account to sign in to. {agent.label} starts a small ClipCat helper that talks to the open ClipCat app over a private
+              connection only your user account on this computer can open. {ASKS[agent.id]}
+            </p>
+            <div className="settings__actions">
+              <button type="button" className="button button--primary" onClick={() => void connect(agent, true)}>
+                <Plug className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
+                Add to {agent.label}
+              </button>
+              <button type="button" className="button" onClick={() => setConfirming(null)}>
+                Cancel
+              </button>
             </div>
-            {CLI_OF[agent.id] && <AgentCli cli={CLI_OF[agent.id]!} />}
-            {confirming === agent.id && (
-              <div className="agents__confirm" role="group" aria-labelledby={`confirm-${agent.id}`}>
-                <p id={`confirm-${agent.id}`} className="agents__ask">
-                  Add ClipCat to {agent.label}?
-                </p>
-                <p className="settings__body">
-                  ClipCat adds this entry to <span className="agents__file">{short(agent.config)}</span>. Nothing else in the file changes, and Disconnect
-                  takes it out again.
-                </p>
-                <pre className="agents__code">{agent.entry}</pre>
-                <p className="settings__hint">
-                  There's no account to sign in to. {agent.label} starts a small ClipCat helper that talks to the open ClipCat app over a private
-                  connection only your user account on this computer can open. {ASKS[agent.id]}
-                </p>
-                <div className="settings__actions">
-                  <button type="button" className="button button--primary" onClick={() => void connect(agent, true)}>
-                    <Plug className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
-                    Add to {agent.label}
-                  </button>
-                  <button type="button" className="button" onClick={() => setConfirming(null)}>
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            )}
-            {error && (
-              <p className="notice notice--danger" role="alert">
-                {error}
-              </p>
-            )}
-            {steps && agent.connected && <Steps agent={agent} steps={steps} />}
-          </li>
-        );
-      })}
-    </ul>
+          </div>
+        )}
+        {error && (
+          <p className="notice notice--danger" role="alert">
+            {error}
+          </p>
+        )}
+        {steps && agent.connected && <Steps agent={agent} steps={steps} />}
+      </li>
+    );
+  };
+
+  // Apps on this computer (or already connected) come first; the rest wait
+  // behind one line, so the list stays short for what's really installed.
+  const found = (agents ?? []).filter((a) => a.detected || a.connected);
+  const missing = (agents ?? []).filter((a) => !a.detected && !a.connected);
+
+  return (
+    <>
+      <ul className="agents" aria-label="Coding agents">
+        {found.map(row)}
+      </ul>
+      {missing.length > 0 && (
+        <details className="agents__more" open={found.length === 0 || missing.some((a) => a.id === confirming || a.id === busy)}>
+          <summary>Not found on this computer: {missing.map((a) => a.label).join(", ")}</summary>
+          <ul className="agents" aria-label="Agents not found on this computer">
+            {missing.map(row)}
+          </ul>
+        </details>
+      )}
+      <OtherApp />
+    </>
   );
 }

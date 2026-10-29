@@ -200,10 +200,14 @@ are mixed into one so transcription hears them together), kept in
 `Movies/ClipCat` (`Videos\ClipCat` on Windows), since it is the project's
 source, and imported like any other video.
 
-Claude Code, Codex and the Claude desktop app can drive ClipCat from outside
-it. Settings (the gear in the library) adds ClipCat's MCP server to each
-agent's config: `~/.claude.json`, `~/.codex/config.toml` or
-`claude_desktop_config.json`. The entry runs ClipCat's own executable as Node
+Claude Code, Codex, the Claude desktop app, Cursor, VS Code, Windsurf, LM
+Studio and Gemini CLI can drive ClipCat from outside it. Settings (the gear in
+the library) adds ClipCat's MCP server to each agent's config:
+`~/.claude.json`, `~/.codex/config.toml`, `claude_desktop_config.json`,
+`~/.cursor/mcp.json`, VS Code's user `mcp.json` (under `servers`),
+`~/.codeium/windsurf/mcp_config.json`, `~/.lmstudio/mcp.json` or
+`~/.gemini/settings.json`. Any other stdio MCP client can use the entry shown
+under "Set up another MCP app". The entry runs ClipCat's own executable as Node
 (`ELECTRON_RUN_AS_NODE=1`) on `dist/mcp.cjs`, a small bridge that pipes the
 agent's stdio to a socket in the app's data folder (a named pipe on Windows),
 so there is no port and no token. The tools read projects and the numbered
