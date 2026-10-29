@@ -28,14 +28,15 @@ Connect Claude Code, Codex, the Claude desktop app, Cursor, VS Code, Windsurf, L
 
 Under **How to use it**, **Steps for** picks the agent to show the steps for.
 
-### Install or update Claude Code and Codex
+### Install or update Claude Code, Codex and Gemini CLI
 
-The Claude Code and Codex rows also show the version of the command-line tool on your computer next to the newest release.
+The Claude Code, Codex and Gemini CLI rows also show the version of the command-line tool on your computer next to the newest release.
 
-- **Install Claude Code** or **Install Codex** runs its maker's own install script.
+- **Install Claude Code** or **Install Codex** runs its maker's own install script. **Install Gemini CLI** runs `npm install -g @google/gemini-cli`, or `brew install gemini-cli` if you have Homebrew but not npm. With neither, the row says to install Node.js first.
 - **Update to** (a version) updates it the way it was installed: its own updater, npm, bun, Homebrew or winget, so you don't end up with two copies.
 - Next to the button is the exact command it runs. Its output shows while it runs.
 - A copy that came inside another app is left to that app, and the row says how to update it.
+- The desktop apps (the Claude desktop app, Cursor, VS Code, Windsurf and LM Studio) can't be installed from ClipCat. When one isn't on your computer, its row has **Get** (the app's name), which opens its maker's download page.
 - If your Codex is older than another Codex on your computer (usually the one inside the ChatGPT app), the row warns that the newer one's settings may not work in it.
 
 The **How to use it** section under the agents walks through the first session for each agent, with prompts to copy. See [Use ClipCat from your coding agent](agents.md).

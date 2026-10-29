@@ -696,6 +696,7 @@ body {
   font: inherit;
   font-size: var(--text-callout);
   font-weight: var(--font-weight-medium);
+  text-decoration: none;
   cursor: pointer;
 }
 

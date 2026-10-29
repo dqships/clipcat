@@ -1,5 +1,5 @@
 import type { McpAgentIdValue, McpAgentValue, McpCheckStepValue, McpSetupValue } from "@clipcat/ipc";
-import { Check, Clock, Copy, LoaderCircle, Minus, Plug, RefreshCw, Unplug, X } from "lucide-react";
+import { Check, Clock, Copy, Download, LoaderCircle, Minus, Plug, RefreshCw, Unplug, X } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import { bridge } from "../bridge";
 import { ICON_STROKE } from "../icons";
@@ -151,7 +151,16 @@ function OtherApp() {
 }
 
 /** The command-line tool behind an agent row, for the ones that have one. */
-const CLI_OF: Partial<Record<McpAgentIdValue, "claude" | "codex">> = { "claude-code": "claude", codex: "codex" };
+const CLI_OF: Partial<Record<McpAgentIdValue, "claude" | "codex" | "gemini">> = { "claude-code": "claude", codex: "codex", gemini: "gemini" };
+
+/** Where the desktop apps are downloaded from: each maker's own page, since ClipCat can't install an app for you. */
+const DOWNLOAD: Partial<Record<McpAgentIdValue, { site: string; url: string }>> = {
+  "claude-desktop": { site: "claude.ai/download", url: "https://claude.ai/download" },
+  cursor: { site: "cursor.com/download", url: "https://cursor.com/download" },
+  vscode: { site: "code.visualstudio.com/download", url: "https://code.visualstudio.com/download" },
+  windsurf: { site: "windsurf.com/download", url: "https://windsurf.com/download" },
+  "lm-studio": { site: "lmstudio.ai/download", url: "https://lmstudio.ai/download" },
+};
 
 /**
  * The coding agents ClipCat can be added to. Connect shows exactly what it
@@ -243,6 +252,15 @@ export function Agents({ agents, onAgents: setAgents }: { agents: McpAgentValue[
           </div>
         </div>
         {CLI_OF[agent.id] && <AgentCli cli={CLI_OF[agent.id]!} />}
+        {!agent.detected && DOWNLOAD[agent.id] && (
+          <div className="cli__actions">
+            <a className="button" href={DOWNLOAD[agent.id]!.url} target="_blank" rel="noreferrer">
+              <Download className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
+              Get {agent.label}
+            </a>
+            <code className="cli__command">{DOWNLOAD[agent.id]!.site}</code>
+          </div>
+        )}
         {confirming === agent.id && (
           <div className="agents__confirm" role="group" aria-labelledby={`confirm-${agent.id}`}>
             <p id={`confirm-${agent.id}`} className="agents__ask">

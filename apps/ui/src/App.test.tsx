@@ -889,6 +889,9 @@ describe("App", () => {
     expect(await screen.findByText("Not found on this computer: Cursor, Gemini CLI")).toBeTruthy();
     expect(screen.getByRole("list", { name: "Coding agents" }).textContent).not.toContain("Cursor");
     expect(screen.getByRole("button", { name: "Connect Cursor" })).toBeTruthy();
+    // An app that isn't installed links to its maker's download page.
+    expect(screen.getByRole("link", { name: "Get Cursor" }).getAttribute("href")).toBe("https://cursor.com/download");
+    expect(screen.queryByRole("link", { name: "Get Claude Code" })).toBeNull();
 
     expect(screen.getByText("Set up another MCP app")).toBeTruthy();
     fireEvent.click(await screen.findByRole("button", { name: "Copy environment" }));

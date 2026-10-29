@@ -130,13 +130,13 @@ export const JobEvent = z.object({
 });
 
 /** The agent command-line tools ClipCat can install and update. */
-export const CliId = z.enum(["claude", "codex"]);
+export const CliId = z.enum(["claude", "codex", "gemini"]);
 
 /** One CLI, as Settings shows it: the user's copy, the newest release, and what its button does. */
 export const CliStatus = z.object({
   id: CliId,
   label: z.string(),
-  /** The `claude` or `codex` the user's terminal runs; null when there is none. */
+  /** The `claude`, `codex` or `gemini` the user's terminal runs; null when there is none. */
   path: z.string().nullable(),
   version: z.string().nullable(),
   source: z.enum(["native", "npm", "bun", "brew", "winget", "app", "unknown"]).nullable(),
