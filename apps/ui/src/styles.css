@@ -57,7 +57,9 @@ body {
 }
 
 .titlebar__action,
-.titlebar .button {
+.titlebar .button,
+.titlebar__name,
+.titlebar .name-field {
   -webkit-app-region: no-drag;
 }
 
@@ -72,6 +74,26 @@ body {
   font-size: var(--text-callout);
   line-height: var(--leading-callout);
   font-weight: var(--font-weight-semibold);
+}
+
+/* The project's name: click it to rename. */
+.titlebar__name {
+  padding: 0 var(--space-1);
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: text;
+}
+
+.titlebar__name:hover {
+  border-color: var(--color-border);
+}
+
+.titlebar__name:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
 }
 
 .library {
@@ -808,6 +830,63 @@ body {
   background: var(--color-surface);
 }
 
+/* A menu of actions on one thing, at the pointer or under its button. */
+.menu {
+  position: fixed;
+  z-index: 2;
+  display: grid;
+  min-width: calc(var(--space-9) * 2);
+  margin: 0;
+  padding: var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  background: var(--color-surface-raised);
+  box-shadow: var(--shadow-raised);
+  list-style: none;
+}
+
+.menu__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: var(--control-height);
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.menu__item:hover,
+.menu__item:focus-visible {
+  outline: none;
+  background: var(--color-surface);
+}
+
+.menu__item:focus-visible {
+  box-shadow: var(--focus-ring);
+}
+
+.menu__item--danger {
+  color: var(--color-danger);
+}
+
+/* A name edited in place, at the size of the title it replaces. */
+.name-field {
+  width: 100%;
+  min-width: 0;
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+.titlebar .name-field {
+  width: calc(var(--space-9) * 4);
+}
+
 /* Background work: a label and a bar. */
 .job {
   display: grid;
@@ -1038,6 +1117,30 @@ body {
   line-height: var(--leading-caption);
 }
 
+/* Transport: the preview's own play, shuttle and frame-step controls, with the time in the edit. */
+.transport {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+}
+
+.transport__time,
+.transport__rate {
+  font-size: var(--text-caption);
+  line-height: var(--leading-caption);
+  font-variant-numeric: tabular-nums;
+}
+
+.transport__time {
+  margin-left: var(--space-3);
+  color: var(--color-text-muted);
+}
+
+.transport__rate {
+  font-weight: var(--font-weight-semibold);
+}
+
 /* Waveform: the waveform under the preview, cuts shaded, suggestions outlined. */
 .wave {
   position: relative;
@@ -1205,6 +1308,37 @@ body {
   font-weight: var(--font-weight-semibold);
 }
 
+/* A rejected cut left its words in. */
+.proposal-row--kept .proposal__words {
+  color: var(--color-text-muted);
+  text-decoration: none;
+}
+
+.proposal__status--rejected {
+  color: var(--color-text-muted);
+}
+
+/* Decided suggestions, folded under the ones still to review. */
+.history {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.history > summary {
+  cursor: pointer;
+  color: var(--color-text-muted);
+  font-size: var(--text-caption);
+}
+
+.history > summary:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.history[open] > summary {
+  margin-bottom: var(--space-2);
+}
+
 .proposal__reason {
   font-size: var(--text-body);
 }
@@ -1338,13 +1472,13 @@ body {
 .captions--box .captions__line {
   padding: 0 var(--space-2);
   border-radius: var(--radius-control);
-  background: color-mix(in srgb, black 60%, transparent);
+  background: color-mix(in srgb, var(--caption-box) 62%, transparent);
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
 }
 
 .captions__word--now {
-  color: var(--color-accent);
+  color: var(--caption-highlight);
 }
 
 /* Docks: a side dock is a column, the bottom dock a row. Two panels in one
@@ -1558,6 +1692,69 @@ body {
 .field__range {
   min-height: var(--control-height);
   accent-color: var(--color-accent);
+}
+
+/* Caption colours: ready-made swatches, then the system picker. The picked one wears splice tape. */
+.color-field {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.color-field:disabled {
+  opacity: 0.5;
+}
+
+.color-field__swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-1) 0;
+}
+
+.color-field__swatch,
+.color-field__other {
+  width: var(--space-5);
+  height: var(--space-5);
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  cursor: pointer;
+}
+
+.color-field__other {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+}
+
+.color-field__other input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.color-field__swatch[aria-pressed="true"],
+.color-field__other--on {
+  box-shadow: var(--focus-ring);
+}
+
+.color-field__swatch:focus-visible,
+.color-field__other:focus-within {
+  outline: none;
+  border-color: var(--color-text);
+  box-shadow: var(--focus-ring);
+}
+
+.color-field:disabled .color-field__swatch,
+.color-field:disabled .color-field__other {
+  cursor: default;
 }
 
 .export {
@@ -1833,15 +2030,72 @@ body {
   grid-template-columns: auto minmax(0, 1fr) auto;
 }
 
-/* The thumbnail draws at 1280×720 and shows at the panel's width. */
+/* The thumbnail draws at the video's shape (1280×720, or 1080×1920 for a
+   tall video) and shows at the panel's width; a tall one at half of it. */
+.thumbnail__stage {
+  position: relative;
+  touch-action: none;
+}
+
+.thumbnail__stage--tall {
+  width: 50%;
+  margin-inline: auto;
+}
+
 .thumbnail__canvas {
   display: block;
   width: 100%;
   height: auto;
-  aspect-ratio: 16 / 9;
   border-radius: var(--radius-control);
   border: 1px solid var(--color-border);
   background: var(--color-surface);
+}
+
+/* The text's box: a dashed outline of splice tape on hover or focus, with a
+   corner to resize it. */
+.thumbnail__text {
+  position: absolute;
+  border: 1px dashed transparent;
+  border-radius: var(--radius-control);
+  cursor: move;
+  transition: border-color var(--motion-duration) var(--motion-spring);
+}
+
+.thumbnail__stage:hover .thumbnail__text,
+.thumbnail__text:focus-visible,
+.thumbnail__text:focus-within {
+  border-color: var(--color-accent);
+}
+
+.thumbnail__text:focus-visible,
+.thumbnail__handle:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.thumbnail__handle {
+  position: absolute;
+  right: calc(var(--space-3) / -2);
+  bottom: calc(var(--space-3) / -2);
+  width: var(--space-3);
+  height: var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--color-accent);
+  cursor: nwse-resize;
+  opacity: 0;
+  transition: opacity var(--motion-duration) var(--motion-spring);
+}
+
+.thumbnail__stage:hover .thumbnail__handle,
+.thumbnail__text:focus-within .thumbnail__handle {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thumbnail__text,
+  .thumbnail__handle {
+    transition: none;
+  }
 }
 
 /* The tools panel: tabs in the order the work goes. Hidden tabs stay mounted. */
@@ -1850,10 +2104,17 @@ body {
   gap: var(--space-3);
 }
 
+/* The tabs stay at the top of the panel while its tools scroll under them. */
 .tools__tabs {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-1);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-background);
 }
 
 .tools__panel {

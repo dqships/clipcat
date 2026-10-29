@@ -1,5 +1,5 @@
-import { type Project, applyCase, buildTimeline, captionCues, captionPixels, outputWords, sourceToOutput } from "@clipcat/core";
-import { useMemo } from "react";
+import { type Project, applyCase, buildTimeline, captionCues, captionHighlight, captionPixels, outputWords, sourceToOutput } from "@clipcat/core";
+import { type CSSProperties, useMemo } from "react";
 import type { Playhead } from "./Preview";
 
 /** The frames the preview stands in for; cue lengths, type size and b-roll windows follow the frame's shape. */
@@ -33,7 +33,15 @@ export function CaptionOverlay({ project, playhead }: { project: Project; playhe
       className={classes.join(" ")}
       aria-hidden
       // The export's pixel size, as a share of the frame's width.
-      style={{ top: `${c.position * 100}%`, fontSize: `calc(${captionPixels(c.size, frame)} / ${frame.width} * 100cqw)`, color: c.color }}
+      style={
+        {
+          top: `${c.position * 100}%`,
+          fontSize: `calc(${captionPixels(c.size, frame)} / ${frame.width} * 100cqw)`,
+          color: c.color,
+          "--caption-box": c.boxColor,
+          "--caption-highlight": captionHighlight(c.color),
+        } as CSSProperties
+      }
     >
       <span className="captions__line">
         {cue.words.map((w, i) => (
