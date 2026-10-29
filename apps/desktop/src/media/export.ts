@@ -455,15 +455,25 @@ export function audioCommand(plan: AudioPlan): { graph: string; args: string[] }
 /** The concat list for the chunks, relative to the folder it sits in. */
 export const chunkList = (files: string[]) => `ffconcat version 1.0\n${files.map((f) => `file '${f}'`).join("\n")}\n`;
 
-/** Joins the chunks and the sound without re-encoding, with the index up front for streaming. */
-export function muxArgs(list: string, audio: string, out: string, meta: string | null = null): string[] {
+/**
+ * Joins the chunks and the sound without re-encoding, with the index up
+ * front for streaming. The title and chapters
+ * come from `meta`; `cover`, a picture, goes in as the file's cover art (an
+ * attached picture), which players and file browsers show for the video.
+ */
+export function muxArgs(list: string, audio: string, out: string, meta: string | null = null, cover: string | null = null): string[] {
+  const coverInput = meta ? 3 : 2;
   return [
     ...BASE_ARGS,
     "-f", "concat", "-safe", "0", "-i", list,
     "-i", audio,
-    ...(meta ? ["-f", "ffmetadata", "-i", meta, "-map_metadata", "2", "-map_chapters", "2"] : []),
+    ...(meta ? ["-f", "ffmetadata", "-i", meta] : []),
+    ...(cover ? ["-i", cover] : []),
+    ...(meta ? ["-map_metadata", "2", "-map_chapters", "2"] : []),
     "-map", "0:v:0", "-map", "1:a:0",
+    ...(cover ? ["-map", `${coverInput}:v:0`] : []),
     "-c", "copy",
+    ...(cover ? ["-c:v:1", "png", "-disposition:v:1", "attached_pic"] : []),
     "-movflags", "+faststart",
     out,
   ];
