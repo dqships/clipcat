@@ -39,10 +39,18 @@ export function validateCorrections(input: AgentCorrections, words: Word[]): { f
   return { fixes, errors };
 }
 
+/** `word` spelled `text`, keeping what was first heard; spelling it as heard again drops the note. */
+export function respell(word: Word, text: string): Word {
+  const heard = word.heard ?? word.text;
+  if (text !== heard) return { ...word, text, heard };
+  const { heard: _, ...rest } = word;
+  return { ...rest, text };
+}
+
 /** The transcript with `fixes` applied, keeping what was first heard. */
 export function applyCorrections(transcript: Word[], fixes: Map<string, string>): Word[] {
   return transcript.map((w) => {
     const text = fixes.get(w.id);
-    return text === undefined ? w : { ...w, text, heard: w.heard ?? w.text };
+    return text === undefined ? w : respell(w, text);
   });
 }

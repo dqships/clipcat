@@ -141,7 +141,7 @@ export function AgentGuide({ agents }: { agents: McpAgentValue[] | null }) {
         <ul className="guide__list">
           <li>Read your projects, their transcripts, the edits ClipCat's AI editor suggested, and what ClipCat is working on.</li>
           <li>Cut and restore words, and accept or reject suggested edits.</li>
-          <li>Add zooms, b-roll from the project's media, motion slides, sound effects and chapters, and change the captions, speed, aspect ratio and music volume.</li>
+          <li>Add zooms, b-roll from the project's media, motion slides, sound effects and chapters, fix misheard words, and change the captions, speed, aspect ratio and music volume.</li>
           <li>Start the jobs you'd start here: importing recordings, AI cuts, shorts, the write-up, video exports and Final Cut, Premiere or EDL timelines.</li>
           <li>Every change is one undo step, just like an edit you make yourself. Nothing deletes your footage.</li>
         </ul>
