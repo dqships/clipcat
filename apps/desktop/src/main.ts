@@ -3,7 +3,7 @@
 // IPC handlers, the MCP socket outside agents drive it through, and the
 // recordings in progress. All media work lives here, never in the renderer.
 
-import { BrowserWindow, app, autoUpdater, crashReporter, desktopCapturer, dialog, nativeTheme, net, safeStorage, session, shell, systemPreferences } from "electron";
+import { BrowserWindow, Menu, app, autoUpdater, crashReporter, desktopCapturer, dialog, nativeTheme, net, safeStorage, session, shell, systemPreferences } from "electron";
 import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
@@ -48,6 +48,8 @@ import { SLIDE_COLORS, SLIDE_CSP, SLIDE_FONTS, fontFaces, slidePage } from "./sl
 import { renderStills, renderVideo } from "./slides/render";
 import { diagnosticsZip } from "./diagnostics/bundle";
 import { MainLog } from "./diagnostics/log";
+import { RELEASES_URL, issueUrl, openHelp } from "./help";
+import { menuTemplate } from "./menu";
 import { handleSquirrelEvent } from "./squirrel";
 import { Updater } from "./update";
 import { ProjectStore } from "./store/projects";
@@ -481,6 +483,46 @@ if (!squirrelLaunch && !app.requestSingleInstanceLock()) {
       const slide = (await store.get(host)).assets.find((a) => a.id === id)?.slide;
       return slide?.html ? slideHtml(slide.html, slide.look) : null;
     }, SLIDE_CSP);
+    const showLogs = async () => {
+      const dir = dirname(mainLog.path);
+      await mkdir(dir, { recursive: true });
+      await shell.openPath(dir);
+    };
+    /** Saves the diagnostics zip where the user picks, from the dialog over `win`; null when they cancel. */
+    const saveDiagnostics = async (win: BrowserWindow | null): Promise<string | null> => {
+      const day = new Date().toISOString().slice(0, 10);
+      const options: Electron.SaveDialogOptions = {
+        title: "Save diagnostics",
+        defaultPath: join(app.getPath("desktop"), `ClipCat diagnostics ${day}.zip`),
+        filters: [{ name: "Zip", extensions: ["zip"] }],
+      };
+      const result = win ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options);
+      if (result.canceled || !result.filePath) return null;
+      const path = extname(result.filePath).toLowerCase() === ".zip" ? result.filePath : `${result.filePath}.zip`;
+      // Each part is asked for on its own, so one that fails is noted instead of losing the bundle.
+      const part = <T>(run: () => Promise<T> | T) => Promise.resolve().then(run).catch((e: unknown) => ({ failed: e instanceof Error ? e.message : String(e) }));
+      const about = {
+        createdAt: new Date().toISOString(),
+        versions: { app: app.getVersion(), electron: process.versions.electron, chrome: process.versions.chrome, node: process.versions.node },
+        system: { platform: process.platform, arch: process.arch, release: release(), locale: app.getLocale(), memory: totalmem(), gpu: app.getGPUFeatureStatus() },
+        info: await part(appInfo),
+        ai: await part(aiStatus),
+        settings: await part(() => settings.get()),
+        agents: await part(agentStatus),
+        mcp: await part(() => mcp),
+        update: updater.current,
+      };
+      const zip = await diagnosticsZip({
+        about,
+        logs: [mainLog.oldPath, mainLog.path].filter((f) => existsSync(f)),
+        jobs: jobs.list(null),
+        projectsDir: join(app.getPath("userData"), "projects"),
+        crashDir: app.getPath("crashDumps"),
+        home: homedir(),
+      });
+      await writeFile(path, zip);
+      return path;
+    };
     registerIpc(
       {
         "app:info": () => appInfo(),
@@ -717,46 +759,9 @@ if (!squirrelLaunch && !app.requestSingleInstanceLock()) {
         "update:open": async () => {
           if (updater.current.page) await shell.openExternal(updater.current.page);
         },
-        "app:reveal-logs": async () => {
-          const dir = dirname(mainLog.path);
-          await mkdir(dir, { recursive: true });
-          await shell.openPath(dir);
-        },
-        "app:diagnostics": async (_, event) => {
-          const win = BrowserWindow.fromWebContents(event.sender);
-          const day = new Date().toISOString().slice(0, 10);
-          const options: Electron.SaveDialogOptions = {
-            title: "Save diagnostics",
-            defaultPath: join(app.getPath("desktop"), `ClipCat diagnostics ${day}.zip`),
-            filters: [{ name: "Zip", extensions: ["zip"] }],
-          };
-          const result = win ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options);
-          if (result.canceled || !result.filePath) return { path: null };
-          const path = extname(result.filePath).toLowerCase() === ".zip" ? result.filePath : `${result.filePath}.zip`;
-          // Each part is asked for on its own, so one that fails is noted instead of losing the bundle.
-          const part = <T>(run: () => Promise<T> | T) => Promise.resolve().then(run).catch((e: unknown) => ({ failed: e instanceof Error ? e.message : String(e) }));
-          const about = {
-            createdAt: new Date().toISOString(),
-            versions: { app: app.getVersion(), electron: process.versions.electron, chrome: process.versions.chrome, node: process.versions.node },
-            system: { platform: process.platform, arch: process.arch, release: release(), locale: app.getLocale(), memory: totalmem(), gpu: app.getGPUFeatureStatus() },
-            info: await part(appInfo),
-            ai: await part(aiStatus),
-            settings: await part(() => settings.get()),
-            agents: await part(agentStatus),
-            mcp: await part(() => mcp),
-            update: updater.current,
-          };
-          const zip = await diagnosticsZip({
-            about,
-            logs: [mainLog.oldPath, mainLog.path].filter((f) => existsSync(f)),
-            jobs: jobs.list(null),
-            projectsDir: join(app.getPath("userData"), "projects"),
-            crashDir: app.getPath("crashDumps"),
-            home: homedir(),
-          });
-          await writeFile(path, zip);
-          return { path };
-        },
+        "app:reveal-logs": () => showLogs(),
+        "app:diagnostics": async (_, event) => ({ path: await saveDiagnostics(BrowserWindow.fromWebContents(event.sender)) }),
+        "help:open": ({ page }) => openHelp(page, { appOrigin: APP_ORIGIN, devUrl: DEV_URL }),
         "cli:status": async ({ id }) => cliStatus(id, await cliDeps()),
         "cli:run": async ({ id }) => {
           // One run per CLI: a second press while one is going waits for it.
@@ -776,6 +781,24 @@ if (!squirrelLaunch && !app.requestSingleInstanceLock()) {
         "mcp:check": async ({ agent }) => checkAgent(agent, { env: installEnv, host: await hostEnv, platform: process.platform }),
       },
       DEV_URL,
+    );
+    Menu.setApplicationMenu(
+      Menu.buildFromTemplate(
+        menuTemplate({
+          platform: process.platform,
+          help: (page) => openHelp(page, { appOrigin: APP_ORIGIN, devUrl: DEV_URL }),
+          open: (url) => void shell.openExternal(url),
+          issueUrl: () => issueUrl({ version: app.getVersion(), platform: process.platform, arch: process.arch, release: process.getSystemVersion() }),
+          releasesUrl: RELEASES_URL,
+          // From the menu, the saved zip is shown in Finder or Explorer, since no screen says where it went.
+          saveDiagnostics: () =>
+            void saveDiagnostics(BrowserWindow.getFocusedWindow() ?? mainWindow).then(
+              (path) => path && shell.showItemInFolder(path),
+              (e: unknown) => dialog.showErrorBox("Couldn't save diagnostics", e instanceof Error ? e.message : String(e)),
+            ),
+          showLogs: () => void showLogs(),
+        }),
+      ),
     );
     if (isSmokeRun()) startSmokeTimer();
     else {

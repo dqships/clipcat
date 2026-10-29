@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 const from = join(here, "..", "..", "ui", "dist");
 const to = join(here, "..", "ui");
-if (!existsSync(join(from, "index.html"))) throw new Error(`No built UI at ${from}; run the ui build first.`);
+if (!["index.html", "help.html"].every((page) => existsSync(join(from, page)))) throw new Error(`No built UI at ${from}; run the ui build first.`);
 rmSync(to, { recursive: true, force: true });
 cpSync(from, to, { recursive: true });
 console.log(`staged UI → ${to}`);

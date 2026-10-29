@@ -359,6 +359,8 @@ export const methods = {
   "app:diagnostics": { input: z.void(), output: z.object({ path: z.string().nullable() }) },
   /** Shows the log folder. */
   "app:reveal-logs": { input: z.void(), output: z.void() },
+  /** Opens the Help window at one page of the help (docs/<page>.md; "" for the overview). */
+  "help:open": { input: z.object({ page: z.string().regex(/^[a-z0-9-]*$/).max(60) }), output: z.void() },
   /** Where an agent CLI stands: installed version, newest release, and what Install or Update would run. */
   "cli:status": { input: z.object({ id: CliId }), output: CliStatus },
   /** Installs or updates an agent CLI with its official method; progress comes as cli:progress events. */

@@ -116,7 +116,9 @@ The help pages at `/docs` are a bin beside the viewer: the list of every page
 sits in a narrow left column on a hairline, the open one marked with a
 `--space-1` strip of splice tape, and the page reads on the right at 68
 characters wide, its sections split by hairlines. On a phone the list moves
-under the page, and a link under the title jumps to it.
+under the page, and a link under the title jumps to it. The app's Help window
+sets the same pages the same way, with the list in a `--color-surface` column
+of `--panel-min` and a search box at its top.
 
 ## The editor's panels
 
