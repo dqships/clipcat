@@ -321,6 +321,10 @@ describe("App", () => {
     emit("menu", { command: "settings" });
     expect(await screen.findByRole("heading", { level: 1, name: "Settings" })).toBeTruthy();
     await vi.waitFor(() => expect(invoke).toHaveBeenLastCalledWith("menu:state", { project: null }));
+
+    // Check for Updates opens Settings on the Updates page.
+    emit("menu", { command: "settings-updates" });
+    expect(await screen.findByRole("heading", { level: 2, name: "Updates" })).toBeTruthy();
   });
 
   it("leaves Undo to a text box that has focus", async () => {

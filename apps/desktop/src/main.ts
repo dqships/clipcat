@@ -572,7 +572,7 @@ if (!squirrelLaunch && !app.requestSingleInstanceLock()) {
             showLogs: () => void showLogs(),
             // Settings shows how the check goes.
             checkUpdates: () => {
-              sendCommand("settings");
+              sendCommand("settings-updates");
               void updater.check();
             },
             showProject: (id) => void shell.openPath(store.dir(id)),
