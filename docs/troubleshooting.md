@@ -9,13 +9,13 @@ updated: 2026-10-29
 
 ## The AI editor isn't ready
 
-The **AI editor** section on the **Edit** tab says what's wrong.
+The **AI editor** section on the **Edit** tab says what's wrong, and so does its row in **Settings > AI editor**.
 
 - **Claude Code or Codex isn't installed**: install it from [Settings](settings.md), or with its maker's instructions.
-- **It isn't signed in**: run `claude auth login` or `codex login` in a terminal, then choose **Check again**.
+- **It isn't signed in**: run `claude auth login` or `codex login` in a terminal, then choose **Check again** next to it in Settings.
 - **ClipCat can't find it**: ClipCat looks on your terminal's PATH and in the usual install folders. If it's somewhere else, set `CLIPCAT_CLAUDE_PATH` or `CLIPCAT_CODEX_PATH` to its full path and reopen ClipCat.
-- **Codex refuses the model**: an older Codex can't run a model a newer one set in `~/.codex/config.toml`. Update Codex from Settings, or pick a model on the **Edit** tab.
-- **The API key is refused**: check it on console.anthropic.com, then remove it and save it again.
+- **Codex refuses the model**: an older Codex can't run a model a newer one set in `~/.codex/config.toml`. Update Codex from Settings, or pick another model there.
+- **The API key is refused**: check it on console.anthropic.com, then remove it in Settings and save it again.
 
 ## A suggestion pass fails
 

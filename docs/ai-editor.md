@@ -1,6 +1,6 @@
 ---
 title: Review the edit your AI suggests in ClipCat
-description: Choose Claude Code, Codex or a Claude API key, ask for a first edit or one change, then accept or reject each suggested cut, zoom, b-roll and sound.
+description: Choose Claude Code, Codex or your own API key, ask for a first edit or one change, then accept or reject each suggested cut, zoom, b-roll and sound.
 order: 6
 updated: 2026-10-29
 ---
@@ -9,23 +9,19 @@ updated: 2026-10-29
 
 ClipCat's AI editor reads your transcript and suggests the first pass of the edit. Nothing changes until you accept a suggestion, and every decision can be undone or changed later.
 
-ClipCat has no AI service of its own. It uses the AI you pick: your Claude Code, your Codex, or the Claude API with your own key. The AI gets one tool, for handing back its suggestions, and no access to your files, your terminal or the web. ClipCat checks each suggestion against your transcript before showing it.
+ClipCat has no AI service of its own. It uses the AI you pick: your Claude Code, your Codex, or the Claude, OpenAI or OpenRouter API with your own key. The AI gets one tool, for handing back its suggestions, and no access to your files, your terminal or the web. ClipCat checks each suggestion against your transcript before showing it.
 
 ## Pick the AI
 
-The **AI editor** section is at the top of the **Edit** tab.
+Set up the AI once, in **Settings > AI editor**: which one runs, its model, and your Claude API key. See [Settings](settings.md#ai-editor).
 
-- **Use**: Claude Code, Codex or Claude API (your key). One that can't run yet says "(not set up)". Your choice is kept for every project.
-- **Model**, for Claude Code and Codex: leave it on the default to use the agent's own default model, or pick one. Codex lists the models your login can use.
-- **Model**, for the Claude API: Opus 5.5 (best), Sonnet 5.5, or Haiku 5.5 (cheapest).
+- **Claude Code** or **Codex**: ClipCat runs the `claude` or `codex` command already on your computer, signed in to your own plan. Install it and sign in once (`claude auth login` or `codex login` in a terminal), or install it from Settings.
+- **Claude API**, **OpenAI** or **OpenRouter**: paste your own key in Settings. Each run is billed to that account. OpenRouter runs many other makers' models, and how well they edit varies by model.
 
-### Claude Code or Codex
+The **AI editor** section at the top of the **Edit** tab shows the one in use:
 
-ClipCat runs the `claude` or `codex` command already on your computer, signed in to your own plan. Install it and sign in once (`claude auth login` or `codex login` in a terminal), or install it from [Settings](settings.md). If it isn't ready, the section says why. Fix it, then choose **Check again**.
-
-### Claude API
-
-Paste a key from console.anthropic.com and choose **Save key**. ClipCat tries the key with one call before saving it, then keeps it encrypted with your system's keychain. Each run is billed to your Anthropic account. **Remove key** deletes it.
+- **Use**: Claude Code, Codex, Claude API, OpenAI or OpenRouter. One that can't run yet says "(not set up)". Your choice is kept for every project.
+- Under it is the model it runs. **AI settings** opens the Settings page. If the AI can't run yet, the line says why and the button reads **Set up** (its name) instead.
 
 ## Ask for the first edit
 

@@ -9,11 +9,11 @@ updated: 2026-10-29
 
 ## What does ClipCat cost?
 
-Nothing. There's no account, trial, watermark or export limit. The AI suggestions use the Claude or ChatGPT plan you already pay for, or your own Claude API key, billed by Anthropic per use.
+Nothing. There's no account, trial, watermark or export limit. The AI suggestions use the Claude or ChatGPT plan you already pay for, or your own Claude, OpenAI or OpenRouter API key, billed per use by that company.
 
 ## Do I need an account?
 
-No. ClipCat has no account and no server. To use the AI editor, you need Claude Code or Codex signed in to your own plan, or a Claude API key.
+No. ClipCat has no account and no server. To use the AI editor, you need Claude Code or Codex signed in to your own plan, or your own Claude, OpenAI or OpenRouter API key.
 
 ## Can I use ClipCat without any AI?
 

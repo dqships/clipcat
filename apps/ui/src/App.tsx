@@ -14,7 +14,7 @@ export function App() {
   const [info, setInfo] = useState<AppInfoValue | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
-  // Settings, open on a page (or the last one opened).
+  // Settings, open on a page, over the library or the open project.
   const [settings, setSettings] = useState<{ section?: SectionId } | null>(null);
   // Recording a take, into the open project or a new one.
   const [recording, setRecording] = useState<{ projectId: string | null; name: string | null } | null>(null);
@@ -33,8 +33,8 @@ export function App() {
 
   // Off the editor, the menu bar's project items are off.
   useEffect(() => {
-    if (!open || recording) void bridge()?.invoke("menu:state", { project: null });
-  }, [open, recording]);
+    if (!open || recording || settings) void bridge()?.invoke("menu:state", { project: null });
+  }, [open, recording, settings]);
 
   /** File > Import Videos: a new project from the picked files, opened. */
   const importVideos = async () => {
@@ -84,6 +84,8 @@ export function App() {
             setOpen(id);
           }}
         />
+      ) : settings ? (
+        <Settings update={update} section={settings.section} overProject={open !== null} onBack={() => setSettings(null)} />
       ) : open ? (
         <ProjectView
           key={open}
@@ -92,9 +94,8 @@ export function App() {
           onBack={() => setOpen(null)}
           onOpen={setOpen}
           onRecord={(name) => setRecording({ projectId: open, name })}
+          onSettings={(section) => setSettings({ section })}
         />
-      ) : settings ? (
-        <Settings update={update} section={settings.section} onBack={() => setSettings(null)} />
       ) : (
         <Library jobsFor={jobsFor} onOpen={setOpen} onSettings={() => setSettings({})} onRecord={() => setRecording({ projectId: null, name: null })} />
       )}
