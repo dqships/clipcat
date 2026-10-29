@@ -182,6 +182,7 @@ export function shortProject(parent: Project, plan: ShortPlan, opts: { id: strin
     name: plan.title,
     language: parent.language,
     aspectRatio: "9:16",
+    bars: parent.bars,
     speed: parent.speed,
     revision: 0,
     brief: "",

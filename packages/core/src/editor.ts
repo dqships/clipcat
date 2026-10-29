@@ -7,6 +7,7 @@ import { z } from "zod";
 import { type IdFactory, setRange, wordSpanRange } from "./edits";
 import {
   AspectRatio,
+  Bars,
   Captions,
   CaptionsPatch,
   type Project,
@@ -42,6 +43,8 @@ export const EditOp = z.discriminatedUnion("type", [
   z.object({ type: z.literal("speed"), speed: z.number().min(0.5).max(2) }),
   /** The shape the preview shows and the project is made for. Not an undo step. */
   z.object({ type: z.literal("aspect"), aspectRatio: AspectRatio }),
+  /** What fills the sides of a recording that doesn't fill a wide video. Not an undo step. */
+  z.object({ type: z.literal("bars"), bars: Bars }),
   /** Where a recording's speaker is (0..1 across), set by hand; null goes back to following the faces found. Not an undo step. */
   z.object({ type: z.literal("frame"), sourceId: z.string(), x: z.number().min(0).max(1).nullable() }),
   /** Punch in on these words (one recording's). An undo step, like accepting a suggested punch-in. */
@@ -163,6 +166,11 @@ export function applyEdit(project: Project, op: EditOp, id: IdFactory): Project 
 
   if (op.type === "aspect") {
     p.aspectRatio = op.aspectRatio;
+    return p;
+  }
+
+  if (op.type === "bars") {
+    p.bars = op.bars;
     return p;
   }
 

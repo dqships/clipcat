@@ -992,6 +992,23 @@ body {
   background: var(--color-primary);
 }
 
+/* A recording of another shape in a wide video, over the same picture
+   blurred: a tiny canvas stretched to the stage, which blurs it. */
+.project__fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-panel);
+}
+
+.project__video--over-fill {
+  position: relative;
+  display: block;
+  background: transparent;
+}
+
 /* The vertical shape: the picture covers a 9:16 box, slid to where the export crops it. */
 .project__video--tall {
   display: block;

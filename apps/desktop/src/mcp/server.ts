@@ -277,7 +277,7 @@ export function createMcpServer(deps: McpDeps): McpServer {
 - {type:"sound", word, effect}: a sound effect on that word; effects: ${SOUND_EFFECTS.map((e) => e.id).join(", ")}
 - {type:"chapter", word, title} / {type:"remove-chapter", word}
 - {type:"captions", captions:{enabled, mode:"word"|"sentence", font, size, color:"#RRGGBB", effect:"none"|"shadow", case:"regular"|"upper"|"lower", background:"none"|"rounded", boxColor:"#RRGGBB", position:0..1}} (any subset)
-- {type:"speed", speed:0.5..2} / {type:"aspect", aspectRatio:"16:9"|"9:16"|"1:1"}
+- {type:"speed", speed:0.5..2} / {type:"aspect", aspectRatio:"16:9"|"9:16"|"1:1"} / {type:"bars", bars:"black"|"blur"} (what fills the sides when a recording of another shape is shown whole in a wide video)
 - {type:"music", volume?:0..1, duck?:boolean} / {type:"remove-music"}
 - {type:"writeup", description?, articleTitle?, article?}
 - {type:"thumbnail", text?, textColor?:"paper"|"ink"|"tape", background?:"frame"|"blur"|"paper"|"ink"|"tape", textSide?:"left"|"right", textBox?:{x,y,width,height} as 0..1 shares of the thumbnail or null for the side's default, behind?:boolean}

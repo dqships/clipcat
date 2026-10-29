@@ -5,6 +5,8 @@
 import { z } from "zod";
 
 export const AspectRatio = z.enum(["16:9", "9:16", "1:1"]);
+/** What fills the sides when a recording of another shape is shown whole in a wide video: black bars, or the same picture blurred. */
+export const Bars = z.enum(["black", "blur"]);
 
 export const MediaInfo = z.object({
   duration: z.number().positive(),
@@ -283,6 +285,7 @@ export const Project = z.object({
   name: z.string(),
   language: z.string().default("en"),
   aspectRatio: AspectRatio.default("16:9"),
+  bars: Bars.default("black"),
   speed: z.number().min(0.5).max(2).default(1),
   /** Bumped on every write; a write based on an older revision is refused. */
   revision: z.number().int().nonnegative(),
@@ -314,6 +317,7 @@ export const Project = z.object({
 });
 
 export type AspectRatio = z.infer<typeof AspectRatio>;
+export type Bars = z.infer<typeof Bars>;
 export type ThumbnailBox = z.infer<typeof ThumbnailBox>;
 export type MediaInfo = z.infer<typeof MediaInfo>;
 export type Source = z.infer<typeof Source>;

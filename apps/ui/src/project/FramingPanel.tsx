@@ -1,4 +1,4 @@
-import { type EditOp, type Project, framingAt } from "@clipcat/core";
+import { type Bars, type EditOp, type Project, framingAt } from "@clipcat/core";
 import type { Playhead } from "./Preview";
 
 type Props = { project: Project; playhead: Playhead | null; onEdit: (op: EditOp) => void };
@@ -34,6 +34,15 @@ export function FramingPanel({ project, playhead, onEdit }: Props) {
           <option value="9:16">Vertical 9:16 (Shorts, TikTok, Reels)</option>
         </select>
       </label>
+      {!tall && (
+        <label className="field">
+          <span className="field__label">Beside a recording of another shape</span>
+          <select className="field__control" value={project.bars} onChange={(e) => onEdit({ type: "bars", bars: e.target.value as Bars })}>
+            <option value="black">Black bars</option>
+            <option value="blur">The same picture, blurred</option>
+          </select>
+        </label>
+      )}
       {tall && source && (
         <>
           <label className="field field--inline">
