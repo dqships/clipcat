@@ -50,7 +50,11 @@ const config = {
     // Hardened runtime with @electron/osx-sign's default entitlements, which already allow the camera
     // and microphone (the bundled helpers in Resources/bin get the same). APPLE_SIGN_IDENTITY picks the
     // certificate when the keychain holds more than one Developer ID.
-    osxSign: process.env.SKIP_SIGN ? undefined : { ...(process.env.APPLE_SIGN_IDENTITY ? { identity: process.env.APPLE_SIGN_IDENTITY } : {}) },
+    // continueOnError: false, because packager otherwise hides a failed signing behind a warning and
+    // the build only fails minutes later, when Apple's notary rejects every binary as unsigned.
+    osxSign: process.env.SKIP_SIGN
+      ? undefined
+      : { continueOnError: false, ...(process.env.APPLE_SIGN_IDENTITY ? { identity: process.env.APPLE_SIGN_IDENTITY } : {}) },
     // Notarizing happens in the postPackage hook below, not here: packager gives up stapling after
     // about 7 seconds, and Apple's ticket server often throttles or drops the first tries.
     windowsSign: sign,
@@ -186,15 +190,18 @@ async function notarize(app, auth) {
     rmSync(dir, { recursive: true, force: true });
   }
 
+  // A staple can report success while validate still finds no ticket (exit 68), so both are retried together.
   for (let attempt = 1; ; attempt++) {
-    const staple = spawnSync("xcrun", ["stapler", "staple", basename(app)], { cwd: dirname(app), encoding: "utf8" });
-    if (staple.status === 0) break;
-    if (attempt === 10) throw new Error(`Stapling ${app} failed after ${attempt} tries:\n${staple.stdout}${staple.stderr}`);
+    const run = (/** @type {string} */ step) => spawnSync("xcrun", ["stapler", step, basename(app)], { cwd: dirname(app), encoding: "utf8" });
+    const staple = run("staple");
+    const result = staple.status === 0 ? run("validate") : staple;
+    if (result.status === 0) break;
+    const step = result === staple ? "Stapling" : "Validating the staple on";
+    if (attempt === 10) throw new Error(`${step} ${app} failed after ${attempt} tries:\n${result.stdout}${result.stderr}`);
     const wait = Math.min(15 * attempt, 60);
-    console.log(`Stapling ${app} failed (exit ${staple.status}), trying again in ${wait}s.`);
+    console.log(`${step} ${app} failed (exit ${result.status}), trying again in ${wait}s.`);
     await new Promise((resolve) => setTimeout(resolve, wait * 1000));
   }
-  execFileSync("xcrun", ["stapler", "validate", basename(app)], { cwd: dirname(app), stdio: "inherit" });
 }
 
 function windowsSign() {
