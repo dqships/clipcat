@@ -78,10 +78,10 @@ export function AgentGuide({ agents }: { agents: McpAgentValue[] | null }) {
   };
 
   return (
-    <section className="settings__section guide" aria-labelledby="guide-title">
-      <h2 id="guide-title" className="section-title">
+    <section className="settings__group guide" aria-labelledby="guide-title">
+      <h3 id="guide-title" className="settings__label">
         How to use it
-      </h2>
+      </h3>
       <p className="settings__body">
         Connecting adds a ClipCat entry to the agent's own settings file. There's no account to sign in to: the agent runs a small ClipCat helper on
         this computer and talks to this window through it, and nothing goes over the internet. Keep ClipCat open while you work, and you'll see each
@@ -154,7 +154,7 @@ export function AgentGuide({ agents }: { agents: McpAgentValue[] | null }) {
           <li>It says it can't reach ClipCat: open ClipCat and ask again.</li>
           <li>A change is refused because the project changed: you or the agent edited it in between. Ask it to read the project again and retry.</li>
           <li>A job like AI cuts or shorts fails: those run on the AI you picked in ClipCat, so check that one is signed in.</li>
-          <li>Still stuck: choose Test next to the agent above to see which step fails, disconnect and connect again, or save diagnostics below and attach them to an issue.</li>
+          <li>Still stuck: choose Test next to the agent above to see which step fails, disconnect and connect again, or save diagnostics from the Troubleshooting page and attach them to an issue.</li>
         </ul>
       </details>
       <a

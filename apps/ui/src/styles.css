@@ -113,19 +113,118 @@ body {
   box-shadow: inset var(--focus-ring);
 }
 
-/* Settings: one column of sections, read top to bottom. */
+/* Settings: the list of pages in a surface column on the left, like the
+   Help window's, the open one marked with a strip of splice tape; the open
+   page on the right, its parts split by hairlines. Each scrolls on its own. */
 .settings {
+  display: grid;
+  grid-template-columns: var(--panel-min) 1fr;
+  min-height: 0;
+}
+
+.settings__nav {
+  padding: var(--space-4) 0;
+  overflow-y: auto;
+  border-right: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.settings__list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.settings__tab {
+  display: grid;
+  grid-template-columns: var(--icon-size-md) 1fr;
+  column-gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-2) var(--space-4);
+  border: 0;
+  background: none;
+  color: var(--color-text-muted);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.settings__tab:hover {
+  color: var(--color-text);
+}
+
+.settings__tab[aria-current="page"] {
+  background: var(--color-background);
+  color: var(--color-text);
+  box-shadow: inset var(--space-1) 0 0 var(--color-accent);
+}
+
+.settings__tab:focus-visible {
+  outline: none;
+  box-shadow: inset var(--focus-ring);
+}
+
+.settings__tab-icon {
+  grid-row: span 2;
+  width: var(--icon-size-md);
+  height: var(--icon-size-md);
+  margin-top: calc((var(--leading-body) - var(--icon-size-md)) / 2);
+}
+
+.settings__tab-name {
+  font-weight: var(--font-weight-medium);
+}
+
+.settings__tab[aria-current="page"] .settings__tab-name {
+  font-weight: var(--font-weight-semibold);
+}
+
+.settings__tab-status {
+  color: var(--color-text-muted);
+  font-size: var(--text-caption);
+  line-height: var(--leading-caption);
+}
+
+.settings__page {
   display: grid;
   align-content: start;
   gap: var(--space-6);
-  padding: var(--space-6);
-  overflow: auto;
+  padding: var(--space-6) var(--space-6) var(--space-7);
+  overflow-y: auto;
 }
 
-.settings__section {
+.settings__page > * {
+  max-width: calc(var(--space-9) * 7);
+}
+
+.settings__head {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.settings__title {
+  margin: 0;
+  font-size: var(--text-title);
+  line-height: var(--leading-title);
+  font-weight: var(--font-weight-semibold);
+}
+
+.settings__group {
   display: grid;
   gap: var(--space-3);
-  max-width: calc(var(--space-9) * 7);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+}
+
+.settings__label {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-caption);
+  line-height: var(--leading-caption);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
 }
 
 .settings__body,
