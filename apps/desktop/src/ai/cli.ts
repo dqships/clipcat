@@ -1,5 +1,6 @@
-// The Claude Code and Codex command-line tools themselves: which version the
-// user's `claude` and `codex` commands are, the newest one out, and
+// The Claude Code, Codex and Gemini CLI command-line tools themselves: which
+// version the user's `claude`, `codex` and `gemini` commands are, the newest
+// one out, and
 // installing or updating each the way its maker documents. An update goes
 // through whatever installed the copy (its own updater, npm, Homebrew,
 // WinGet), so ClipCat never leaves a second copy fighting the first on PATH.
@@ -12,7 +13,7 @@ import { dirname, join } from "node:path";
 import { bundledDirs, codexHome, configModel } from "./codex";
 import { type HostEnv, compareVersions, killTree, needsShell, parseVersion, quoteArg, resolveBinary, runOnce, which, whichAll } from "./env";
 
-export type CliId = "claude" | "codex";
+export type CliId = "claude" | "codex" | "gemini";
 
 /** How a copy got onto the computer, which decides how it updates. */
 export type CliSource = "native" | "npm" | "bun" | "brew" | "winget" | "app" | "unknown";
@@ -23,7 +24,7 @@ export type CliCommand = { file: string; args: string[]; env?: Record<string, st
 export type CliStatus = {
   id: CliId;
   label: string;
-  /** The `claude` or `codex` the user's terminal runs; null when there is none. */
+  /** The `claude`, `codex` or `gemini` the user's terminal runs; null when there is none. */
   path: string | null;
   version: string | null;
   source: CliSource | null;
@@ -39,11 +40,13 @@ export type CliStatus = {
   warning: string | null;
 };
 
-const LABELS: Record<CliId, string> = { claude: "Claude Code", codex: "Codex" };
-const PACKAGES: Record<CliId, string> = { claude: "@anthropic-ai/claude-code", codex: "@openai/codex" };
+const LABELS: Record<CliId, string> = { claude: "Claude Code", codex: "Codex", gemini: "Gemini CLI" };
+const PACKAGES: Record<CliId, string> = { claude: "@anthropic-ai/claude-code", codex: "@openai/codex", gemini: "@google/gemini-cli" };
+/** Each CLI's Homebrew formula or cask, for telling the user what to run. */
+const BREW: Record<CliId, string> = { claude: "claude-code", codex: "codex", gemini: "gemini-cli" };
 
-/** The official installers (code.claude.com/docs/en/setup, github.com/openai/codex). */
-const INSTALLERS: Record<CliId, { sh: string; ps: string }> = {
+/** The official install scripts (code.claude.com/docs/en/setup, github.com/openai/codex). Gemini CLI has none: npm or Homebrew. */
+const INSTALLERS: Record<Exclude<CliId, "gemini">, { sh: string; ps: string }> = {
   claude: { sh: "curl -fsSL https://claude.ai/install.sh | bash", ps: "irm https://claude.ai/install.ps1 | iex" },
   codex: { sh: "curl -fsSL https://chatgpt.com/codex/install.sh | sh", ps: "irm https://chatgpt.com/codex/install.ps1 | iex" },
 };
@@ -73,7 +76,7 @@ export function brewPackage(real: string): { cask: boolean; name: string } | nul
 }
 
 /** The official installer for this platform. */
-export function installCommand(id: CliId, platform: NodeJS.Platform = process.platform): CliCommand {
+export function installCommand(id: Exclude<CliId, "gemini">, platform: NodeJS.Platform = process.platform): CliCommand {
   const { sh, ps } = INSTALLERS[id];
   // Codex's installer asks whether to start Codex when it's done; nobody is there to answer.
   const env = id === "codex" ? { CODEX_NON_INTERACTIVE: "1" } : undefined;
@@ -88,6 +91,21 @@ function sibling(name: string, path: string, host: HostEnv): string | null {
 
 export type Update = { command: CliCommand } | { manual: string };
 
+/**
+ * How to install a missing CLI. Claude Code and Codex have install scripts;
+ * Gemini CLI installs with npm (github.com/google-gemini/gemini-cli), or
+ * Homebrew when there's no npm, and needs Node.js when there's neither.
+ */
+export function installFor(id: CliId, host: HostEnv, platform: NodeJS.Platform = process.platform): Update {
+  if (id !== "gemini") return { command: installCommand(id, platform) };
+  const npm = which("npm", host);
+  const npmArgs = ["install", "-g", PACKAGES.gemini];
+  if (npm) return { command: { file: npm, args: npmArgs, display: `npm ${npmArgs.join(" ")}` } };
+  const brew = platform === "win32" ? null : which("brew", host);
+  if (brew) return { command: { file: brew, args: ["install", BREW.gemini], display: `brew install ${BREW.gemini}` } };
+  return { manual: "Gemini CLI installs with npm, which comes with Node.js. Install Node.js 20 or newer from nodejs.org, then reopen ClipCat." };
+}
+
 /** How to update the copy at `path`, by what installed it. */
 export function updateCommand(id: CliId, path: string, real: string, host: HostEnv, platform: NodeJS.Platform = process.platform): Update {
   const source = installSource(id, path, real);
@@ -98,7 +116,7 @@ export function updateCommand(id: CliId, path: string, real: string, host: HostE
     case "brew": {
       const brew = which("brew", host);
       const pkg = brewPackage(real);
-      if (!brew || !pkg) return { manual: `Update it with Homebrew: brew upgrade ${id === "claude" ? "claude-code" : "codex"}.` };
+      if (!brew || !pkg) return { manual: `Update it with Homebrew: brew upgrade ${BREW[id]}.` };
       const args = ["upgrade", ...(pkg.cask ? ["--cask"] : []), pkg.name];
       return { command: { file: brew, args, display: `brew ${args.join(" ")}` } };
     }
@@ -106,7 +124,7 @@ export function updateCommand(id: CliId, path: string, real: string, host: HostE
       if (id === "claude") return { command: { file: "winget", args: ["upgrade", "Anthropic.ClaudeCode"], display: "winget upgrade Anthropic.ClaudeCode" } };
       return { manual: "Update it with WinGet." };
     case "npm": {
-      // Claude Code's own updater handles npm installs; Codex's has none.
+      // Claude Code's own updater handles npm installs; Codex and Gemini CLI have none.
       if (id === "claude") return { command: { file: path, args: ["update"], display: "claude update" } };
       const npm = sibling("npm", path, host);
       const args = ["install", "-g", `${PACKAGES[id]}@latest`];
@@ -122,6 +140,7 @@ export function updateCommand(id: CliId, path: string, real: string, host: HostE
     case "native":
       // Codex's installer is also its updater; Claude Code updates itself.
       if (id === "codex") return { command: installCommand(id, platform) };
+      if (id === "gemini") return { manual: `ClipCat can't tell how this ${label} was installed, so update it the way you installed it.` };
       return { command: { file: path, args: ["update"], display: "claude update" } };
     default:
       if (id === "claude") return { command: { file: path, args: ["update"], display: "claude update" } };
@@ -244,7 +263,11 @@ export async function cliStatus(id: CliId, deps: CliDeps): Promise<CliStatus> {
     (deps.latest ?? latestVersion)(id, channel),
   ]);
   const base = { id, label, path, version, latest, warning: null, manual: null };
-  if (!path) return { ...base, source: null, action: "install", command: installCommand(id, platform).display };
+  if (!path) {
+    const install = installFor(id, host, platform);
+    if ("manual" in install) return { ...base, source: null, action: null, command: null, manual: install.manual };
+    return { ...base, source: null, action: "install", command: install.command.display };
+  }
 
   const source = installSource(id, path, real ?? path);
   let warning: string | null = null;
@@ -286,8 +309,11 @@ export async function runCli(id: CliId, deps: CliDeps, onLine: (line: string) =>
   const platform = deps.platform ?? process.platform;
   const before = await cliStatus(id, deps);
   let command: CliCommand;
-  if (!before.path) command = installCommand(id, platform);
-  else {
+  if (!before.path) {
+    const install = installFor(id, host, platform);
+    if ("manual" in install) throw new Error(install.manual);
+    command = install.command;
+  } else {
     const update = updateCommand(id, before.path, realOr(before.path), host, platform);
     if ("manual" in update) throw new Error(update.manual);
     command = update.command;

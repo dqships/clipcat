@@ -66,4 +66,4 @@ On the **Export** tab, choose **Export 16:9** or **Export 9:16** and pick where 
 - Make shorts from the same recording: [Make shorts](shorts.md).
 - Write the chapters, description and article: [Write the chapters and article](chapters-and-article.md).
 - Make a thumbnail: [Make a thumbnail](thumbnail.md).
-- Let Claude Code or Codex do the editing for you: [Use ClipCat from Claude or Codex](agents.md).
+- Let Claude Code, Codex, Cursor or another agent do the editing for you: [Use ClipCat from your coding agent](agents.md).

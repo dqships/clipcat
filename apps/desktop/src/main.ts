@@ -23,7 +23,7 @@ import { broadcast, registerIpc, send } from "./ipc";
 import { JobLog } from "./jobs/log";
 import { JobQueue } from "./jobs/queue";
 import { BACKGROUND_ARG } from "./mcp/config";
-import { type InstallEnv, connectAgent, healRegistrations, mcpStatus, serverSpec } from "./mcp/install";
+import { type InstallEnv, connectAgent, healRegistrations, mcpSetup, mcpStatus, serverSpec } from "./mcp/install";
 import { checkAgent } from "./mcp/check";
 import { createMcpServer } from "./mcp/server";
 import { SessionLog } from "./mcp/sessions";
@@ -850,6 +850,7 @@ if (!squirrelLaunch && !app.requestSingleInstanceLock()) {
           return agentStatus();
         },
         "mcp:check": async ({ agent }) => checkAgent(agent, { env: installEnv, host: await hostEnv, platform: process.platform }),
+        "mcp:setup": async () => mcpSetup(installEnv),
       },
       DEV_URL,
     );

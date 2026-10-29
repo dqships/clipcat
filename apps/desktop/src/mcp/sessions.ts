@@ -1,6 +1,8 @@
 // Which agents have really reached ClipCat. Every MCP session starts with a
 // handshake where the client names itself (Claude Code sends "claude-code",
-// the Claude app "claude-ai", Codex "codex-mcp-client"), so the settings
+// the Claude app "claude-ai", Codex "codex-mcp-client", Cursor
+// "cursor-vscode", VS Code "Visual Studio Code", Gemini CLI
+// "gemini-cli-mcp-client"), so the settings
 // screen can say "Claude Code is connected now" from what arrived on the
 // socket rather than from what a config file says. The last session's time
 // is kept on disk, so "last used" survives a restart.
@@ -20,6 +22,12 @@ export function agentFor(client: string): AgentId | null {
   if (name.includes("codex")) return "codex";
   if (name.includes("claude-code") || name.includes("claude code")) return "claude-code";
   if (name === "claude-ai" || name.includes("claude desktop") || name === "claude") return "claude-desktop";
+  // Cursor and Windsurf are built on VS Code, so they're told apart before it.
+  if (name.includes("cursor")) return "cursor";
+  if (name.includes("windsurf") || name.includes("codeium")) return "windsurf";
+  if (name.includes("visual studio code") || name === "vscode") return "vscode";
+  if (/lm[ -]?studio/.test(name)) return "lm-studio";
+  if (name.includes("gemini")) return "gemini";
   return null;
 }
 

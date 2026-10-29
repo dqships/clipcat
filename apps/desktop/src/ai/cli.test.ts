@@ -2,7 +2,7 @@ import { chmod, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { brewPackage, cliStatus, codexWarning, installCommand, installSource, lastLine, latestVersion, runCli, updateCommand } from "./cli";
+import { brewPackage, cliStatus, codexWarning, installCommand, installFor, installSource, lastLine, latestVersion, runCli, updateCommand } from "./cli";
 import type { HostEnv } from "./env";
 
 let dir: string;
@@ -59,6 +59,23 @@ describe("commands", () => {
     expect(installCommand("codex", "darwin")).toMatchObject({ args: ["-c", "curl -fsSL https://chatgpt.com/codex/install.sh | sh"], env: { CODEX_NON_INTERACTIVE: "1" } });
     expect(installCommand("claude", "win32")).toMatchObject({ file: "powershell.exe", display: "irm https://claude.ai/install.ps1 | iex" });
     expect(installCommand("codex", "win32").args.at(-1)).toBe("irm https://chatgpt.com/codex/install.ps1 | iex");
+  });
+
+  it("installs Gemini CLI with npm, else Homebrew, else says it needs Node.js", async () => {
+    expect(installFor("gemini", host(), "darwin")).toEqual({ manual: expect.stringMatching(/Node\.js/) });
+    const brew = await fake("brew", "5.0.0");
+    expect(installFor("gemini", host(), "darwin")).toEqual({ command: { file: brew, args: ["install", "gemini-cli"], display: "brew install gemini-cli" } });
+    expect(installFor("gemini", host(), "win32")).toHaveProperty("manual");
+    const npm = await fake("npm", "11.0.0");
+    expect(installFor("gemini", host(), "darwin")).toEqual({ command: { file: npm, args: ["install", "-g", "@google/gemini-cli"], display: "npm install -g @google/gemini-cli" } });
+    expect(installFor("codex", host(), "darwin")).toEqual({ command: installCommand("codex", "darwin") });
+  });
+
+  it("shows no button for Gemini CLI when there's nothing to install it with", async () => {
+    const status = await cliStatus("gemini", { host: host(), latest: async () => "0.14.0", platform: "darwin" });
+    expect(status).toMatchObject({ label: "Gemini CLI", path: null, action: null, command: null, manual: expect.stringMatching(/Node\.js/) });
+    await fake("npm", "11.0.0");
+    expect(await cliStatus("gemini", { host: host(), latest: async () => "0.14.0", platform: "darwin" })).toMatchObject({ action: "install", command: "npm install -g @google/gemini-cli" });
   });
 
   it("updates through whatever installed the copy", async () => {

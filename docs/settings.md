@@ -16,7 +16,7 @@ Two more kinds of settings live where you use them:
 
 ## Edit from your coding agent
 
-Connect Claude Code, Codex or the Claude desktop app, and it can edit your projects while ClipCat is open. Each agent has a row:
+Connect Claude Code, Codex, the Claude desktop app, Cursor, VS Code, Windsurf, LM Studio or Gemini CLI, and it can edit your projects while ClipCat is open. Agents on this computer are listed first, and the rest are folded under **Not found on this computer**. Each agent has a row:
 
 - The line under its name says whether it's connected, when it last connected, or that it isn't on this computer. You can connect an agent before you install it.
 - The path is the agent's own settings file, where ClipCat adds its entry.
@@ -24,17 +24,22 @@ Connect Claude Code, Codex or the Claude desktop app, and it can edit your proje
 - **Test** checks the connection again, step by step: the file is read back, the entry is run through to ClipCat, and the agent's own command is asked. The last step turns to done once the agent really connects.
 - **Disconnect** takes ClipCat's entry out of the file. Nothing else in the file changes.
 
-### Install or update Claude Code and Codex
+**Set up another MCP app**, under the list, shows the entry for any other app that runs local MCP servers: the JSON, and the command, arguments and environment, each with a copy button. See [Use ClipCat from your coding agent](agents.md#set-up-another-mcp-app).
 
-The Claude Code and Codex rows also show the version of the command-line tool on your computer next to the newest release.
+Under **How to use it**, **Steps for** picks the agent to show the steps for.
 
-- **Install Claude Code** or **Install Codex** runs its maker's own install script.
+### Install or update Claude Code, Codex and Gemini CLI
+
+The Claude Code, Codex and Gemini CLI rows also show the version of the command-line tool on your computer next to the newest release.
+
+- **Install Claude Code** or **Install Codex** runs its maker's own install script. **Install Gemini CLI** runs `npm install -g @google/gemini-cli`, or `brew install gemini-cli` if you have Homebrew but not npm. With neither, the row says to install Node.js first.
 - **Update to** (a version) updates it the way it was installed: its own updater, npm, bun, Homebrew or winget, so you don't end up with two copies.
 - Next to the button is the exact command it runs. Its output shows while it runs.
 - A copy that came inside another app is left to that app, and the row says how to update it.
+- The desktop apps (the Claude desktop app, Cursor, VS Code, Windsurf and LM Studio) can't be installed from ClipCat. When one isn't on your computer, its row has **Get** (the app's name), which opens its maker's download page.
 - If your Codex is older than another Codex on your computer (usually the one inside the ChatGPT app), the row warns that the newer one's settings may not work in it.
 
-The **How to use it** section under the agents walks through the first session for each agent, with prompts to copy. See [Use ClipCat from Claude or Codex](agents.md).
+The **How to use it** section under the agents walks through the first session for each agent, with prompts to copy. See [Use ClipCat from your coding agent](agents.md).
 
 ## Transcription
 

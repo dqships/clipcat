@@ -1,13 +1,13 @@
 ---
-title: Use ClipCat from Claude Code, Codex or the Claude app
-description: Connect ClipCat to Claude Code, Codex or the Claude desktop app, check it worked, and let the agent read your transcripts and make edits while you watch.
+title: Use ClipCat from Claude, Codex, Cursor and more
+description: Connect ClipCat to Claude Code, Codex, Claude, Cursor, VS Code, Windsurf, LM Studio or Gemini CLI, check it worked, and let the agent edit while you watch.
 order: 15
 updated: 2026-10-29
 ---
 
-# Use ClipCat from Claude or Codex
+# Use ClipCat from your coding agent
 
-ClipCat includes an MCP server. Connect it once, and Claude Code, Codex or the Claude desktop app can open your projects, read the transcripts and make edits. You see each change land in ClipCat, and each one is one undo step.
+ClipCat includes an MCP server. Connect it once, and Claude Code, Codex, the Claude desktop app, Cursor, VS Code, Windsurf, LM Studio or Gemini CLI can open your projects, read the transcripts and make edits. You see each change land in ClipCat, and each one is one undo step.
 
 ## How it works
 
@@ -15,12 +15,12 @@ Connecting adds a ClipCat entry to the agent's own settings file. When the agent
 
 If ClipCat isn't open, the helper starts it in the background, with no window. It becomes the usual app when you open ClipCat, and otherwise quits once the agent disconnects and its jobs finish.
 
-The agent asks before it uses each ClipCat tool, unless you tell it to always allow one. For Codex, that follows its approval setting.
+The agent asks before it uses each ClipCat tool, unless you tell it to always allow one. For Codex, Cursor and Windsurf, that follows their own approval settings.
 
 ## Connect your agent
 
 1. In ClipCat, open **Settings** (the gear in the library).
-2. Under **Edit from your coding agent**, choose **Connect** next to your agent.
+2. Under **Edit from your coding agent**, choose **Connect** next to your agent. Agents ClipCat can't find on this computer are listed under **Not found on this computer**, and you can connect them there before you install them. A desktop app has **Get** (the app's name), which opens its maker's download page, and a command-line tool has **Install** (its name).
 3. Check the entry ClipCat shows you, then choose **Add to** (the agent's name).
 
 ClipCat writes its entry here:
@@ -28,6 +28,13 @@ ClipCat writes its entry here:
 - **Claude desktop app**: `claude_desktop_config.json` in the Claude app's folder.
 - **Claude Code**: `~/.claude.json`, for every folder you work in.
 - **Codex**: `~/.codex/config.toml`, which the Codex CLI, the Codex app and the editor extension all read.
+- **Cursor**: `~/.cursor/mcp.json`, for every project.
+- **VS Code**: your user `mcp.json` (in `Code/User` in VS Code's settings folder), under `servers`, for every workspace.
+- **Windsurf**: `~/.codeium/windsurf/mcp_config.json`.
+- **LM Studio**: `~/.lmstudio/mcp.json`.
+- **Gemini CLI**: `~/.gemini/settings.json`, for every folder you work in.
+
+ClipCat won't rewrite a file it can't read as plain JSON. VS Code and Gemini CLI allow comments in theirs, so if yours has any, add the entry by hand from **Set up another MCP app**.
 
 **Disconnect** takes the entry out again. ClipCat points the entry at its current copy each time it opens, so moving or updating the app doesn't break it.
 
@@ -50,6 +57,42 @@ ClipCat writes its entry here:
 1. Start a new Codex session, or quit the Codex app and open it again.
 2. In the CLI, type `/mcp`. clipcat should be listed with its tools.
 3. Ask for something and say ClipCat.
+
+### Cursor
+
+1. Open a new Cursor window, or quit Cursor and open it again.
+2. In Cursor Settings > MCP, clipcat should be listed and turned on, with its tools.
+3. In the agent chat, ask for something and say ClipCat. Approve each tool when Cursor asks.
+
+### VS Code
+
+1. Open a new VS Code window. If clipcat doesn't start on its own, run **MCP: List Servers** from the Command Palette, pick clipcat and choose **Start**.
+2. Open Copilot Chat in Agent mode and check clipcat's tools are ticked under the tools button.
+3. Ask for something and say ClipCat. Choose **Allow** when VS Code asks to run a ClipCat tool.
+
+### Windsurf
+
+1. Restart Windsurf, or open Cascade's MCP servers and choose **Refresh**.
+2. Cascade's MCP list should show clipcat with its tools.
+3. Ask Cascade for something and say ClipCat.
+
+### LM Studio
+
+1. Quit LM Studio and open it again, then load a model that can use tools.
+2. In a chat, open the integrations menu and turn on `mcp/clipcat`.
+3. Ask for something and say ClipCat. Small local models can miss steps, so check what it did in ClipCat.
+
+### Gemini CLI
+
+1. Start a new `gemini` session.
+2. Type `/mcp`. clipcat should be listed as ready, with its tools.
+3. Ask for something and say ClipCat. Approve each tool the first time Gemini CLI asks.
+
+## Set up another MCP app
+
+Any other app that runs local (stdio) MCP servers can use ClipCat too. In Settings, open **Set up another MCP app** under the list of agents. It shows the entry for this copy of ClipCat as JSON, plus the command, arguments and environment on their own, each with a copy button. Paste the JSON into the app's MCP settings file, inside its list of servers, or fill in its form with the parts.
+
+ClipCat doesn't keep an entry you added by hand up to date, so copy it again if you move the app. Apps that only take remote (HTTP) MCP servers, such as ChatGPT, can't use ClipCat yet.
 
 ## Things to ask
 
@@ -116,4 +159,5 @@ Every change names the project revision the agent last read. If you or the agent
 - **It says it can't reach ClipCat**: open ClipCat and ask again.
 - **A change is refused because the project changed**: you or the agent edited it in between. Ask it to read the project again and retry.
 - **AI cuts, shorts or the write-up fail**: those run on the AI you picked in ClipCat, so check it's set up on the **Edit** tab.
+- **ClipCat can't update the agent's file**: it has comments or trailing commas in it. Add the entry by hand from **Set up another MCP app**.
 - **Still stuck**: choose **Test** next to the agent in Settings to see which step fails, disconnect and connect again, or see [Fix a problem](troubleshooting.md).

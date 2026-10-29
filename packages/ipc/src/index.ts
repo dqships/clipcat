@@ -130,13 +130,13 @@ export const JobEvent = z.object({
 });
 
 /** The agent command-line tools ClipCat can install and update. */
-export const CliId = z.enum(["claude", "codex"]);
+export const CliId = z.enum(["claude", "codex", "gemini"]);
 
 /** One CLI, as Settings shows it: the user's copy, the newest release, and what its button does. */
 export const CliStatus = z.object({
   id: CliId,
   label: z.string(),
-  /** The `claude` or `codex` the user's terminal runs; null when there is none. */
+  /** The `claude`, `codex` or `gemini` the user's terminal runs; null when there is none. */
   path: z.string().nullable(),
   version: z.string().nullable(),
   source: z.enum(["native", "npm", "bun", "brew", "winget", "app", "unknown"]).nullable(),
@@ -152,7 +152,7 @@ export const CliStatus = z.object({
 });
 
 /** The coding agents ClipCat can register its MCP server with. */
-export const McpAgentId = z.enum(["claude-code", "claude-desktop", "codex"]);
+export const McpAgentId = z.enum(["claude-code", "claude-desktop", "codex", "cursor", "vscode", "windsurf", "lm-studio", "gemini"]);
 
 /** One agent, as the settings screen shows it: is it on this computer, and does its config have ClipCat in it. */
 export const McpAgent = z.object({
@@ -174,6 +174,17 @@ export const McpAgent = z.object({
     /** The client's own name and version from that session's handshake, e.g. "claude-code 2.1.312". */
     client: z.string().nullable(),
   }),
+});
+
+/** ClipCat's MCP server as any stdio client runs it, for apps ClipCat doesn't write to itself. */
+export const McpSetup = z.object({
+  command: z.string(),
+  args: z.array(z.string()),
+  env: z.record(z.string(), z.string()),
+  /** The same entry under `mcpServers`, the way most apps' JSON files spell it. */
+  json: z.string(),
+  /** Why it can't be used from this build, or null when it can. */
+  unavailable: z.string().nullable(),
 });
 
 /** One step of checking an agent's connection: is the entry saved, does it reach ClipCat, does the agent itself see it. Whether the agent has used it is `McpAgent.session`. */
@@ -405,6 +416,8 @@ export const methods = {
   "mcp:connect": { input: z.object({ agent: McpAgentId, connect: z.boolean() }), output: z.array(McpAgent) },
   /** Checks one agent's connection for real: reads its config back, runs that entry through to ClipCat, and asks the agent's CLI. */
   "mcp:check": { input: z.object({ agent: McpAgentId }), output: z.array(McpCheckStep) },
+  /** What any other MCP app runs to reach ClipCat, for setting one up by hand. */
+  "mcp:setup": { input: z.void(), output: McpSetup },
 } as const;
 
 /** Pushed from main to the UI. */
@@ -470,3 +483,4 @@ export type RecordKindValue = z.output<typeof RecordKind>;
 export type McpAgentIdValue = z.output<typeof McpAgentId>;
 export type McpAgentValue = z.output<typeof McpAgent>;
 export type McpCheckStepValue = z.output<typeof McpCheckStep>;
+export type McpSetupValue = z.output<typeof McpSetup>;
