@@ -1046,6 +1046,30 @@ body {
   line-height: var(--leading-caption);
 }
 
+/* Transport: the preview's own play, shuttle and frame-step controls, with the time in the edit. */
+.transport {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+}
+
+.transport__time,
+.transport__rate {
+  font-size: var(--text-caption);
+  line-height: var(--leading-caption);
+  font-variant-numeric: tabular-nums;
+}
+
+.transport__time {
+  margin-left: var(--space-3);
+  color: var(--color-text-muted);
+}
+
+.transport__rate {
+  font-weight: var(--font-weight-semibold);
+}
+
 /* Waveform: the waveform under the preview, cuts shaded, suggestions outlined. */
 .wave {
   position: relative;
@@ -1858,15 +1882,72 @@ body {
   grid-template-columns: auto minmax(0, 1fr) auto;
 }
 
-/* The thumbnail draws at 1280×720 and shows at the panel's width. */
+/* The thumbnail draws at the video's shape (1280×720, or 1080×1920 for a
+   tall video) and shows at the panel's width; a tall one at half of it. */
+.thumbnail__stage {
+  position: relative;
+  touch-action: none;
+}
+
+.thumbnail__stage--tall {
+  width: 50%;
+  margin-inline: auto;
+}
+
 .thumbnail__canvas {
   display: block;
   width: 100%;
   height: auto;
-  aspect-ratio: 16 / 9;
   border-radius: var(--radius-control);
   border: 1px solid var(--color-border);
   background: var(--color-surface);
+}
+
+/* The text's box: a dashed outline of splice tape on hover or focus, with a
+   corner to resize it. */
+.thumbnail__text {
+  position: absolute;
+  border: 1px dashed transparent;
+  border-radius: var(--radius-control);
+  cursor: move;
+  transition: border-color var(--motion-duration) var(--motion-spring);
+}
+
+.thumbnail__stage:hover .thumbnail__text,
+.thumbnail__text:focus-visible,
+.thumbnail__text:focus-within {
+  border-color: var(--color-accent);
+}
+
+.thumbnail__text:focus-visible,
+.thumbnail__handle:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.thumbnail__handle {
+  position: absolute;
+  right: calc(var(--space-3) / -2);
+  bottom: calc(var(--space-3) / -2);
+  width: var(--space-3);
+  height: var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--color-accent);
+  cursor: nwse-resize;
+  opacity: 0;
+  transition: opacity var(--motion-duration) var(--motion-spring);
+}
+
+.thumbnail__stage:hover .thumbnail__handle,
+.thumbnail__text:focus-within .thumbnail__handle {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thumbnail__text,
+  .thumbnail__handle {
+    transition: none;
+  }
 }
 
 /* The tools panel: tabs in the order the work goes. Hidden tabs stay mounted. */

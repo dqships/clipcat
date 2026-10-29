@@ -12,19 +12,21 @@ import { ExportPanel } from "./ExportPanel";
 import { FramingPanel } from "./FramingPanel";
 import { useHideCuts } from "./hiddenCuts";
 import { MediaPanel } from "./MediaPanel";
-import { type Playhead, Preview, type PreviewHandle } from "./Preview";
+import { type Playhead, Preview, type PreviewHandle, type Transport } from "./Preview";
 import { Proposals } from "./Proposals";
 import { PunchInsPanel } from "./PunchInsPanel";
 import { ShortsPanel } from "./ShortsPanel";
 import { SoundPanel } from "./SoundPanel";
 import { Spelling } from "./Spelling";
 import { Tools } from "./Tools";
+import { TransportBar } from "./TransportBar";
 import { Waveform } from "./Waveform";
 import { Transcript } from "./Transcript";
 import { type Dock, type PanelId, panelsIn, SIZE_LIMITS, SPLIT_LIMITS, usePanelLayout } from "./layout";
 import { DockPanel, Resizer } from "./Panels";
 import { useAi } from "./useAi";
 import { useEditor } from "./useEditor";
+import { usePlaybackKeys } from "./usePlaybackKeys";
 import { ThumbnailPanel } from "./ThumbnailPanel";
 import { WriteupPanel } from "./WriteupPanel";
 
@@ -50,6 +52,7 @@ export function ProjectView({ projectId, jobs, onBack, onOpen, onRecord }: Props
   const [error, setError] = useState<string | null>(null);
   const [playhead, setPlayhead] = useState<Playhead | null>(null);
   const preview = useRef<PreviewHandle>(null);
+  const [transport, setTransport] = useState<Transport>({ rate: 0 });
 
   // Loads and edits can finish out of order; never go back to an older revision.
   const setProject = useCallback((next: Project) => {
@@ -76,6 +79,9 @@ export function ProjectView({ projectId, jobs, onBack, onOpen, onRecord }: Props
     preview.current?.seek(sourceId, time);
     setPlayhead({ sourceId, time });
   }, []);
+
+  const fps = project?.sources.find((s) => s.id === playhead?.sourceId)?.media.fps || 30;
+  usePlaybackKeys(preview, fps);
 
   const hasWords = (project?.transcript.length ?? 0) > 0;
   const transcribed = project?.sources.some((s) => s.transcription) ?? false;
@@ -250,7 +256,7 @@ export function ProjectView({ projectId, jobs, onBack, onOpen, onRecord }: Props
             <div className="project__screen">
               {project ? (
                 <div className={project.aspectRatio === "9:16" ? "stage stage--tall" : "stage"}>
-                  <Preview ref={preview} project={project} onTime={setPlayhead} />
+                  <Preview ref={preview} project={project} onTime={setPlayhead} onTransport={setTransport} />
                   <CaptionOverlay project={project} playhead={playhead} />
                 </div>
               ) : (
@@ -259,6 +265,7 @@ export function ProjectView({ projectId, jobs, onBack, onOpen, onRecord }: Props
                 </div>
               )}
             </div>
+            {project && <TransportBar project={project} playhead={playhead} transport={transport} preview={preview} />}
             {project && <Waveform project={project} playhead={playhead} onSeek={seek} hideCuts={hideCuts} />}
             <JobLine jobs={jobs} onCancel={() => void bridge()?.invoke("jobs:cancel", { id: projectId })} />
           </section>
