@@ -1,11 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { formatDuration, mediaUrl } from "./format";
+import { formatDuration, formatTimecode, mediaUrl } from "./format";
 
 describe("format", () => {
   it("formats durations", () => {
     expect(formatDuration(0)).toBe("0:00");
     expect(formatDuration(75.4)).toBe("1:15");
     expect(formatDuration(3725)).toBe("1:02:05");
+  });
+
+  it("formats timecodes to the hundredth", () => {
+    expect(formatTimecode(0)).toBe("0:00.00");
+    expect(formatTimecode(75.426)).toBe("1:15.42");
+    expect(formatTimecode(0.29)).toBe("0:00.29");
+    expect(formatTimecode(3725)).toBe("1:02:05.00");
   });
 
   it("builds media URLs from project paths", () => {

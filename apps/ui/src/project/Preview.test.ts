@@ -1,6 +1,6 @@
 import { buildTimeline } from "@clipcat/core";
 import { describe, expect, it } from "vitest";
-import { brollStyle, nextKept, previewOffset, punchViewBox } from "./Preview";
+import { brollStyle, nextKept, nextShuttle, outputAt, previewOffset, punchViewBox } from "./Preview";
 
 const seg = (id: string, sourceId: string, sourceStart: number, sourceEnd: number, included = true) => ({ id, sourceId, sourceStart, sourceEnd, included });
 const sources = [
@@ -73,5 +73,33 @@ describe("brollStyle", () => {
       height: "calc(432 / 1080 * 100cqw)",
       borderRadius: "calc(216 / 1080 * 100cqw)",
     });
+  });
+});
+
+describe("nextShuttle", () => {
+  it("speeds up with each press the same way, up to 8x", () => {
+    expect(nextShuttle(0, 1)).toBe(1);
+    expect(nextShuttle(1, 1)).toBe(2);
+    expect(nextShuttle(4, 1)).toBe(8);
+    expect(nextShuttle(8, 1)).toBe(8);
+    expect(nextShuttle(-2, -1)).toBe(-4);
+  });
+
+  it("starts again at 1x when the direction changes", () => {
+    expect(nextShuttle(4, -1)).toBe(-1);
+    expect(nextShuttle(-8, 1)).toBe(1);
+    expect(nextShuttle(0, -1)).toBe(-1);
+  });
+});
+
+describe("outputAt", () => {
+  it("places a kept moment in the edit", () => {
+    expect(outputAt(timeline, "a", 6, order)).toBe(3);
+    expect(outputAt(timeline, "b", 2, order)).toBe(6);
+  });
+
+  it("counts a moment inside a cut as the next kept frame", () => {
+    expect(outputAt(timeline, "a", 3, order)).toBe(2);
+    expect(outputAt(timeline, "b", 0.5, order)).toBe(5);
   });
 });
