@@ -472,19 +472,26 @@ if (!squirrelLaunch && !app.requestSingleInstanceLock()) {
     );
     if (!isSmokeRun()) void healRegistrations(installEnv);
     // Each key's model list, fetched once per key: listing needs the network, and the lists change rarely.
-    const modelLists = new Map<string, Promise<ModelChoice[]>>();
-    const providerStatus = async (provider: KeyedProviderValue, current: SettingsValue) => {
+    // A failed listing is tried again after a minute, so a dead connection isn't asked on every status.
+    const modelLists = new Map<string, { list: Promise<ModelChoice[]>; failedAt: number | null }>();
+    const LIST_RETRY_MS = 60_000;
+    // The status doesn't wait long for a list: the AI picked may not need it, and a slow one arrives on the next status.
+    const LIST_WAIT_MS = 3_000;
+    const providerStatus = async (provider: KeyedProviderValue, current: SettingsValue, waitMs = LIST_WAIT_MS) => {
       const key = await providerKeys[provider].get();
       const model = provider === "openai" ? current.openaiModel : current.openrouterModel;
       if (!key) return { hasKey: false, model, choices: [] };
       const cacheKey = `${provider}:${key}`;
-      if (!modelLists.has(cacheKey)) {
-        const list = listModels(provider, key);
-        modelLists.set(cacheKey, list);
-        // A failed listing is tried again next time rather than kept.
-        list.catch(() => modelLists.delete(cacheKey));
+      const cached = modelLists.get(cacheKey);
+      if (!cached || (cached.failedAt !== null && Date.now() - cached.failedAt > LIST_RETRY_MS)) {
+        const entry = { list: listModels(provider, key), failedAt: null as number | null };
+        entry.list.catch(() => {
+          entry.failedAt = Date.now();
+        });
+        modelLists.set(cacheKey, entry);
       }
-      const choices = await modelLists.get(cacheKey)!.catch(() => [] as ModelChoice[]);
+      const wait = new Promise<ModelChoice[]>((resolve) => setTimeout(() => resolve([]), waitMs));
+      const choices = await Promise.race([modelLists.get(cacheKey)!.list.catch(() => [] as ModelChoice[]), wait]);
       return { hasKey: true, model, choices };
     };
     const aiStatus = async () => {
@@ -740,7 +747,8 @@ if (!squirrelLaunch && !app.requestSingleInstanceLock()) {
           if (key) await verifyProviderKey(provider, key);
           await providerKeys[provider].set(key);
           let current = await settings.get();
-          const status = await providerStatus(provider, current);
+          // Just saved: wait for the whole list, so the page can offer it (and OpenAI can start on its best model).
+          const status = await providerStatus(provider, current, 20_000);
           // OpenAI's list is short and ranked, so a new key starts on its best model; OpenRouter's is too long to guess from.
           if (provider === "openai" && key && !current.openaiModel && status.choices[0]) {
             current = await settings.set({ openaiModel: status.choices[0].id });

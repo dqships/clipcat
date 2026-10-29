@@ -704,7 +704,7 @@ describe("App", () => {
     expect(await screen.findByRole("heading", { name: "AI editor" })).toBeTruthy();
     expect(screen.getByRole("radio", { name: /Claude Code/ })).toHaveProperty("checked", true);
     expect(screen.getAllByText("Run `codex login` in a terminal, then try again.").length).toBeGreaterThan(0);
-    fireEvent.click(screen.getByRole("button", { name: "Back to library" }));
+    fireEvent.click(screen.getByRole("button", { name: "Back to project" }));
     expect(await screen.findByRole("button", { name: "Suggest an edit" })).toBeTruthy();
   });
 

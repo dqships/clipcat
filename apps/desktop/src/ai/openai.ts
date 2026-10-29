@@ -42,8 +42,14 @@ export class ProviderError extends Error {
 }
 
 /** Parses a response, turning an error status into a readable error. */
-async function body<T>(provider: Provider, response: Response): Promise<T> {
-  const text = await response.text();
+async function body<T>(provider: Provider, response: Response, signal?: AbortSignal | null): Promise<T> {
+  let text: string;
+  try {
+    text = await response.text();
+  } catch (e) {
+    if (signal?.aborted && (signal.reason as Error | undefined)?.name !== "TimeoutError") throw e;
+    throw new Error(`Couldn't reach ${PROVIDER_NAME[provider]}. Check the connection.`);
+  }
   if (!response.ok) {
     let detail = text.slice(0, 300);
     try {
@@ -75,7 +81,7 @@ async function call<T>(provider: Provider, fetcher: Fetch, path: string, key: st
     if (init.signal?.aborted && (init.signal.reason as Error | undefined)?.name !== "TimeoutError") throw e;
     throw new Error(`Couldn't reach ${PROVIDER_NAME[provider]}. Check the connection.`);
   }
-  return body<T>(provider, response);
+  return body<T>(provider, response, init.signal);
 }
 
 /** Checks a key with one cheap call; throws a readable error if it doesn't work. */
@@ -88,8 +94,11 @@ export type ModelChoice = { id: string; label: string };
 
 /** OpenAI's chat models, newest family first: not audio, image, embedding or moderation models, which can't edit. */
 export function openAiChoices(ids: string[]): ModelChoice[] {
-  const chat = ids.filter((id) => /^(gpt-|o\d)/.test(id) && !/(audio|realtime|image|tts|transcribe|search|embedding|moderation|instruct|-\d{4}-\d{2}-\d{2}$)/.test(id));
-  const version = (id: string) => Number(/^gpt-(\d+(?:\.\d+)?)/.exec(id)?.[1] ?? /^o(\d+)/.exec(id)?.[1] ?? 0);
+  const chat = ids.filter(
+    (id) => /^(gpt-|o\d)/.test(id) && !/(audio|realtime|image|tts|transcribe|search|embedding|moderation|instruct|preview|-pro\b|-\d{4}-\d{2}-\d{2}$)/.test(id),
+  );
+  // GPT models by version; the o-series sort after them, since a GPT model leads the list and is picked for a new key.
+  const version = (id: string) => (id.startsWith("gpt-") ? 100 + Number(/^gpt-(\d+(?:\.\d+)?)/.exec(id)?.[1] ?? 0) : Number(/^o(\d+)/.exec(id)?.[1] ?? 0));
   // Bigger version first; at one version, the full model before mini and nano.
   const size = (id: string) => (/nano/.test(id) ? 2 : /mini/.test(id) ? 1 : 0);
   return [...new Set(chat)]
@@ -97,13 +106,16 @@ export function openAiChoices(ids: string[]): ModelChoice[] {
     .map((id) => ({ id, label: id }));
 }
 
-type OpenRouterModel = { id: string; name?: string; supported_parameters?: string[] };
+type OpenRouterModel = { id: string; name?: string; supported_parameters?: string[]; architecture?: { input_modalities?: string[] } };
 
-/** OpenRouter's models that take tools, by name. */
+/** OpenRouter's models that take tools, by name; one that can't see pictures says so, since it can't design slides. */
 export function openRouterChoices(models: OpenRouterModel[]): ModelChoice[] {
   return models
     .filter((m) => m.supported_parameters?.includes("tools") ?? false)
-    .map((m) => ({ id: m.id, label: m.name ? `${m.name} (${m.id})` : m.id }))
+    .map((m) => {
+      const textOnly = m.architecture?.input_modalities ? !m.architecture.input_modalities.includes("image") : false;
+      return { id: m.id, label: `${m.name ? `${m.name} (${m.id})` : m.id}${textOnly ? ", text only" : ""}` };
+    })
     .sort((a, b) => a.label.localeCompare(b.label));
 }
 
@@ -154,28 +166,34 @@ function responses(run: AgentRun, pictures: string[], options: Options & { fetch
   ];
   const tool = { type: "function", name: run.task.tool, description: run.task.description, parameters: run.task.jsonSchema, strict: true };
   type Item = { type: string; call_id?: string; name?: string; arguments?: string; content?: { type: string }[] };
+  type Reply = { output: Item[]; status?: string; incomplete_details?: { reason?: string } | null };
+  // Nothing is kept on OpenAI's side, so a reasoning model's reasoning comes back encrypted for the next turn to carry.
+  // Older models refuse to be asked for it, so a refusal drops the ask for the rest of the run.
+  let reasoning = true;
+  const send = () =>
+    call<Reply>("openai", options.fetcher, "/responses", options.key, {
+      method: "POST",
+      signal: run.signal,
+      body: JSON.stringify({
+        model: options.model,
+        instructions: `${run.system}\n\n${run.task.toolAnswer}`,
+        input,
+        tools: [tool],
+        tool_choice: "required",
+        store: false,
+        ...(reasoning ? { include: ["reasoning.encrypted_content"] } : {}),
+      }),
+    });
   return {
     turn: async () => {
-      const response = await call<{ output: Item[]; status?: string; incomplete_details?: { reason?: string } | null }>(
-        "openai",
-        options.fetcher,
-        "/responses",
-        options.key,
-        {
-          method: "POST",
-          signal: run.signal,
-          body: JSON.stringify({
-            model: options.model,
-            instructions: `${run.system}\n\n${run.task.toolAnswer}`,
-            input,
-            tools: [tool],
-            tool_choice: "required",
-            // Nothing is kept on OpenAI's side, so reasoning comes back encrypted for the next turn to carry.
-            store: false,
-            include: ["reasoning.encrypted_content"],
-          }),
-        },
-      );
+      let response: Reply;
+      try {
+        response = await send();
+      } catch (e) {
+        if (!(reasoning && e instanceof ProviderError && e.status === 400 && /reasoning|encrypted/i.test(e.message))) throw e;
+        reasoning = false;
+        response = await send();
+      }
       input.push(...response.output);
       const calls = response.output
         .filter((item) => item.type === "function_call")

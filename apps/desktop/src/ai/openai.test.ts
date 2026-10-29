@@ -86,6 +86,15 @@ describe("OpenAI agent", () => {
     }
   });
 
+  it("stops asking for encrypted reasoning when an older model refuses it", async () => {
+    const refused = { status: 400, body: { error: { message: "Encrypted content is not supported with this model." } } };
+    const { fetcher, sent } = fakeFetch([refused, responsesCall("c1", good)]);
+    await providerAgent("openai", { key: async () => "k", model: async () => "gpt-4.1", fetch: fetcher }).run(run([{ text: "Saved.", done: true }]).r);
+    expect(sent).toHaveLength(2);
+    expect(sent[0]!.body!.include).toEqual(["reasoning.encrypted_content"]);
+    expect(sent[1]!.body!.include).toBeUndefined();
+  });
+
   it("hands back arguments that aren't JSON instead of failing the run", async () => {
     const broken = { status: "completed", output: [{ type: "function_call", call_id: "c1", name: "submit_analysis", arguments: "{oops" }] };
     const { fetcher, sent } = fakeFetch([broken, responsesCall("c2", good)]);
@@ -164,7 +173,7 @@ describe("keys and model lists", () => {
   });
 
   it("lists OpenAI's chat models, newest and biggest first", () => {
-    const ids = ["gpt-5.5-mini", "text-embedding-3-large", "gpt-6.1-sol", "gpt-4o-audio-preview", "gpt-6.1-sol-2026-09-01", "dall-e-3", "gpt-5.5", "o4-mini", "gpt-6.1-mini", "whisper-1", "gpt-image-2"];
+    const ids = ["gpt-5.5-mini", "text-embedding-3-large", "o1-preview", "gpt-6.1-sol", "gpt-4o-audio-preview", "gpt-6.1-sol-2026-09-01", "dall-e-3", "gpt-5.5", "o4-mini", "gpt-6.1-mini", "gpt-5.5-pro", "whisper-1", "gpt-image-2"];
     expect(openAiChoices(ids).map((c) => c.id)).toEqual(["gpt-6.1-sol", "gpt-6.1-mini", "gpt-5.5", "gpt-5.5-mini", "o4-mini"]);
   });
 
@@ -172,10 +181,10 @@ describe("keys and model lists", () => {
     const models = [
       { id: "z/one", name: "Zed One", supported_parameters: ["tools", "tool_choice"] },
       { id: "a/two", name: "Alpha Two", supported_parameters: ["temperature"] },
-      { id: "a/three", name: "Alpha Three", supported_parameters: ["tools"] },
+      { id: "a/three", name: "Alpha Three", supported_parameters: ["tools"], architecture: { input_modalities: ["text"] } },
     ];
     expect(openRouterChoices(models)).toEqual([
-      { id: "a/three", label: "Alpha Three (a/three)" },
+      { id: "a/three", label: "Alpha Three (a/three), text only" },
       { id: "z/one", label: "Zed One (z/one)" },
     ]);
     const { fetcher, sent } = fakeFetch([{ data: models }]);

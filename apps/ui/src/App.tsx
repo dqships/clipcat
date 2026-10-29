@@ -33,8 +33,8 @@ export function App() {
 
   // Off the editor, the menu bar's project items are off.
   useEffect(() => {
-    if (!open || recording) void bridge()?.invoke("menu:state", { project: null });
-  }, [open, recording]);
+    if (!open || recording || settings) void bridge()?.invoke("menu:state", { project: null });
+  }, [open, recording, settings]);
 
   /** File > Import Videos: a new project from the picked files, opened. */
   const importVideos = async () => {
@@ -85,7 +85,7 @@ export function App() {
           }}
         />
       ) : settings ? (
-        <Settings update={update} section={settings.section} onBack={() => setSettings(null)} />
+        <Settings update={update} section={settings.section} overProject={open !== null} onBack={() => setSettings(null)} />
       ) : open ? (
         <ProjectView
           key={open}

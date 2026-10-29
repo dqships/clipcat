@@ -15,7 +15,13 @@ import { Transcription } from "./Transcription";
 export const SECTIONS = ["ai", "agents", "transcription", "updates", "help"] as const;
 export type SectionId = (typeof SECTIONS)[number];
 
-type Props = { update: UpdateStatusValue | null; onBack: () => void; section?: SectionId };
+type Props = {
+  update: UpdateStatusValue | null;
+  onBack: () => void;
+  section?: SectionId;
+  /** Opened from a project, so Back returns to it. */
+  overProject?: boolean;
+};
 
 const message = (e: unknown) => (e instanceof Error ? e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, "") : String(e));
 
@@ -90,7 +96,7 @@ function speechShort(prefs: SettingsValue | null): string {
  * AI editor, hooking ClipCat into the coding agents on this computer, how speech is transcribed, updates,
  * and diagnostics.
  */
-export function Settings({ update, onBack, section }: Props) {
+export function Settings({ update, onBack, section, overProject = false }: Props) {
   const [open, setOpen] = useState<SectionId>(() => section ?? remembered());
   const [agents, setAgents] = useState<McpAgentValue[] | null>(null);
   const [agentsError, setAgentsError] = useState<string | null>(null);
@@ -151,7 +157,7 @@ export function Settings({ update, onBack, section }: Props) {
   return (
     <>
       <header className="titlebar">
-        <button type="button" className="button button--icon" aria-label="Back to library" onClick={onBack}>
+        <button type="button" className="button button--icon" aria-label={overProject ? "Back to project" : "Back to library"} onClick={onBack}>
           <ArrowLeft className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
         </button>
         <h1 className="titlebar__title">Settings</h1>

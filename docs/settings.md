@@ -25,7 +25,7 @@ Pick the AI that suggests edits, shorts, the write-up and spelling fixes. Each o
 
 - **Claude API**: a key from console.anthropic.com. Its model is Opus 5.5 (best), Sonnet 5.5, or Haiku 5.5 (cheapest).
 - **OpenAI**: a key from platform.openai.com, to run GPT models.
-- **OpenRouter**: a key from openrouter.ai, to run any model OpenRouter serves that can use tools, from Anthropic, Google, Meta, Mistral, DeepSeek, Qwen and others. Results vary a lot by model: small models often lose track of the transcript's word numbers. A model that can't see pictures can't design slides.
+- **OpenRouter**: a key from openrouter.ai, to run any model OpenRouter serves that can use tools, from Anthropic, Google, Meta, Mistral, DeepSeek, Qwen and others. Results vary a lot by model: small models often lose track of the transcript's word numbers. A model that can't see pictures can't design slides, and the list marks those "text only".
 - **Model**, for OpenAI and OpenRouter: the list comes from your key once it's saved. OpenAI starts on its best model. OpenRouter waits for you to pick one.
 
 The list on the left shows which AI is picked, and says "not set up" when it can't run yet. The **Edit** tab of a project can switch between them too. See [Review the suggested edit](ai-editor.md).

@@ -74,7 +74,8 @@ function KeyField({ name, saved, onSave }: { name: Keyed; saved: boolean; onSave
   const save = (next: string | null) => {
     setSaving(true);
     onSave(next)
-      .then(() => setKey(""))
+      // The page shows why a key was refused, so the field just keeps it for fixing.
+      .then(() => setKey(""), () => {})
       .finally(() => setSaving(false));
   };
   if (saved) {
@@ -250,7 +251,13 @@ export function AiModels({ ai: shared }: { ai: Ai }) {
       <>
         {models}
         {name !== "api" && ai[name].hasKey && ai[name].choices.length === 0 && (
-          <p className="settings__hint">Couldn't load the list of models. Check the connection, then come back to this page.</p>
+          <p className="settings__hint ai__row">
+            <span>Couldn't load the list of models. Check the connection and the key.</span>
+            <button type="button" className="button" onClick={check}>
+              <RefreshCw className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
+              Check again
+            </button>
+          </p>
         )}
         <KeyField name={name} saved={hasKey(ai, name)} onSave={(key) => saveKey(name, key)} />
       </>
