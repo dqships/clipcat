@@ -11,7 +11,7 @@ function setup(speed = 1) {
   const sources = [source("a", 10), source("b", 5, 1)];
   let segments = [...initialSegments("a", 10, id), ...initialSegments("b", 5, id)];
   segments = setRange(segments, "a", [2, 4], false, id);
-  const project = { sources, speed };
+  const project = { sources, speed, bars: "black" as const };
   const timeline = frameTimeline(buildTimeline({ ...project, segments }), 30);
   const inputs = new Map([
     ["a", "/v/a.mov"],
@@ -95,6 +95,24 @@ describe("chunkCommand", () => {
     expect(second.args).toEqual(expect.arrayContaining(["-ss", "8.666667", "-i", "/v/a.mov", "-ss", "0.000000", "-i", "/v/b.mov"]));
     expect(second.graph).toContain("[s0v0]trim=start_frame=0:end_frame=40");
     expect(second.graph).not.toContain("ass=");
+  });
+
+  it("shows a vertical recording whole in a wide export, with black bars or over itself blurred", () => {
+    const { timeline, shape } = setup();
+    const chunk = exportChunks(timeline, 10_000)[0]!;
+    const a = shape.project.sources[0]!;
+    const tall = { ...a, media: { ...a.media, width: 1080, height: 1920 } };
+    const graph = (bars: "black" | "blur") =>
+      chunkCommand({ ...shape, project: { ...shape.project, bars, sources: [tall, shape.project.sources[1]!] }, chunk, captions: null, encoder: "libx264", out: "c.mp4" }).graph;
+    expect(graph("black")).toContain("force_original_aspect_ratio=decrease:flags=lanczos,pad=");
+    expect(graph("black")).not.toContain("boxblur");
+    const blurred = graph("blur");
+    expect(blurred).toContain("[s0v0]trim=start_frame=0:end_frame=60,setpts=PTS-STARTPTS[t0]");
+    expect(blurred).toContain("[t0]split=2[fa0][fb0]");
+    expect(blurred).toMatch(/\[fa0\]scale=\d+:\d+:force_original_aspect_ratio=increase:flags=bilinear,crop=\d+:\d+,boxblur=\d+:2\[fg0\]/);
+    expect(blurred).toContain("[fg0][fc0]overlay=x=(W-w)/2:y=(H-h)/2,setsar=1,format=yuv420p[v0]");
+    // b is already wide, so it keeps the plain fit.
+    expect(blurred).not.toContain("[fa2]");
   });
 
   it("crops for vertical and reads the speed change as a slower frame grid", () => {

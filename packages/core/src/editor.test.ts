@@ -104,6 +104,13 @@ describe("applyEdit framing", () => {
     expect(set.history.past).toHaveLength(0);
     expect(() => applyEdit(p, { type: "frame", sourceId: "nope", x: 0.5 }, counter("g"))).toThrow("Unknown source");
   });
+
+  it("fills the sides of another shape with black bars or the picture blurred", () => {
+    const p = project();
+    expect(p.bars).toBe("black");
+    expect(applyEdit(p, { type: "bars", bars: "blur" }, counter("g")).bars).toBe("blur");
+    expect(EditOp.safeParse({ type: "bars", bars: "blue" }).success).toBe(false);
+  });
 });
 
 describe("applyEdit punch-ins", () => {
