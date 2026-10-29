@@ -45,3 +45,9 @@ export function broadcast<E extends EventName>(event: E, payload: EventPayload<E
     if (!win.isDestroyed()) win.webContents.send(eventChannelFor(event), checked);
   }
 }
+
+/** Pushes an event to one window, after checking it against the contract. */
+export function send<E extends EventName>(win: BrowserWindow, event: E, payload: EventPayload<E>): void {
+  const checked = events[event].parse(payload);
+  if (!win.isDestroyed()) win.webContents.send(eventChannelFor(event), checked);
+}

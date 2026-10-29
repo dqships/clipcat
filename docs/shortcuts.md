@@ -1,6 +1,6 @@
 ---
 title: ClipCat keyboard shortcuts for Mac and Windows
-description: Every keyboard shortcut in ClipCat: playback, stepping frames, cutting words, fixing words, undo and redo, and moving panels and thumbnail text.
+description: Every keyboard shortcut in ClipCat: playback, stepping frames, cutting and fixing words, undo and redo, the menu bar, and moving panels and text.
 order: 16
 updated: 2026-10-29
 ---
@@ -50,6 +50,19 @@ These work anywhere in the editor, except while you type in a box.
 | Enter, while renaming a project | Save the name |
 | Esc, while renaming a project | Keep the old name |
 | Up and Down arrows, in a project's menu | Move through the menu. Esc closes it. |
+
+## Menu bar
+
+| Key | What it does |
+| --- | --- |
+| Cmd+N | New recording |
+| Cmd+O | Import videos into a new project |
+| Shift+Cmd+O | Add videos to the open project |
+| Cmd+E | Open the Export tab |
+| Cmd+1, Cmd+2, Cmd+3, Cmd+4 | Open the Edit, Look, Publish or Export tab |
+| Shift+Cmd+H | Hide cuts, or show them again |
+| Cmd+, | Settings |
+| Cmd+Plus, Cmd+Minus, Cmd+0 | Make the whole window bigger, smaller, or its usual size |
 
 ## Help
 

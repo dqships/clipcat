@@ -185,6 +185,38 @@ export const McpCheckStep = z.object({
 });
 
 /** Where updating stands: off (a dev copy, or no feed), checking, downloading, ready to restart, or a newer version to download by hand. */
+/** What a menu bar item asks the window to do. */
+export const MenuCommand = z.enum([
+  "settings",
+  "new-recording",
+  "import",
+  "open-project",
+  "add-videos",
+  "export",
+  "tab-edit",
+  "tab-look",
+  "tab-publish",
+  "tab-export",
+  "hide-cuts",
+  "undo",
+  "redo",
+  "play-pause",
+  "play-backwards",
+  "pause",
+  "play-forwards",
+  "back-frame",
+  "forward-frame",
+  "back-second",
+  "forward-second",
+]);
+
+/** What the window shows, so the menu bar can match it: the open project, or null on any other screen. */
+export const MenuState = z.object({
+  project: z
+    .object({ id: z.string().regex(/^[a-zA-Z0-9-]+$/), canUndo: z.boolean(), canRedo: z.boolean(), hideCuts: z.boolean() })
+    .nullable(),
+});
+
 export const UpdateStatus = z.object({
   state: z.enum(["off", "idle", "checking", "downloading", "ready", "available", "error"]),
   /** The newer version, once known. */
@@ -359,6 +391,8 @@ export const methods = {
   "app:diagnostics": { input: z.void(), output: z.object({ path: z.string().nullable() }) },
   /** Shows the log folder. */
   "app:reveal-logs": { input: z.void(), output: z.void() },
+  /** Tells the menu bar what the window shows, so project items turn on and off and Open Recent stays current. */
+  "menu:state": { input: MenuState, output: z.void() },
   /** Opens the Help window at one page of the help (docs/<page>.md; "" for the overview). */
   "help:open": { input: z.object({ page: z.string().regex(/^[a-z0-9-]*$/).max(60) }), output: z.void() },
   /** Where an agent CLI stands: installed version, newest release, and what Install or Update would run. */
@@ -384,6 +418,8 @@ export const events = {
   "speech:progress": z.object({ id: SpeechModelId, fraction: z.number().nullable() }),
   /** An agent opened or closed an MCP session: every agent's state. */
   "mcp:agents": z.array(McpAgent),
+  /** A menu bar item was chosen; projectId is the project for Open Recent. */
+  menu: z.object({ command: MenuCommand, projectId: z.string().optional() }),
 } as const;
 
 export type Events = typeof events;
@@ -411,6 +447,8 @@ export interface ClipcatBridge {
 }
 
 export type AppInfoValue = z.output<typeof AppInfo>;
+export type MenuCommandValue = z.output<typeof MenuCommand>;
+export type MenuStateValue = z.output<typeof MenuState>;
 export type ToolInfoValue = z.output<typeof ToolInfo>;
 export type ProjectSummaryValue = z.output<typeof ProjectSummary>;
 export type JobEventValue = z.output<typeof JobEvent>;

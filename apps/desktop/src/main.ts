@@ -11,7 +11,7 @@ import { type Article, type EditOp, TIMELINE_FORMATS, type TimelineFormat, apply
 import tokens from "../../../design/tokens.json";
 import { homedir, release, totalmem } from "node:os";
 import { dirname, extname, join, resolve } from "node:path";
-import type { AppInfoValue } from "@clipcat/ipc";
+import type { AppInfoValue, MenuCommandValue, MenuStateValue } from "@clipcat/ipc";
 import { AnalysisRunner } from "./ai/analyze";
 import { apiAgent, verifyKey } from "./ai/api";
 import { CLAUDE_MODELS, claudeAgent, probeClaude } from "./ai/claude";
@@ -19,7 +19,7 @@ import { type CliDeps, cliStatus, runCli } from "./ai/cli";
 import { codexAgent, codexModels, probeCodex, resolveCodex } from "./ai/codex";
 import { hydrateEnv } from "./ai/env";
 import { type Binary, binaryPath, probeVersion } from "./tools";
-import { broadcast, registerIpc } from "./ipc";
+import { broadcast, registerIpc, send } from "./ipc";
 import { JobLog } from "./jobs/log";
 import { JobQueue } from "./jobs/queue";
 import { BACKGROUND_ARG } from "./mcp/config";
@@ -54,6 +54,7 @@ import { handleSquirrelEvent } from "./squirrel";
 import { Updater } from "./update";
 import { ProjectStore } from "./store/projects";
 import { KeyStore } from "./store/keys";
+import { RecentProjects } from "./store/recent";
 import { SettingsStore } from "./store/settings";
 import { SpeechLibrary } from "./transcribe/library";
 import type { ModelId } from "./transcribe/models";
@@ -290,6 +291,8 @@ const articleFile = (a: Article) => `${a.title.trim() ? `# ${a.title.trim()}\n\n
 
 /** The app's window; the face detector's hidden window is never it. */
 let mainWindow: BrowserWindow | null = null;
+/** Set once the menu bar is up: turns its project items off when the window closes. */
+let onMainWindowClosed: (() => void) | null = null;
 
 /**
  * Started by the MCP bridge for an agent (the Claude desktop app starts its
@@ -345,6 +348,7 @@ function createWindow(): BrowserWindow {
   mainWindow = win;
   win.on("closed", () => {
     mainWindow = null;
+    onMainWindowClosed?.();
     closeFaceDetector();
     closeCutout();
   });
@@ -523,10 +527,62 @@ if (!squirrelLaunch && !app.requestSingleInstanceLock()) {
       await writeFile(path, zip);
       return path;
     };
+    // The menu bar matches what the window shows, and is built again when that changes.
+    const recent = new RecentProjects(join(app.getPath("userData"), "recent-projects.json"));
+    let menuState: MenuStateValue = { project: null };
+    let pendingCommand: { command: MenuCommandValue; projectId?: string } | null = null;
+    const sendCommand = (command: MenuCommandValue, projectId?: string) => {
+      const win = mainWindow;
+      if (win) {
+        showWindow();
+        send(win, "menu", { command, ...(projectId ? { projectId } : {}) });
+      } else {
+        pendingCommand = { command, ...(projectId ? { projectId } : {}) };
+        showWindow();
+      }
+    };
+    const refreshMenu = async () => {
+      const [ids, projects] = await Promise.all([recent.list(), store.list().catch(() => [])]);
+      const names = new Map(projects.map((p) => [p.id, p.name]));
+      Menu.setApplicationMenu(
+        Menu.buildFromTemplate(
+          menuTemplate({
+            platform: process.platform,
+            dev: !app.isPackaged,
+            state: menuState,
+            recent: ids.flatMap((id) => (names.has(id) ? [{ id, name: names.get(id)! }] : [])),
+            send: sendCommand,
+            help: (page) => openHelp(page, { appOrigin: APP_ORIGIN, devUrl: DEV_URL }),
+            open: (url) => void shell.openExternal(url),
+            issueUrl: () => issueUrl({ version: app.getVersion(), platform: process.platform, arch: process.arch, release: process.getSystemVersion() }),
+            releasesUrl: RELEASES_URL,
+            // From the menu, the saved zip is shown in Finder or File Explorer, since no screen says where it went.
+            saveDiagnostics: () =>
+              void saveDiagnostics(BrowserWindow.getFocusedWindow() ?? mainWindow).then(
+                (path) => path && shell.showItemInFolder(path),
+                (e: unknown) => dialog.showErrorBox("Couldn't save diagnostics", e instanceof Error ? e.message : String(e)),
+              ),
+            showLogs: () => void showLogs(),
+            // Settings shows how the check goes.
+            checkUpdates: () => {
+              sendCommand("settings");
+              void updater.check();
+            },
+            showProject: (id) => void shell.openPath(store.dir(id)),
+            clearRecent: () => void recent.clear().then(refreshMenu),
+          }),
+        ),
+      );
+    };
     registerIpc(
       {
         "app:info": () => appInfo(),
-        "app:ready": async ({ screen }) => {
+        "app:ready": async ({ screen }, event) => {
+          // A menu item chosen with no window open waits for the window it opened.
+          const waiting = pendingCommand;
+          pendingCommand = null;
+          const win = BrowserWindow.fromWebContents(event.sender);
+          if (waiting && win) send(win, "menu", waiting);
           if (!isSmokeRun()) return;
           const info = await appInfo();
           const file = process.env.CLIPCAT_SMOKE_IMPORT;
@@ -762,6 +818,12 @@ if (!squirrelLaunch && !app.requestSingleInstanceLock()) {
         "app:reveal-logs": () => showLogs(),
         "app:diagnostics": async (_, event) => ({ path: await saveDiagnostics(BrowserWindow.fromWebContents(event.sender)) }),
         "help:open": ({ page }) => openHelp(page, { appOrigin: APP_ORIGIN, devUrl: DEV_URL }),
+        "menu:state": async (state) => {
+          const opened = state.project && state.project.id !== menuState.project?.id ? state.project.id : null;
+          menuState = state;
+          if (opened) await recent.opened(opened);
+          await refreshMenu();
+        },
         "cli:status": async ({ id }) => cliStatus(id, await cliDeps()),
         "cli:run": async ({ id }) => {
           // One run per CLI: a second press while one is going waits for it.
@@ -782,24 +844,11 @@ if (!squirrelLaunch && !app.requestSingleInstanceLock()) {
       },
       DEV_URL,
     );
-    Menu.setApplicationMenu(
-      Menu.buildFromTemplate(
-        menuTemplate({
-          platform: process.platform,
-          help: (page) => openHelp(page, { appOrigin: APP_ORIGIN, devUrl: DEV_URL }),
-          open: (url) => void shell.openExternal(url),
-          issueUrl: () => issueUrl({ version: app.getVersion(), platform: process.platform, arch: process.arch, release: process.getSystemVersion() }),
-          releasesUrl: RELEASES_URL,
-          // From the menu, the saved zip is shown in Finder or Explorer, since no screen says where it went.
-          saveDiagnostics: () =>
-            void saveDiagnostics(BrowserWindow.getFocusedWindow() ?? mainWindow).then(
-              (path) => path && shell.showItemInFolder(path),
-              (e: unknown) => dialog.showErrorBox("Couldn't save diagnostics", e instanceof Error ? e.message : String(e)),
-            ),
-          showLogs: () => void showLogs(),
-        }),
-      ),
-    );
+    onMainWindowClosed = () => {
+      menuState = { project: null };
+      void refreshMenu();
+    };
+    void refreshMenu();
     if (isSmokeRun()) startSmokeTimer();
     else {
       // Each part picks up its own unfinished work, so one failing doesn't stop the others.
