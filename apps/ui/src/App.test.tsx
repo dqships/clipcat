@@ -513,7 +513,7 @@ describe("App", () => {
   });
 
   it("makes a thumbnail from the frame at the playhead, then changes its text and colours", async () => {
-    const thumbnail = { sourceId: "s1", time: 0, frame: "media/thumbnail/frame-a.jpg", subject: "media/thumbnail/subject-a.png", text: "", textColor: "paper", background: "frame", textSide: "left", behind: true };
+    const thumbnail = { sourceId: "s1", time: 0, frame: "media/thumbnail/frame-a.jpg", subject: "media/thumbnail/subject-a.png", text: "", textColor: "paper", background: "frame", textSide: "left", textBox: null, behind: true };
     const { invoke } = fakeBridge({
       "app:info": info(),
       "library:list": [summary],
