@@ -10,6 +10,7 @@ export default {
       { source: "/:path*", headers: [...SECURITY_HEADERS, { key: "Vary", value: "Accept" }] },
       { source: "/fonts/:file*", headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }] },
       { source: "/llms.txt", headers: [{ key: "Content-Type", value: "text/plain; charset=utf-8" }] },
+      { source: "/llms-full.txt", headers: [{ key: "Content-Type", value: "text/plain; charset=utf-8" }] },
     ];
   },
   async redirects() {
@@ -17,6 +18,9 @@ export default {
     return [
       { source: "/index.html", destination: "/", permanent: true },
       { source: "/:page.html", destination: "/:page", permanent: true },
+      // The agent guide became a help page.
+      { source: "/agents", destination: "/docs/agents", permanent: true },
+      { source: "/agents.md", destination: "/docs/agents.md", permanent: true },
     ];
   },
 };

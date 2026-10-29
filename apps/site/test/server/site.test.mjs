@@ -11,7 +11,7 @@ import { createRequire } from "node:module";
 import { createServer } from "node:net";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { NOT_FOUND, PAGES } from "../../lib/markdown.mjs";
+import { ALL, NOT_FOUND } from "../../lib/markdown.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const ORIGIN = "https://clipcat.example";
@@ -57,7 +57,7 @@ const text = (html) =>
     .trim();
 const decode = (s) => s.replace(/&#x27;|&#39;/g, "'").replace(/&amp;/g, "&").replace(/&quot;/g, '"');
 
-for (const page of [...PAGES, NOT_FOUND]) {
+for (const page of [...ALL, NOT_FOUND]) {
   const path = page === NOT_FOUND ? "/no-such-page" : page.path;
 
   test(`${page.path}: status, head and headers`, async () => {
@@ -107,7 +107,7 @@ for (const page of [...PAGES, NOT_FOUND]) {
 }
 
 test("Markdown at every page URL and every .md address", async () => {
-  for (const page of PAGES) {
+  for (const page of ALL) {
     const res = await get(page.path, { accept: "text/markdown" });
     assert.equal(res.status, 200);
     assert.equal(res.headers.get("content-type"), "text/markdown; charset=utf-8");
@@ -134,9 +134,20 @@ test("robots.txt, sitemap.xml and llms.txt", async () => {
   assert.match(await robots.text(), new RegExp(`Sitemap: ${ORIGIN}/sitemap.xml`));
   const sitemap = await get("/sitemap.xml");
   assert.match(sitemap.headers.get("content-type"), /xml/);
-  assert.equal((await sitemap.text()).match(/<url>/g).length, PAGES.length);
+  assert.equal((await sitemap.text()).match(/<url>/g).length, ALL.length);
   const llms = await get("/llms.txt");
   assert.match(await llms.text(), /^# ClipCat\n\n> /);
+  const full = await get("/llms-full.txt");
+  assert.match(full.headers.get("content-type"), /^text\/plain/);
+  assert.match(await full.text(), /^# ClipCat help, every page\n/);
+});
+
+test("the old agent guide redirects to its help page", async () => {
+  for (const [from, to] of [["/agents", "/docs/agents"], ["/agents.md", "/docs/agents.md"]]) {
+    const res = await get(from);
+    assert.equal(res.status, 308);
+    assert.equal(new URL(res.headers.get("location"), base).pathname, to);
+  }
 });
 
 test("old .html addresses redirect to the clean ones", async () => {

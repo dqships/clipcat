@@ -21,6 +21,7 @@ in [DESIGN.md](DESIGN.md); read it before touching any screen.
 | `native/recorder` | `clipcat-recorder`, a Swift helper that records the screen with ScreenCaptureKit (macOS 15) |
 | `scripts/` | `fetch-ffmpeg` (pinned static builds), `build-whisper` (whisper.cpp from a pinned commit), `build-parakeet` and `build-recorder` (the Swift helpers), `check-tokens` (no raw values in UI) |
 | `apps/site` | Marketing site at [clipcat.followusai.com](https://clipcat.followusai.com) (Next.js, no JavaScript on the pages), deployed on its own by Vercel |
+| `docs/` | The help pages: how to use every part of the app. The site serves them at `/docs` (and as Markdown for agents); GitHub shows them as they are. After editing one, run `npm run docs`. |
 
 ## Develop
 

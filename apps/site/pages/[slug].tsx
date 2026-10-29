@@ -1,5 +1,6 @@
 import type { GetStaticPaths, GetStaticProps } from "next";
 import { PageView } from "../components/PageView";
+import type { Page } from "../components/types";
 import { PAGES, findPage } from "../lib/markdown.mjs";
 
 export const config = { unstable_runtimeJS: false };
@@ -15,5 +16,5 @@ export const getStaticPaths: GetStaticPaths = () => ({
 export const getStaticProps: GetStaticProps<Props> = ({ params }) => ({ props: { slug: String(params!.slug) } });
 
 export default function Page({ slug }: Props) {
-  return <PageView page={findPage(`/${slug}`)!} />;
+  return <PageView page={findPage(`/${slug}`) as Page} />;
 }

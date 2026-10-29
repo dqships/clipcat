@@ -1,4 +1,4 @@
-import { HEADER, PAGES, SITE } from "../lib/markdown.mjs";
+import { DOCS, HEADER, PAGES, SITE, findPage } from "../lib/markdown.mjs";
 import { DownloadIcon, Mark } from "./Icons";
 
 /** The logo and the main links. On the home page it sits on the yellow plate. */
@@ -14,8 +14,8 @@ export function SiteHeader({ current, plate = false }: { current: string; plate?
           <ul className="masthead__nav">
             {HEADER.map((path) => (
               <li key={path}>
-                <a href={path} aria-current={path === current ? "page" : undefined}>
-                  {PAGES.find((p) => p.path === path)!.nav}
+                <a href={path} aria-current={path === current ? "page" : current.startsWith(`${path}/`) ? "true" : undefined}>
+                  {findPage(path)!.nav}
                 </a>
               </li>
             ))}
@@ -58,7 +58,7 @@ export function SiteFooter() {
         </a>
         <nav aria-label="Site">
           <ul className="footer__links">
-            {PAGES.map((p) => (
+            {[...PAGES, DOCS[0]!].map((p) => (
               <li key={p.path}>
                 <a href={p.path}>{p.nav}</a>
               </li>

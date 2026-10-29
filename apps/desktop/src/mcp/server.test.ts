@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { type EditOp, applyEdit, initialSegments } from "@clipcat/core";
+import { type EditOp, SOUND_EFFECTS, applyEdit, initialSegments } from "@clipcat/core";
 import { counter, source, words } from "@clipcat/core/fixtures";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ProjectStore } from "../store/projects";
@@ -64,6 +64,13 @@ describe("ClipCat's MCP server", () => {
     expect(tools.find((t) => t.name === "get_transcript")!.annotations?.readOnlyHint).toBe(true);
     expect(tools.find((t) => t.name === "cut_words")!.annotations?.readOnlyHint).toBe(false);
     expect(tools.every((t) => t.description)).toBe(true);
+  });
+
+  it("has every tool and sound effect in the help page for agents", async () => {
+    const guide = await readFile(join(__dirname, "..", "..", "..", "..", "docs", "agents.md"), "utf8");
+    const { tools } = await client.listTools();
+    for (const tool of tools) expect(guide, `docs/agents.md doesn't mention ${tool.name}`).toContain(`**${tool.name}**`);
+    for (const effect of SOUND_EFFECTS) expect(guide, `docs/agents.md doesn't list the ${effect.id} effect`).toMatch(new RegExp(`\\b${effect.id}\\b`));
   });
 
   it("reads projects and the numbered transcript", async () => {
