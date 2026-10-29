@@ -205,10 +205,15 @@ describe("thumbnail edits", () => {
   it("change the text and colours once there is a frame, and are not undo steps", () => {
     const p = project();
     expect(() => applyEdit(p, { type: "thumbnail", text: "Hi" }, counter("t"))).toThrow("Pick a frame");
-    p.thumbnail = { sourceId: p.sources[0]!.id, time: 3, frame: "media/thumbnail/frame-1.jpg", subject: null, text: "", textColor: "paper", background: "frame", textSide: "left", behind: true };
+    p.thumbnail = { sourceId: p.sources[0]!.id, time: 3, frame: "media/thumbnail/frame-1.jpg", subject: null, text: "", textColor: "paper", background: "frame", textSide: "left", textBox: null, behind: true };
     const next = applyEdit(p, { type: "thumbnail", text: "Cut the fluff", background: "blur", textSide: "right" }, counter("t"));
     expect(next.thumbnail).toMatchObject({ text: "Cut the fluff", background: "blur", textSide: "right", textColor: "paper" });
     expect(next.history.past).toHaveLength(0);
     expect(EditOp.safeParse({ type: "thumbnail", textColor: "red" }).success).toBe(false);
+    // The text can be moved anywhere on the thumbnail, and put back.
+    const moved = applyEdit(next, { type: "thumbnail", textBox: { x: 0.1, y: 0.6, width: 0.5, height: 0.3 } }, counter("t"));
+    expect(moved.thumbnail?.textBox).toEqual({ x: 0.1, y: 0.6, width: 0.5, height: 0.3 });
+    expect(applyEdit(moved, { type: "thumbnail", textBox: null }, counter("t")).thumbnail?.textBox).toBeNull();
+    expect(EditOp.safeParse({ type: "thumbnail", textBox: { x: 0.8, y: 0, width: 0.5, height: 0.5 } }).success).toBe(false);
   });
 });

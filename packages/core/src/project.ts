@@ -179,6 +179,8 @@ const captionFields = {
   effect: z.enum(["none", "shadow"]),
   case: z.enum(["regular", "upper", "lower"]),
   background: z.enum(["none", "rounded"]),
+  /** The box's colour behind the text, when there is one. */
+  boxColor: z.string().regex(/^#[0-9a-fA-F]{6}$/),
   /** Vertical position of the caption block's baseline, 0 (top) .. 1 (bottom). */
   position: z.number().min(0).max(1),
 };
@@ -192,6 +194,7 @@ export const Captions = z.object({
   effect: captionFields.effect.default("shadow"),
   case: captionFields.case.default("regular"),
   background: captionFields.background.default("none"),
+  boxColor: captionFields.boxColor.default("#000000"),
   position: captionFields.position.default(0.82),
 });
 
@@ -224,6 +227,16 @@ export const ThumbnailColor = z.enum(["paper", "ink", "tape"]);
 /** What fills the thumbnail behind the text: the frame itself, the frame blurred, or a flat colour. */
 export const ThumbnailBackground = z.enum(["frame", "blur", "paper", "ink", "tape"]);
 
+/** A box on the thumbnail, its corner and size as shares of the thumbnail's width and height. */
+export const ThumbnailBox = z
+  .object({
+    x: z.number().min(0).max(1),
+    y: z.number().min(0).max(1),
+    width: z.number().min(0.05).max(1),
+    height: z.number().min(0.05).max(1),
+  })
+  .refine((b) => b.x + b.width <= 1.0001 && b.y + b.height <= 1.0001, "The text box has to stay on the thumbnail");
+
 /**
  * The video's thumbnail: a frame from a recording, its subject cut out so the
  * text can sit behind them, and the text and colours on it. The pictures are
@@ -239,8 +252,10 @@ export const Thumbnail = z.object({
   text: z.string().max(80).default(""),
   textColor: ThumbnailColor.default("paper"),
   background: ThumbnailBackground.default("frame"),
-  /** Which half the text sits in. */
+  /** Which half the text sits in, and the side its lines line up on. */
   textSide: z.enum(["left", "right"]).default("left"),
+  /** Where the user moved the text, as shares of the thumbnail (0..1); null keeps it in its half. */
+  textBox: ThumbnailBox.nullable().default(null),
   /** The subject in front of the text (true) or the text over everything. */
   behind: z.boolean().default(true),
 });
@@ -299,6 +314,7 @@ export const Project = z.object({
 });
 
 export type AspectRatio = z.infer<typeof AspectRatio>;
+export type ThumbnailBox = z.infer<typeof ThumbnailBox>;
 export type MediaInfo = z.infer<typeof MediaInfo>;
 export type Source = z.infer<typeof Source>;
 export type Word = z.infer<typeof Word>;

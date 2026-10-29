@@ -56,7 +56,7 @@ export class ThumbnailPipeline {
     this.deps.changed(
       await this.deps.store.update(projectId, null, (p) => {
         const t = p.thumbnail;
-        const style = t ? { text: t.text, textColor: t.textColor, background: t.background, textSide: t.textSide, behind: t.behind } : {};
+        const style = t ? { text: t.text, textColor: t.textColor, background: t.background, textSide: t.textSide, textBox: t.textBox, behind: t.behind } : {};
         p.thumbnail = Thumbnail.parse({ ...style, sourceId, time, frame, subject: null });
       }),
     );

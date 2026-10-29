@@ -549,6 +549,30 @@ if (!squirrelLaunch && !app.requestSingleInstanceLock()) {
             if (parent) broadcast("project:changed", { id: parent.id, revision: parent.revision });
           }
         },
+        "project:rename": async ({ id, name }) => {
+          const next = await store.update(id, null, (p) => {
+            p.name = name;
+          });
+          broadcast("project:changed", { id, revision: next.revision });
+          // Shorts name their long video, and the long video lists its shorts by title.
+          const related = [
+            ...(next.origin
+              ? [
+                  store.update(next.origin.projectId, null, (p) => {
+                    for (const s of p.shorts) if (s.id === id) s.title = name;
+                  }),
+                ]
+              : []),
+            ...next.shorts.map((s) =>
+              store.update(s.id, null, (p) => {
+                if (p.origin?.projectId === id) p.origin.name = name;
+              }),
+            ),
+          ];
+          for (const r of await Promise.allSettled(related)) if (r.status === "fulfilled") broadcast("project:changed", { id: r.value.id, revision: r.value.revision });
+          return next;
+        },
+        "project:reveal": ({ id }) => shell.showItemInFolder(store.dir(id)),
         "ai:status": () => aiStatus(),
         "settings:get": () => settings.get(),
         "settings:set": (patch) => settings.set(patch),
@@ -597,7 +621,7 @@ if (!squirrelLaunch && !app.requestSingleInstanceLock()) {
         },
         "project:shorts": async ({ id, count, seconds }) => analysis.shorts(id, count, seconds),
         "project:edit": ({ id, revision, op }) => edit(id, revision, op),
-        "project:export": async ({ id, format }, event) => {
+        "project:export": async ({ id, format, cover }, event) => {
           const project = await store.get(id);
           const win = BrowserWindow.fromWebContents(event.sender);
           const suffix = format === "9:16" ? " (vertical)" : "";
@@ -609,7 +633,7 @@ if (!squirrelLaunch && !app.requestSingleInstanceLock()) {
           const result = win ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options);
           if (result.canceled || !result.filePath) return { path: null };
           const path = extname(result.filePath).toLowerCase() === ".mp4" ? result.filePath : `${result.filePath}.mp4`;
-          exporter.export(id, format, path);
+          exporter.export(id, format, path, cover ? Buffer.from(cover, "base64") : null);
           return { path };
         },
         "project:export-timeline": async ({ id, format }, event) => {

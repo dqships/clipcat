@@ -55,6 +55,16 @@ export function Library({ jobsFor, onOpen, onSettings, onRecord }: Props) {
     void importFiles([...event.dataTransfer.files].map((f) => api.pathForFile(f)).filter(Boolean));
   };
 
+  const rename = async (id: string, name: string) => {
+    setError(null);
+    try {
+      await bridge()?.invoke("project:rename", { id, name });
+      refresh();
+    } catch (e) {
+      setError(message(e));
+    }
+  };
+
   const remove = async (id: string) => {
     await bridge()?.invoke("project:remove", { id });
     refresh();
@@ -129,7 +139,14 @@ export function Library({ jobsFor, onOpen, onSettings, onRecord }: Props) {
           <ul className="grid" aria-label="Projects">
             {(projects ?? []).map((p) => (
               <li key={p.id}>
-                <ProjectCard project={p} jobs={jobsFor(p.id)} onOpen={() => onOpen(p.id)} onRemove={() => remove(p.id)} />
+                <ProjectCard
+                  project={p}
+                  jobs={jobsFor(p.id)}
+                  onOpen={() => onOpen(p.id)}
+                  onRename={(name) => void rename(p.id, name)}
+                  onReveal={() => void bridge()?.invoke("project:reveal", { id: p.id })}
+                  onRemove={() => remove(p.id)}
+                />
               </li>
             ))}
           </ul>

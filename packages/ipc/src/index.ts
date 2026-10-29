@@ -191,6 +191,8 @@ export const RecordKind = z.enum(["camera", "screen", "voice"]);
 const Token = z.string().uuid();
 
 const ProjectRef = z.object({ id: z.string().regex(/^[a-zA-Z0-9-]+$/) });
+/** A picture the editor drew, as base64 PNG. */
+const Png = z.string().min(1).max(30_000_000).regex(/^[A-Za-z0-9+/]+={0,2}$/);
 /** Absolute paths, as the file picker or a drop gives them. */
 const Files = z.array(z.string().min(1).max(4096)).min(1).max(200);
 
@@ -213,6 +215,10 @@ export const methods = {
   "project:import": { input: z.object({ projectId: z.string().regex(/^[a-zA-Z0-9-]+$/).nullable(), files: Files }), output: Project },
   "project:get": { input: ProjectRef, output: Project },
   "project:remove": { input: ProjectRef, output: z.void() },
+  /** Renames a project; a short's entry in its long video, and a long video's name on its shorts, follow. */
+  "project:rename": { input: ProjectRef.extend({ name: z.string().trim().min(1).max(200) }), output: Project },
+  /** Shows the project's folder in Finder or Explorer. */
+  "project:reveal": { input: ProjectRef, output: z.void() },
   /** Whether the user's AI editor is installed and signed in. Probing runs the CLI, so it takes a moment. */
   "ai:status": { input: z.void(), output: AiStatus },
   /** Changes app-wide settings; resolves with all of them. */
@@ -235,7 +241,7 @@ export const methods = {
   "project:thumbnail-frame": { input: ProjectRef.extend({ sourceId: z.string().min(1).max(200), time: z.number().nonnegative() }), output: z.void() },
   /** Asks where to save the thumbnail the editor drew (a base64 PNG), then writes it. Resolves with the path, or null when cancelled. */
   "project:save-thumbnail": {
-    input: ProjectRef.extend({ png: z.string().min(1).max(30_000_000).regex(/^[A-Za-z0-9+/]+={0,2}$/) }),
+    input: ProjectRef.extend({ png: Png }),
     output: z.object({ path: z.string().nullable() }),
   },
   /** Queues designing the project's slides that have no design yet (one that failed, say). */
@@ -253,10 +259,14 @@ export const methods = {
    */
   "project:edit": { input: ProjectRef.extend({ revision: z.number().int().nonnegative(), op: EditOp }), output: Project },
   /**
-   * Asks where to save, then queues an export in that shape. Resolves with
-   * the chosen path, or null when the save dialog was cancelled.
+   * Asks where to save, then queues an export in that shape. `cover`, the
+   * thumbnail the editor drew for that shape, becomes the file's cover art.
+   * Resolves with the chosen path, or null when the save dialog was cancelled.
    */
-  "project:export": { input: ProjectRef.extend({ format: z.enum(["16:9", "9:16"]) }), output: z.object({ path: z.string().nullable() }) },
+  "project:export": {
+    input: ProjectRef.extend({ format: z.enum(["16:9", "9:16"]), cover: Png.nullable().optional() }),
+    output: z.object({ path: z.string().nullable() }),
+  },
   /**
    * Asks where to save, then writes the edit as a timeline another editor opens:
    * FCPXML (Final Cut Pro, Resolve), Final Cut 7 XML (Premiere Pro) or an EDL.

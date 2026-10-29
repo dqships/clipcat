@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { bridge } from "../bridge";
 import { ICON_STROKE } from "../icons";
 import { JobLine } from "../JobLine";
+import { NameField } from "../NameField";
 import { type ProjectJobs, useProjectChanges } from "../useJobs";
 import { AiPanel } from "./AiPanel";
 import { CaptionOverlay } from "./CaptionOverlay";
@@ -49,6 +50,7 @@ export function ProjectView({ projectId, jobs, onBack, onOpen, onRecord }: Props
   const [project, setProjectState] = useState<Project | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [playhead, setPlayhead] = useState<Playhead | null>(null);
+  const [renaming, setRenaming] = useState(false);
   const preview = useRef<PreviewHandle>(null);
   const [transport, setTransport] = useState<Transport>({ rate: 0 });
 
@@ -198,7 +200,26 @@ export function ProjectView({ projectId, jobs, onBack, onOpen, onRecord }: Props
         <button type="button" className="button button--icon" aria-label="Back to library" onClick={onBack}>
           <ArrowLeft className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
         </button>
-        <h1 className="titlebar__title">{project?.name ?? "Project"}</h1>
+        <h1 className="titlebar__title">
+          {project && renaming ? (
+            <NameField
+              name={project.name}
+              label="Project name"
+              onRename={(name) =>
+                void bridge()
+                  ?.invoke("project:rename", { id: projectId, name })
+                  .then(setProject, (e: unknown) => setError(e instanceof Error ? e.message : String(e)))
+              }
+              onDone={() => setRenaming(false)}
+            />
+          ) : project ? (
+            <button type="button" className="titlebar__name" title="Rename" onClick={() => setRenaming(true)}>
+              {project.name}
+            </button>
+          ) : (
+            "Project"
+          )}
+        </h1>
         <div className="titlebar__action">
           <button
             type="button"
