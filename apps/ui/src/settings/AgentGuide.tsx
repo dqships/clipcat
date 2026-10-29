@@ -4,7 +4,7 @@ import { useState } from "react";
 import { ICON_STROKE } from "../icons";
 
 /** The site's longer version of this guide. */
-export const GUIDE_URL = "https://clipcat.followusai.com/agents";
+export const GUIDE_URL = "https://clipcat.followusai.com/docs/agents";
 
 /** How to get from Connect to a first edit, per agent: restart it, check ClipCat is there, ask. */
 const STEPS: Record<McpAgentIdValue, { label: string; steps: string[] }> = {

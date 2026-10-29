@@ -4,7 +4,7 @@ import { siteOrigin } from "../lib/site.mjs";
 import type { Page } from "./types";
 
 /** The head every page gets: title, description, canonical, the Markdown alternate and share cards. */
-export function Meta({ page }: { page: Page }) {
+export function Meta({ page }: { page: Pick<Page, "path" | "title" | "description" | "updated"> }) {
   const origin = siteOrigin();
   const canonical = url(origin, page.path);
   const image = `${origin}${OG.path}`;

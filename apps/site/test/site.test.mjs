@@ -8,7 +8,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { NOT_FOUND, PAGES, llmsTxt, pageMarkdown, robotsTxt, sitemapXml } from "../lib/markdown.mjs";
+import { ALL, DOCS, NOT_FOUND, PAGES, llmsFullTxt, llmsTxt, pageMarkdown, robotsTxt, sitemapXml } from "../lib/markdown.mjs";
+import { OUT, docsModule } from "../scripts/docs.mjs";
 import { negotiate, wantsMarkdown } from "../lib/negotiate.mjs";
 import { SECURITY_HEADERS, siteOrigin } from "../lib/site.mjs";
 import nextConfig from "../next.config.mjs";
@@ -18,7 +19,7 @@ const ORIGIN = "https://clipcat.example";
 const read = (file) => readFileSync(file, "utf8");
 
 test("titles and descriptions fit search results", () => {
-  for (const page of [...PAGES, NOT_FOUND]) {
+  for (const page of [...ALL, NOT_FOUND]) {
     const min = page === NOT_FOUND ? 15 : 30;
     assert.ok(page.title.length >= min && page.title.length <= 60, `${page.path} title is ${page.title.length} characters`);
     assert.ok(page.description.length >= 120 && page.description.length <= 160, `${page.path} description is ${page.description.length} characters`);
@@ -30,7 +31,7 @@ test("About, Contact, Privacy and Pricing pages exist", () => {
 });
 
 test("every page's Markdown has its H1 and only absolute links", () => {
-  for (const page of PAGES) {
+  for (const page of ALL) {
     const md = pageMarkdown(page, ORIGIN);
     assert.ok(md.startsWith(`# ${page.h1}\n`));
     assert.doesNotMatch(md, /\]\(\//, "links are absolute");
@@ -43,11 +44,15 @@ test("robots.txt, sitemap.xml and llms.txt", () => {
   assert.match(robots, /^User-agent: \*\nAllow: \/\n/);
   assert.match(robots, new RegExp(`Sitemap: ${ORIGIN}/sitemap.xml`));
   const sitemap = sitemapXml(ORIGIN);
-  assert.equal(sitemap.match(/<url>/g).length, PAGES.length);
-  assert.equal(sitemap.match(/<lastmod>\d{4}-\d{2}-\d{2}<\/lastmod>/g).length, PAGES.length);
+  assert.equal(sitemap.match(/<url>/g).length, ALL.length);
+  assert.equal(sitemap.match(/<lastmod>\d{4}-\d{2}-\d{2}<\/lastmod>/g).length, ALL.length);
   const llms = llmsTxt(ORIGIN);
   assert.match(llms, /^# ClipCat\n\n> /);
-  assert.equal([...llms.matchAll(/\]\(https:\/\/clipcat\.example\/[^)]*\.md\)/g)].length, PAGES.length);
+  assert.equal([...llms.matchAll(/\]\(https:\/\/clipcat\.example\/[^)]*\.md\)/g)].length, ALL.length);
+  assert.match(llms, /\(https:\/\/clipcat\.example\/llms-full\.txt\)/);
+  const full = llmsFullTxt(ORIGIN);
+  for (const doc of DOCS) assert.ok(full.includes(`# ${doc.h1}\n`), doc.path);
+  assert.doesNotMatch(full, /\]\(\//, "links are absolute");
 });
 
 test("Markdown is chosen only when it's named and not ranked below HTML", () => {
@@ -113,4 +118,38 @@ test("the production address comes from SITE_URL, then Vercel, then the custom d
   assert.equal(siteOrigin({ SITE_URL: "https://clipcat.app/" }), "https://clipcat.app");
   assert.equal(siteOrigin({ VERCEL_PROJECT_PRODUCTION_URL: "clipcat.vercel.app" }), "https://clipcat.vercel.app");
   assert.equal(siteOrigin({}), "https://clipcat.followusai.com");
+});
+
+test("the help pages are built from docs/ as it is now", () => {
+  assert.equal(read(OUT), docsModule(), "docs/ changed: run `npm run docs` from the repo root");
+});
+
+test("the help index links every help page, and every link between them lands", () => {
+  const index = DOCS.find((d) => d.path === "/docs");
+  for (const doc of DOCS) if (doc !== index) assert.ok(index.html.includes(`href="${doc.path}"`), `${doc.path} isn't on the index`);
+  const ids = new Map(DOCS.map((d) => [d.path, new Set([...d.html.matchAll(/ id="([^"]+)"/g)].map((m) => m[1]))]));
+  for (const doc of DOCS) {
+    for (const [, path, hash] of doc.html.matchAll(/href="(\/docs[^"#]*)(?:#([^"]+))?"/g)) {
+      assert.ok(ids.has(path), `${doc.path} links to ${path}, which doesn't exist`);
+      if (hash) assert.ok(ids.get(path).has(hash), `${doc.path} links to ${path}#${hash}, which doesn't exist`);
+    }
+    assert.doesNotMatch(doc.html, /href="[^"]*\.md[#"]/, `${doc.path} still links to a .md file`);
+  }
+});
+
+test("the old agent guide address goes to its help page", async () => {
+  const redirects = await nextConfig.redirects();
+  assert.ok(redirects.some((r) => r.source === "/agents" && r.destination === "/docs/agents" && r.permanent));
+  assert.ok(!PAGES.some((p) => p.path === "/agents"));
+});
+
+test("help pages answer with Markdown too", async () => {
+  const ask = (path) => negotiate(new Request(`${ORIGIN}${path}`, { headers: { accept: "text/markdown" } }), ORIGIN);
+  const agents = ask("/docs/agents");
+  assert.equal(agents.status, 200);
+  const body = await agents.text();
+  assert.match(body, /^# Use ClipCat from Claude or Codex\n/);
+  assert.match(body, /\(https:\/\/clipcat\.example\/docs\/troubleshooting\.md\)/);
+  assert.equal(ask("/docs.md").status, 200);
+  assert.equal(ask("/docs/no-such-page").status, 404);
 });

@@ -24,6 +24,8 @@ export type Section = {
 };
 export type Page = {
   path: string;
+  /** Its name in the header and footer. */
+  nav?: string;
   title: string;
   description: string;
   kicker?: string;
@@ -32,4 +34,17 @@ export type Page = {
   hero?: boolean;
   updated?: string;
   sections: Section[];
+};
+
+/** A help page, made from the repo's docs/ folder by scripts/docs.mjs. */
+export type Doc = {
+  path: string;
+  nav: string;
+  title: string;
+  description: string;
+  h1: string;
+  updated: string;
+  /** The page after its H1, as HTML. */
+  html: string;
+  markdown: string;
 };

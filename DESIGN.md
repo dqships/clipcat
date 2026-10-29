@@ -112,6 +112,12 @@ content as clips on the lane. Lanes use `--color-surface`, clips
 mark blown up and cropped off its edge. On a phone the track names shrink to
 their short label and clips stack.
 
+The help pages at `/docs` are a bin beside the viewer: the list of every page
+sits in a narrow left column on a hairline, the open one marked with a
+`--space-1` strip of splice tape, and the page reads on the right at 68
+characters wide, its sections split by hairlines. On a phone the list moves
+under the page, and a link under the title jumps to it.
+
 ## The editor's panels
 
 The preview sits still in the middle of the editor and never scrolls; the

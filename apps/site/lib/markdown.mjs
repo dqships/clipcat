@@ -4,9 +4,13 @@
 // and the proxy share them.
 
 import { NOT_FOUND, PAGES, SITE } from "./content.mjs";
+import { DOCS } from "./docs.generated.mjs";
 
 /** Pages in the header; the footer lists them all. */
-export const HEADER = ["/features", "/download", "/pricing", "/about"];
+export const HEADER = ["/features", "/docs", "/download", "/pricing", "/about"];
+
+/** Every page with an address: the site's own pages, then the help pages. */
+export const ALL = [...PAGES, ...DOCS];
 export const OG = { path: "/og.png", width: 1200, height: 630, alt: "ClipCat: raw takes in, finished video out." };
 
 /** The same text for Markdown, with the site's own links made absolute. */
@@ -64,6 +68,10 @@ export function longDate(iso) {
 
 export function pageMarkdown(page, origin) {
   const md = (t) => inlineMd(t, origin);
+  // A help page is Markdown already.
+  if (page.markdown !== undefined) {
+    return [md(page.markdown).trimEnd(), "", `Last updated ${longDate(page.updated)}.`, "", `Web page: ${url(origin, page.path)}`, ""].join("\n");
+  }
   const out = [`# ${page.h1}`, "", md(page.lede), ""];
   if (page.hero) out.push(downloadsMd(), "");
   for (const s of page.sections) {
@@ -108,6 +116,12 @@ export function llmsTxt(origin) {
     "",
     ...PAGES.map((p) => `- [${p.nav}](${origin}${mdPath(p.path)}): ${p.description}`),
     "",
+    "## Help",
+    "",
+    `How to use every part of the app. [All of it in one file](${origin}/llms-full.txt).`,
+    "",
+    ...DOCS.map((p) => `- [${p.h1}](${origin}${mdPath(p.path)}): ${p.description}`),
+    "",
     "## Elsewhere",
     "",
     `- [Source code](${SITE.repo}): the app and this site`,
@@ -117,19 +131,25 @@ export function llmsTxt(origin) {
   ].join("\n");
 }
 
+/** llms-full.txt: every help page in one file, for an agent that wants to read it all. */
+export function llmsFullTxt(origin) {
+  const pages = DOCS.map((p) => [inlineMd(p.markdown, origin).trimEnd(), "", `Web page: ${url(origin, p.path)}`].join("\n"));
+  return [`# ${SITE.name} help, every page`, "", `> ${SITE.tagline}`, "", pages.join("\n\n---\n\n"), ""].join("\n");
+}
+
 export function robotsTxt(origin) {
   return `User-agent: *\nAllow: /\n\nSitemap: ${origin}/sitemap.xml\n`;
 }
 
 export function sitemapXml(origin) {
-  const urls = PAGES.map((p) => `  <url><loc>${url(origin, p.path)}</loc><lastmod>${p.updated}</lastmod></url>`).join("\n");
+  const urls = ALL.map((p) => `  <url><loc>${url(origin, p.path)}</loc><lastmod>${p.updated}</lastmod></url>`).join("\n");
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`;
 }
 
 /** The page for a request path, or null; `/about/` and `/about` are the same page. */
 export function findPage(pathname) {
   const path = pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname;
-  return PAGES.find((p) => p.path === path || (p.path === "/" && path === "/index")) ?? null;
+  return ALL.find((p) => p.path === path || (p.path === "/" && path === "/index")) ?? null;
 }
 
-export { NOT_FOUND, PAGES, SITE, mdPath };
+export { DOCS, NOT_FOUND, PAGES, SITE, mdPath };

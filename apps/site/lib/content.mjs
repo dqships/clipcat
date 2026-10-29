@@ -131,7 +131,7 @@ export const PAGES = [
           "clipcat  make_shorts     3, up to 60 s each",
           "clipcat  export_video    16:9 and 9:16",
         ],
-        more: "[Set up your agent](/agents)",
+        more: "[Set up your agent](/docs/agents)",
       },
       {
         kind: "facts",
@@ -169,7 +169,7 @@ export const PAGES = [
           "Every edit can be undone and redone, and the preview always plays the edit with the cuts skipped.",
           "Ask for one-off changes in plain words, like \"cut the part about pricing\".",
           "ClipCat transcribes on your computer in 100 languages. Set the language for new projects in Settings, or transcribe one project again in another. [See every language](/languages).",
-          "Keep a list of the names and terms you use, and \"Fix transcript\" corrects only the words it's sure of.",
+          "Keep a list of the names and terms you use, and \"Fix spelling\" corrects only the words it's sure of.",
         ],
       },
       {
@@ -218,82 +218,7 @@ export const PAGES = [
         h2: "Let your coding agent make the edits",
         body: [
           "Connect Claude Code, Codex or the Claude desktop app from ClipCat's settings, and the agent can read your projects, cut words, accept suggestions, start exports and import recordings while ClipCat is open. Every change goes through the same undo history as the editor.",
-          "The [agent guide](/agents) shows how to set it up and what to ask.",
-        ],
-      },
-    ],
-  },
-  {
-    path: "/agents",
-    nav: "Agents",
-    title: "Use ClipCat from Claude Code, Codex or the Claude app",
-    description:
-      "How to connect ClipCat to Claude Code, Codex or the Claude desktop app, check it worked, and what to ask so the agent edits your videos for you.",
-    h1: "Edit from Claude or Codex",
-    lede:
-      "ClipCat includes an MCP server. Connect it once, and Claude Code, Codex or the Claude app can open your projects, read the transcripts and make edits while you watch them appear in ClipCat.",
-    updated: UPDATED,
-    sections: [
-      {
-        h2: "How it works",
-        body: [
-          "Connecting adds a ClipCat entry to the agent's own settings file. When the agent starts, it runs a small ClipCat helper on your computer that talks to the open ClipCat window. There's no account and no sign-in, and nothing goes over the internet.",
-          "The agent reads the numbered transcript first, then cuts words, accepts or rejects suggested edits, adds zooms, b-roll, slides and sounds, and starts jobs like shorts and exports. Every change is one undo step in ClipCat, just like an edit you make yourself, and nothing deletes your footage.",
-        ],
-      },
-      {
-        h2: "Connect your agent",
-        body: ["In ClipCat, open **Settings**. Under **Edit from your coding agent**, choose **Connect** next to the agent you use. ClipCat writes its entry here:"],
-        list: [
-          "**Claude desktop app**: `claude_desktop_config.json` in the Claude app's folder.",
-          "**Claude Code**: `~/.claude.json`, for every folder you work in.",
-          "**Codex**: `~/.codex/config.toml`, which the Codex CLI, the Codex app and the editor extension all read.",
-        ],
-      },
-      {
-        h2: "Start it and check",
-        steps: [
-          {
-            title: "Claude desktop app",
-            text: "Quit Claude completely (closing the window isn't enough) and open it again. Settings > Developer lists clipcat as running, and ClipCat's tools show in the tools menu of a new chat. Claude asks before it uses each tool the first time.",
-          },
-          { title: "Claude Code", text: "Start a new session, then type `/mcp`. clipcat should be listed as connected. A session that was already running won't see it." },
-          { title: "Codex", text: "Start a new session, or quit the Codex app and open it again. In the CLI, `/mcp` lists clipcat and its tools." },
-        ],
-      },
-      {
-        h2: "Things to ask",
-        body: ["Say \"ClipCat\" or \"my ClipCat project\" so the agent knows to use it. Keep ClipCat open while it works."],
-        prompts: [
-          "List my ClipCat projects and tell me which ones haven't been exported yet.",
-          "In ClipCat, cut the filler words and long pauses from my newest project. Show me what you'll cut before you do it.",
-          "Ask ClipCat's AI editor for cuts on my newest project, then accept the retakes and leave the rest for me.",
-          "In my newest ClipCat project, cut the part where I talk about pricing.",
-          "Add a zoom on each line where I give a number, and a whoosh where each new topic starts.",
-          "Make three ClipCat shorts of up to 60 seconds from my newest project.",
-          "Write the chapters and a YouTube description for my newest ClipCat project.",
-          "Import ~/Movies/take-1.mov and ~/Movies/take-2.mov into a new ClipCat project, and cut the retakes once it's transcribed.",
-          "Export my newest ClipCat project as a 9:16 video to my Desktop, and save a Final Cut Pro timeline beside it.",
-        ],
-      },
-      {
-        h2: "Every tool it gets",
-        list: [
-          "**list_projects**, **get_project**, **get_transcript**, **list_proposals** and **list_jobs** read your projects, transcripts, suggested edits and what ClipCat is working on.",
-          "**cut_words** cuts or restores a run of words. **decide_proposals** accepts or rejects suggested edits.",
-          "**edit_project** makes any other change: zooms, b-roll, motion slides, sound effects, chapters, captions, speed, aspect ratio, music volume, the write-up, the thumbnail, and undo or redo.",
-          "**find_cuts**, **make_shorts** and **write_up** ask ClipCat's own AI editor (the Claude Code, Codex or API key you picked in ClipCat) for cuts, shorts and a write-up.",
-          "**import_videos**, **export_video** and **export_timeline** bring recordings in and send the video or a Final Cut, Premiere or EDL timeline out.",
-        ],
-      },
-      {
-        h2: "If it doesn't work",
-        list: [
-          "**The agent doesn't know about ClipCat**: quit it completely and open it again, then check its tool list as above.",
-          "**It can't reach ClipCat**: open ClipCat and ask again.",
-          "**A change is refused because the project changed**: you or the agent edited it in between. Ask it to read the project again and retry.",
-          "**AI cuts or shorts fail**: those run on the AI you picked in ClipCat's settings, so check it's signed in.",
-          "**Still stuck**: disconnect and connect again, or save diagnostics in Settings and attach them to an [issue](https://github.com/dqships/clipcat/issues).",
+          "The [agent guide](/docs/agents) shows how to set it up and what to ask. The [help pages](/docs) cover every other part of the app.",
         ],
       },
     ],
@@ -435,7 +360,10 @@ export const PAGES = [
     sections: [
       {
         h2: "Report a bug or ask a question",
-        body: [`Open an issue on [GitHub](${REPO}/issues). Say what you did, what you expected and what happened instead.`],
+        body: [
+          "The [help pages](/docs) cover every part of the app, and [Fix a problem](/docs/troubleshooting) covers what goes wrong most often.",
+          `Open an issue on [GitHub](${REPO}/issues). Say what you did, what you expected and what happened instead.`,
+        ],
       },
       {
         h2: "Send diagnostics",
