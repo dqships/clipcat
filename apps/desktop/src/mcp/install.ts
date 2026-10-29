@@ -11,7 +11,7 @@
 import { existsSync } from "node:fs";
 import { mkdir, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import type { McpAgentValue } from "@clipcat/ipc";
+import type { McpAgentValue, McpSetupValue } from "@clipcat/ipc";
 import { writeFileAtomic } from "../atomic";
 import {
   AGENT_TARGETS,
@@ -91,6 +91,12 @@ export async function mcpStatus(env: InstallEnv, seen: (id: AgentId) => Promise<
       session: await seen(target.id),
     })),
   );
+}
+
+/** The entry for any other stdio MCP app, set up by hand: the parts, and the JSON most apps take. */
+export function mcpSetup(env: InstallEnv): McpSetupValue {
+  const { command, args, env: vars } = env.spec;
+  return { command, args: [...args], env: { ...vars }, json: previewEntry("mcpServers", { command, args: [...args], env: { ...vars } }), unavailable: unavailable(env) };
 }
 
 /** Our entry as the agent's config has it now, or null when it has none; throws when the file can't be read. */

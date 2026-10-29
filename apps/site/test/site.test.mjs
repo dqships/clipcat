@@ -148,7 +148,7 @@ test("help pages answer with Markdown too", async () => {
   const agents = ask("/docs/agents");
   assert.equal(agents.status, 200);
   const body = await agents.text();
-  assert.match(body, /^# Use ClipCat from Claude or Codex\n/);
+  assert.match(body, /^# Use ClipCat from your coding agent\n/);
   assert.match(body, /\(https:\/\/clipcat\.example\/docs\/troubleshooting\.md\)/);
   assert.equal(ask("/docs.md").status, 200);
   assert.equal(ask("/docs/no-such-page").status, 404);

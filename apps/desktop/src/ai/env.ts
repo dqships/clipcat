@@ -156,13 +156,13 @@ export function which(name: string, host: HostEnv): string | null {
 }
 
 /** An explicit override (`CLIPCAT_CLAUDE_PATH`, `CLIPCAT_CODEX_PATH`), when it points at an executable. */
-export function overrideBinary(name: "claude" | "codex", host: HostEnv): string | null {
+export function overrideBinary(name: "claude" | "codex" | "gemini", host: HostEnv): string | null {
   const override = host.env[`CLIPCAT_${name.toUpperCase()}_PATH`] ?? process.env[`CLIPCAT_${name.toUpperCase()}_PATH`];
   return override && isExecutable(override) ? override : null;
 }
 
 /** Where an agent CLI is: the override, else `which`. */
-export function resolveBinary(name: "claude" | "codex", host: HostEnv): string | null {
+export function resolveBinary(name: "claude" | "codex" | "gemini", host: HostEnv): string | null {
   return overrideBinary(name, host) ?? which(name, host);
 }
 

@@ -30,7 +30,13 @@ describe("agent sessions", () => {
     expect(agentFor("codex-mcp-client")).toBe("codex");
     expect(agentFor("claude-ai")).toBe("claude-desktop");
     expect(agentFor(CHECK_CLIENT)).toBeNull();
-    expect(agentFor("cursor")).toBeNull();
+    expect(agentFor("cursor-vscode")).toBe("cursor");
+    expect(agentFor("Visual Studio Code")).toBe("vscode");
+    expect(agentFor("Visual Studio Code - Insiders")).toBe("vscode");
+    expect(agentFor("windsurf-client")).toBe("windsurf");
+    expect(agentFor("LM Studio")).toBe("lm-studio");
+    expect(agentFor("gemini-cli-mcp-client")).toBe("gemini");
+    expect(agentFor("some-other-client")).toBeNull();
   });
 
   it("is live while a session is open, then remembers it, across restarts", async () => {

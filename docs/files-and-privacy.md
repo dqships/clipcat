@@ -39,4 +39,4 @@ Nothing else. Transcription, face finding, the thumbnail cutout and the export a
 
 ## Agents you connect
 
-A connected agent (see [Use ClipCat from Claude or Codex](agents.md)) talks to ClipCat on your computer. What the agent then sends to its own service follows that agent's terms.
+A connected agent (see [Use ClipCat from your coding agent](agents.md)) talks to ClipCat on your computer. What the agent then sends to its own service follows that agent's terms.

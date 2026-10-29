@@ -33,7 +33,7 @@ describe("HelpWindow", () => {
     expect(window.location.search).toBe("?page=troubleshooting");
     const inPage = document.querySelector<HTMLAnchorElement>('.help__body a[href^="?page=agents"]')!;
     fireEvent.click(inPage);
-    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Use ClipCat from Claude or Codex");
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Use ClipCat from your coding agent");
   });
 
   it("searches the pages", () => {
