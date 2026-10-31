@@ -1,6 +1,6 @@
 import { AUTO_LANGUAGE, languageName } from "@clipcat/core";
 import type { McpAgentValue, SettingsValue, UpdateStatusValue } from "@clipcat/ipc";
-import { ArrowLeft, AudioLines, Bot, Download, FileArchive, FolderOpen, LifeBuoy, type LucideIcon, Plug, RefreshCw, RotateCw } from "lucide-react";
+import { ArrowLeft, AudioLines, Bot, Download, FileArchive, FolderOpen, LifeBuoy, type LucideIcon, RefreshCw, RotateCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { bridge } from "../bridge";
 import { ICON_STROKE } from "../icons";
@@ -12,7 +12,7 @@ import { AiModels, aiShort } from "./AiModels";
 import { Transcription } from "./Transcription";
 
 /** The pages of Settings, in the order the list shows them. */
-export const SECTIONS = ["ai", "agents", "transcription", "updates", "help"] as const;
+export const SECTIONS = ["ai", "transcription", "updates", "help"] as const;
 export type SectionId = (typeof SECTIONS)[number];
 
 type Props = {
@@ -79,12 +79,6 @@ function updateShort(u: UpdateStatusValue | null): string {
   }
 }
 
-function agentsShort(agents: McpAgentValue[] | null): string {
-  if (!agents) return "Checking…";
-  const connected = agents.filter((a) => a.connected).length;
-  return connected === 0 ? "None connected" : `${connected} of ${agents.length} connected`;
-}
-
 function speechShort(prefs: SettingsValue | null): string {
   if (!prefs) return "Loading…";
   return prefs.speechLanguage === AUTO_LANGUAGE ? "Detects the language" : languageName(prefs.speechLanguage);
@@ -92,9 +86,9 @@ function speechShort(prefs: SettingsValue | null): string {
 
 /**
  * Settings: a list of pages on the left, each with a word on where it
- * stands, and the open page on the right. The pages are which AI runs the
- * AI editor, hooking ClipCat into the coding agents on this computer, how speech is transcribed, updates,
- * and diagnostics.
+ * stands, and the open page on the right. The pages are the AI models (which
+ * one runs the AI editor, and the coding agents ClipCat connects to), how
+ * speech is transcribed, updates, and diagnostics.
  */
 export function Settings({ update, onBack, section, overProject = false }: Props) {
   const [open, setOpen] = useState<SectionId>(() => section ?? remembered());
@@ -147,8 +141,7 @@ export function Settings({ update, onBack, section, overProject = false }: Props
   };
 
   const pages: Record<SectionId, { label: string; icon: LucideIcon; status: string }> = {
-    ai: { label: "AI editor", icon: Bot, status: aiShort(ai.status) },
-    agents: { label: "Coding agents", icon: Plug, status: agentsShort(agents) },
+    ai: { label: "AI models", icon: Bot, status: aiShort(ai.status) },
     transcription: { label: "Transcription", icon: AudioLines, status: speechShort(prefs) },
     updates: { label: "Updates", icon: RefreshCw, status: updateShort(update) },
     help: { label: "Troubleshooting", icon: LifeBuoy, status: "Diagnostics and the log" },
@@ -182,20 +175,16 @@ export function Settings({ update, onBack, section, overProject = false }: Props
         <main className="settings__page" key={open}>
           {open === "ai" && (
             <>
-              <PageHead id="ai-title" title="AI editor">
-                ClipCat has no AI service of its own. It uses the AI you pick here, which gets one tool for handing back suggestions and no access to
-                your files, your terminal or the web.
+              <PageHead id="ai-title" title="AI models">
+                ClipCat has no AI service of its own. The AI you pick here runs the AI editor, with one tool for handing back suggestions and no access
+                to your files, your terminal or the web.
               </PageHead>
               <AiModels ai={ai} />
-            </>
-          )}
-          {open === "agents" && (
-            <>
-              <PageHead id="agents-title" title="Coding agents">
-                Connect an agent and, while ClipCat is open, it can read your transcripts, cut words, accept suggested edits, add zooms, b-roll and
-                sounds, and start exports. Every change shows up here and can be undone.
-              </PageHead>
-              <Group id="connections-title" label="Connections">
+              <Group id="connections-title" label="Coding agents">
+                <p className="settings__hint">
+                  Connect an agent and, while ClipCat is open, it can read your transcripts, cut words, accept suggested edits, add zooms, b-roll and
+                  sounds, and start exports. Every change shows up here and can be undone.
+                </p>
                 {agentsError && (
                   <p className="notice notice--danger" role="alert">
                     {agentsError}
@@ -203,7 +192,7 @@ export function Settings({ update, onBack, section, overProject = false }: Props
                 )}
                 <Agents agents={agents} onAgents={setAgents} />
               </Group>
-              <AgentGuide agents={agents} />
+              <AgentGuide />
             </>
           )}
           {open === "transcription" && (

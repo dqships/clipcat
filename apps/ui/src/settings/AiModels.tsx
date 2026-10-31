@@ -24,7 +24,7 @@ const WHAT: Record<AgentNameValue, string> = {
   codex: "Runs the codex command on this computer, on your ChatGPT plan.",
   api: "Calls the Claude API. Each run is billed to your Anthropic account.",
   openai: "Calls the OpenAI API with GPT models. Each run is billed to your OpenAI account.",
-  openrouter: "Calls any model OpenRouter serves that can use tools. Each run is billed to your OpenRouter credit. Results vary by model.",
+  openrouter: "Calls any model OpenRouter serves that can read images and use tools. Each run is billed to your OpenRouter credit. Results vary by model.",
 };
 
 /** Where to get a key, and what one starts with. */
@@ -114,7 +114,7 @@ function KeyField({ name, saved, onSave }: { name: Keyed; saved: boolean; onSave
 }
 
 /**
- * The AI editor's page in Settings: which AI runs it, each one's model,
+ * The AI editor's part of Settings: which AI runs it, each one's model,
  * the keys for the APIs, and the Claude Code and Codex command-line tools.
  * The Edit tab only picks among these.
  */
@@ -277,13 +277,13 @@ export function AiModels({ ai: shared }: { ai: Ai }) {
 
   return (
     <>
-      <Group id="ai-plans-title" label="On your plan">
+      <Group id="ai-plans-title" label="AI editor, on your plan">
         <p className="settings__hint">Pick one AI on this page. It suggests edits, shorts, the write-up and spelling fixes in every project.</p>
         <ul className="agents" aria-label="AI on your plan">
           {PLANS.map((name) => row(name, cliExtra(name), checkAgain(name)))}
         </ul>
       </Group>
-      <Group id="ai-keys-title" label="With your own key">
+      <Group id="ai-keys-title" label="AI editor, with your own key">
         <p className="settings__hint">ClipCat tries a key with one call before saving it, then keeps it encrypted with your system's keychain.</p>
         <ul className="agents" aria-label="AI with your own key">
           {KEYS.map((name) => row(name, keyedExtra(name)))}

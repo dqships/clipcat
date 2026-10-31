@@ -498,52 +498,10 @@ body {
   white-space: nowrap;
 }
 
-/* The walkthrough under the agents: a menu to pick the agent, numbered
-   steps like the tracks on a reel, then prompts to copy. */
-.guide__pick {
-  max-width: calc(var(--space-9) * 4);
-}
-
-.guide__more summary:focus-visible,
+/* Prompts to copy under the agents. */
 .guide__link:focus-visible {
   outline: none;
   box-shadow: var(--focus-ring);
-}
-
-.guide__steps {
-  display: grid;
-  gap: var(--space-3);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  counter-reset: step;
-}
-
-.guide__steps li {
-  display: grid;
-  grid-template-columns: var(--space-6) 1fr;
-  gap: var(--space-3);
-  counter-increment: step;
-}
-
-.guide__steps li::before {
-  content: counter(step, decimal-leading-zero);
-  border-top: 1px solid var(--color-text-muted);
-  color: var(--color-text-muted);
-  font-size: var(--text-caption);
-  line-height: var(--leading-body);
-  font-variant-numeric: tabular-nums;
-}
-
-.guide__code {
-  font-family: var(--font-mono);
-}
-
-.guide__subtitle {
-  margin: var(--space-3) 0 0;
-  font-size: var(--text-body);
-  line-height: var(--leading-body);
-  font-weight: var(--font-weight-semibold);
 }
 
 .guide__prompts {
@@ -565,23 +523,6 @@ body {
 .guide__prompt-text {
   flex: 1;
   min-width: 0;
-}
-
-.guide__more summary {
-  border-radius: var(--radius-control);
-  font-weight: var(--font-weight-medium);
-  cursor: pointer;
-}
-
-.guide__list {
-  display: grid;
-  gap: var(--space-2);
-  margin: var(--space-2) 0 0;
-  padding-left: var(--space-5);
-}
-
-.guide__list li::marker {
-  color: var(--color-text-muted);
 }
 
 .guide__link {
@@ -1160,6 +1101,8 @@ body {
   width: 100%;
   aspect-ratio: 16 / 9;
   border-radius: var(--radius-panel);
+  filter: blur(var(--space-2));
+  clip-path: inset(0 round var(--radius-panel));
 }
 
 .project__video--over-fill {
@@ -1277,22 +1220,46 @@ body {
 /* Transcript editor: the selection's actions above the words. */
 .editor {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-3);
 }
 
-/* One row that scrolls sideways when the panel is narrow: wrapping would move the
+/* One row, with chevrons when the panel is narrow: wrapping would move the
    words down between the two clicks of a double-click. */
-.editor__actions {
+.editor__bar {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-  min-height: var(--control-height);
-  padding: var(--space-1);
-  margin: calc(-1 * var(--space-1));
-  overflow-x: auto;
+  gap: var(--space-1);
 }
 
-.editor__actions > :not(.editor__count) {
+/* The padding gives focus rings room inside the scrolling row. */
+.editor__actions {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  min-height: var(--control-height);
+  padding: var(--space-1);
+  margin: calc(-1 * var(--space-1)) 0 calc(-1 * var(--space-1)) calc(-1 * var(--space-1));
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .editor__actions {
+    scroll-behavior: smooth;
+  }
+}
+
+.editor__more {
+  flex-shrink: 0;
+  width: var(--control-height);
+  padding: 0;
+}
+
+.editor__actions > :not(.editor__count),
+.editor__count:not(:only-child) {
   flex-shrink: 0;
   white-space: nowrap;
 }
@@ -2212,6 +2179,11 @@ body {
   white-space: nowrap;
 }
 
+/* A track's second line: the ducking choice, then how it sounds. */
+.sound__row {
+  flex: 1 1 100%;
+}
+
 .sound__library > summary {
   cursor: pointer;
   color: var(--color-text-muted);
@@ -2327,9 +2299,39 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-1);
-  padding-bottom: var(--space-2);
   border-bottom: 1px solid var(--color-border);
   background: var(--color-background);
+}
+
+/* Ghost text on the hairline, with a strip of splice tape under the open one,
+   as Settings marks its open page. */
+.tools__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-height);
+  padding: 0 var(--space-3);
+  border: 0;
+  background: none;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+}
+
+.tools__tab:hover {
+  color: var(--color-text);
+}
+
+.tools__tab--on {
+  color: var(--color-text);
+  font-weight: var(--font-weight-semibold);
+  box-shadow: inset 0 calc(-1 * var(--space-1)) 0 var(--color-accent);
+}
+
+.tools__tab:focus-visible {
+  outline: none;
+  box-shadow: inset var(--focus-ring);
 }
 
 .tools__panel {

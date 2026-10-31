@@ -1,4 +1,4 @@
-import { type EditOp, type Project, SOUND_EFFECTS, buildTimeline, timedSounds } from "@clipcat/core";
+import { type EditOp, type Project, SOUND_EFFECTS, buildTimeline, timedMusic, timedSounds } from "@clipcat/core";
 import { Music, Play, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { bridge } from "../bridge";
@@ -46,9 +46,9 @@ function hear(id: string): void {
 
 /**
  * Sound: the effects in the edit, in play order, with how loud each is and a
- * way to take it out; the music under the whole video; and the library, to
- * listen through. New effects come from the transcript (select words, then
- * Sound…) or from the AI editor.
+ * way to take it out; the music tracks and where they're placed; and the
+ * library, to listen through. New effects and placements come from the
+ * transcript (select words, then Sound… or Music…) or from the AI editor.
  */
 export function SoundPanel({ project, onSeek, onEdit }: Props) {
   const [error, setError] = useState<string | null>(null);
@@ -56,15 +56,15 @@ export function SoundPanel({ project, onSeek, onEdit }: Props) {
   const placed = useMemo(() => timedSounds(project, timeline), [project, timeline]);
   const text = useMemo(() => new Map(project.transcript.map((w) => [w.id, w.text])), [project.transcript]);
   const byId = new Map(project.proposals.map((p) => [p.id, p]));
-  const music = project.music;
+  const tracks = project.music;
+  const placements = useMemo(() => timedMusic(project, timeline).filter((m) => byId.get(m.id)?.music), [project, timeline]);
 
   const pickMusic = async () => {
     setError(null);
     const b = bridge();
     if (!b) return;
     try {
-      const file = await b.invoke("music:pick");
-      if (file) await b.invoke("project:set-music", { id: project.id, file });
+      for (const file of await b.invoke("music:pick")) await b.invoke("project:add-music", { id: project.id, file });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -121,43 +121,92 @@ export function SoundPanel({ project, onSeek, onEdit }: Props) {
         </ol>
       )}
       <h3 className="sound__heading">Music</h3>
-      {music ? (
-        <div className="punches__item punches__item--wrap">
-          <span className="sound__music">
-            {music.name}
-            <span className="media__kind">{music.prep ? formatDuration(music.duration) : "Preparing…"}</span>
-          </span>
-          <select
-            className="field__control"
-            aria-label="Music volume"
-            value={nearestLevel(MUSIC_LEVELS, music.volume)}
-            onChange={(e) => onEdit({ type: "music", volume: Number(e.target.value) })}
-          >
-            {MUSIC_LEVELS.map((l) => (
-              <option key={l.value} value={l.value}>
-                {l.label}
-              </option>
-            ))}
-          </select>
-          <label className="field field--inline">
-            <input type="checkbox" checked={music.duck} onChange={(e) => onEdit({ type: "music", duck: e.target.checked })} />
-            Lower the music while you talk
-          </label>
-          <button type="button" className="button" onClick={() => void pickMusic()}>
-            Change music
-          </button>
-          <button type="button" className="button button--icon" aria-label="Remove the music" onClick={() => onEdit({ type: "remove-music" })}>
-            <X className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
-          </button>
-        </div>
-      ) : (
-        <div>
-          <button type="button" className="button" onClick={() => void pickMusic()}>
-            <Music className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
-            Add music
-          </button>
-        </div>
+      <p className="project__summary">
+        {tracks.length < 2
+          ? "Add a track to play under the whole video. Add more to give parts of the video their own music."
+          : "Select words in the transcript to play a track over them, or say how each one sounds and run the AI editor for suggestions."}
+      </p>
+      {tracks.length > 0 && (
+        <ul className="punches" aria-label="Music tracks">
+          {tracks.map((t) => (
+            <li key={t.id} className="punches__item punches__item--wrap">
+              <span className="sound__music">
+                {t.name}
+                <span className="media__kind">{t.prep ? formatDuration(t.duration) : "Preparing…"}</span>
+              </span>
+              <select
+                className="field__control"
+                aria-label={`Volume of ${t.name}`}
+                value={nearestLevel(MUSIC_LEVELS, t.volume)}
+                onChange={(e) => onEdit({ type: "music", id: t.id, volume: Number(e.target.value) })}
+              >
+                {MUSIC_LEVELS.map((l) => (
+                  <option key={l.value} value={l.value}>
+                    {l.label}
+                  </option>
+                ))}
+              </select>
+              <select
+                className="field__control"
+                aria-label={`Where ${t.name} plays`}
+                value={t.whole ? "whole" : "placed"}
+                onChange={(e) => onEdit({ type: "music", id: t.id, whole: e.target.value === "whole" })}
+              >
+                <option value="whole">Whole video</option>
+                <option value="placed">Where placed</option>
+              </select>
+              <button type="button" className="button button--icon" aria-label={`Remove ${t.name}`} onClick={() => onEdit({ type: "remove-music", id: t.id })}>
+                <X className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
+              </button>
+              <label className="field field--inline sound__row">
+                <input type="checkbox" checked={t.duck} onChange={(e) => onEdit({ type: "music", id: t.id, duck: e.target.checked })} />
+                Lower {t.name} while you talk
+              </label>
+              <input
+                key={t.description}
+                className="field__control sound__row"
+                aria-label={`How ${t.name} sounds`}
+                placeholder="How it sounds, for the AI editor"
+                maxLength={1000}
+                defaultValue={t.description}
+                onBlur={(e) => {
+                  if (e.target.value !== t.description) onEdit({ type: "music", id: t.id, description: e.target.value });
+                }}
+              />
+            </li>
+          ))}
+        </ul>
       )}
+      {placements.length > 0 && (
+        <ol className="punches" aria-label="Music placed in the edit">
+          {placements.map((m) => {
+            const p = byId.get(m.id)!;
+            const at = `${formatDuration(m.start)} to ${formatDuration(m.end)}`;
+            return (
+              <li key={m.id} className="punches__item">
+                <button type="button" className="punches__where" onClick={() => onSeek(p.sourceId, p.music!.range[0])}>
+                  <span className="punches__time">{at}</span>
+                  <span className="punches__words">{m.track.name}</span>
+                </button>
+                <button
+                  type="button"
+                  className="button button--icon"
+                  aria-label={`Remove ${m.track.name} at ${at}`}
+                  onClick={() => onEdit({ type: "decide", ids: [m.id], status: "rejected" })}
+                >
+                  <X className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
+                </button>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+      <div>
+        <button type="button" className="button" onClick={() => void pickMusic()}>
+          <Music className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
+          Add music
+        </button>
+      </div>
       {error && (
         <p className="notice notice--danger" role="alert">
           {error}

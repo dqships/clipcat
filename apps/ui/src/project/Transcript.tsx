@@ -1,7 +1,8 @@
 import { type EditOp, type Project, SOUND_EFFECTS, type SlideLook, type Word, isWordKept, orderedWords } from "@clipcat/core";
-import { AudioLines, Bookmark, Image, Pencil, Presentation, Scissors, Undo2, ZoomIn } from "lucide-react";
+import { AudioLines, Bookmark, Image, Music, Pencil, Presentation, Scissors, Undo2, ZoomIn } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { ICON_STROKE } from "../icons";
+import { ActionRow } from "./ActionRow";
 import type { Playhead } from "./Preview";
 
 const LOOKS: { value: SlideLook; label: string }[] = [
@@ -42,7 +43,7 @@ export function Transcript({ project, playhead, onSeek, onEdit, hideCuts = false
   // Set the moment a fix ends, so a blur from the input leaving can't save a fix Esc dropped.
   const fixLive = useRef(false);
   const proposed = useMemo(
-    // Only suggested cuts: a suggested zoom, b-roll or sound leaves its words in.
+    // Only suggested cuts: a suggested zoom, b-roll, sound or music leaves its words in.
     () => new Set(project.proposals.filter((p) => p.cuts.length > 0 && p.type !== "silence" && p.status === "pending").flatMap((p) => p.wordIds)),
     [project.proposals],
   );
@@ -121,7 +122,7 @@ export function Transcript({ project, playhead, onSeek, onEdit, hideCuts = false
         }
       }}
     >
-      <div className="editor__actions" aria-live="polite">
+      <ActionRow>
         {fixing ? (
           <span className="editor__count">
             {draftOk || !draft
@@ -245,15 +246,35 @@ export function Transcript({ project, playhead, onSeek, onEdit, hideCuts = false
                     </select>
                   </label>
                 )}
+                {!slide && project.music.length > 0 && (
+                  <label className="editor__broll">
+                    <Music className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
+                    <select
+                      className="field__control"
+                      aria-label="Play a music track over the selection"
+                      value=""
+                      onChange={(e) => {
+                        if (e.target.value) onEdit({ type: "place-music", wordIds: selected.map((w) => w.id), trackId: e.target.value });
+                      }}
+                    >
+                      <option value="">Music…</option>
+                      {project.music.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
               </>
             )}
           </>
         ) : (
           <span className="editor__count">
-            Click a word to jump to it, or double-click to fix a misheard word. Shift-click to select words, then cut them or add a zoom, b-roll, slide, chapter or sound.
+            Click a word to jump to it, or double-click to fix a misheard word. Shift-click to select words, then cut them or add a zoom, b-roll, slide, chapter, sound or music.
           </span>
         )}
-      </div>
+      </ActionRow>
       <p className="transcript">
         {words.map((w, i) => {
           const heading = several && (i === 0 || words[i - 1]!.sourceId !== w.sourceId);

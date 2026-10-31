@@ -2,7 +2,7 @@
 title: Use ClipCat from Claude, Codex, Cursor and more
 description: Connect ClipCat to Claude Code, Codex, Claude, Cursor, VS Code, Windsurf, LM Studio or Gemini CLI, check it worked, and let the agent edit while you watch.
 order: 15
-updated: 2026-10-29
+updated: 2026-10-31
 ---
 
 # Use ClipCat from your coding agent
@@ -20,7 +20,7 @@ The agent asks before it uses each ClipCat tool, unless you tell it to always al
 ## Connect your agent
 
 1. In ClipCat, open **Settings** (the gear in the library).
-2. On the **Coding agents** page, choose **Connect** next to your agent. Agents ClipCat can't find on this computer are listed under **Not found on this computer**, and you can connect them there before you install them. A desktop app has **Get** (the app's name), which opens its maker's download page, and a command-line tool has **Install** (its name).
+2. On the **AI models** page, under **Coding agents**, choose **Connect** next to your agent. Agents ClipCat can't find on this computer are listed under **Not found on this computer**, and you can connect them there before you install them. A desktop app has **Get** (the app's name), which opens its maker's download page, and a command-line tool has **Install** (its name).
 3. Check the entry ClipCat shows you, then choose **Add to** (the agent's name).
 
 ClipCat writes its entry here:
@@ -131,7 +131,7 @@ The agent reads the transcript first. Every word has a number, and edits name wo
   - a sound effect on a word, by its id: whoosh, swish, pop, click, tick, ding, chime, riser, boom, blip, buzz, shutter or scratch,
   - a chapter on a word, or removing one,
   - retyping one misheard word,
-  - the caption style, the speed, the shape, what fills the sides of a landscape video, and the music volume and dip,
+  - the caption style, the speed, the shape, what fills the sides of a landscape video, and each music track's volume, dip, description and where it plays,
   - the description and article, and the thumbnail's text, colours, side and position,
   - undo and redo.
 
@@ -146,6 +146,7 @@ These run on the AI picked in ClipCat (your Claude Code, Codex or API key), not 
 ### Bring in and send out
 
 - **import_videos**: adds video or audio files to a project, or to a new one. ClipCat prepares and transcribes them.
+- **add_music**: adds audio files as music tracks on a project.
 - **export_video**: exports the edit as an MP4 at 16:9 or 9:16 to a path, with an .srt beside it. A file already at that path is replaced.
 - **export_timeline**: saves the edit as a Final Cut Pro, Premiere Pro or EDL timeline.
 

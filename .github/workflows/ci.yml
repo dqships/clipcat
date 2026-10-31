@@ -36,7 +36,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-14
+          # The Swift and whisper builds still target macOS 14, so this runner doesn't raise what ClipCat needs.
+          - os: macos-15
             target: darwin-arm64
             app: apps/desktop/out/ClipCat-darwin-arm64/ClipCat.app/Contents/MacOS/ClipCat
             ffmpeg: apps/desktop/out/ClipCat-darwin-arm64/ClipCat.app/Contents/Resources/bin/ffmpeg

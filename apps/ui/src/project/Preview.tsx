@@ -1,11 +1,14 @@
 import {
-  MUSIC,
   type Project,
   type Source,
   type TimedOverlay,
   type TimedPunch,
   type Timeline,
   buildTimeline,
+  musicAt,
+  musicFade,
+  musicTime,
+  timedMusic,
   cropOffset,
   framingAt,
   overlayAt,
@@ -167,8 +170,8 @@ export function Preview({ project, onTime, onTransport, ref }: Props) {
   const [shown, setShown] = useState<TimedOverlay | null>(null);
   const showing = useRef<TimedOverlay | null>(null);
   const sounds = useMemo(() => timedSounds(project, timeline), [project, timeline]);
-  const music = project.music;
-  const musicEl = useRef<HTMLAudioElement>(null);
+  const music = useMemo(() => timedMusic(project, timeline), [project, timeline]);
+  const musicEls = useRef(new Map<string, HTMLAudioElement>());
   const effects = useRef(new Map<string, HTMLAudioElement>());
   /** Output time at the last check while playing; effects between it and now play. */
   const heard = useRef<number | null>(null);
@@ -351,19 +354,18 @@ export function Preview({ project, onTime, onTransport, ref }: Props) {
           playQuietly(el);
         }
       }
-      // The music runs on the output clock, looping, faded at both ends, and dips while someone speaks.
-      const m = musicEl.current;
-      if (m && bed) {
-        if (v.paused) {
+      // One stretch of music plays at a time, looping, faded at both ends, and dips while someone speaks.
+      const playing = v.paused || out === null ? null : musicAt(bed, out);
+      for (const [id, m] of musicEls.current) {
+        if (playing?.track.id !== id) {
           if (!m.paused) m.pause();
-        } else if (out !== null) {
-          const want = out % bed.duration;
-          if (Math.abs(m.currentTime - want) > DRIFT) m.currentTime = want;
-          const fade = Math.max(0, Math.min(1, out / MUSIC.fadeIn, (tl.duration - out) / MUSIC.fadeOut));
-          const speaking = bed.duck && said.some((w) => w.sourceId === sid && t >= w.start && t < w.end);
-          m.volume = Math.min(1, bed.volume * fade * (speaking ? DUCKED : 1));
-          if (m.paused) playQuietly(m);
+          continue;
         }
+        const want = musicTime(playing, out!);
+        if (Math.abs(m.currentTime - want) > DRIFT) m.currentTime = want;
+        const speaking = playing.track.duck && said.some((w) => w.sourceId === sid && t >= w.start && t < w.end);
+        m.volume = Math.min(1, playing.track.volume * musicFade(playing, out!) * (speaking ? DUCKED : 1));
+        if (m.paused) playQuietly(m);
       }
       if (v.paused || !(Math.abs(t - reported) < REPORT_STEP)) {
         reported = t;
@@ -459,7 +461,20 @@ export function Preview({ project, onTime, onTransport, ref }: Props) {
           if (next.play) void e.currentTarget.play().catch(() => {});
         }}
       />
-      {music?.prep && <audio ref={musicEl} key={music.prep} src={mediaUrl(project.id, music.prep)} preload="auto" />}
+      {project.music.map(
+        (t) =>
+          t.prep && (
+            <audio
+              key={t.id}
+              ref={(el) => {
+                if (el) musicEls.current.set(t.id, el);
+                else musicEls.current.delete(t.id);
+              }}
+              src={mediaUrl(project.id, t.prep)}
+              preload="auto"
+            />
+          ),
+      )}
       {shown && shownPrep && (
         <div className="broll" style={brollStyle(shown, previewFrame(project))} aria-hidden>
           {shown.asset.kind === "slide" ? (

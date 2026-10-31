@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { formatDuration } from "../format";
 import { ICON_STROKE } from "../icons";
 
-const TYPE_LABEL: Record<string, string> = { silence: "Silence", retake: "Retake", cleanup: "Filler words", tighten: "Tangent", "punch-in": "Zoom", visual: "B-roll", sound: "Sound" };
+const TYPE_LABEL: Record<string, string> = { silence: "Silence", retake: "Retake", cleanup: "Filler words", tighten: "Tangent", "punch-in": "Zoom", visual: "B-roll", sound: "Sound", music: "Music" };
 const LOOK_LABEL: Record<string, string> = { paper: "paper", ink: "ink", overlay: "over the video" };
 const PLACEMENT_LABEL: Record<string, string> = { full: "full frame", pip: "picture in picture" };
 const STYLE_LABEL: Record<string, string> = { cut: "jump", "zoom-in": "smooth", "slow-zoom": "slow" };
@@ -23,19 +23,21 @@ const suggested = (p: Proposal) => p.type === "silence" || p.reason !== "";
 
 const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
-/** "2 cuts, 1 zoom, 3 b-roll, 1 slide and 2 sounds to review" */
+/** "2 cuts, 1 zoom, 3 b-roll, 1 slide, 2 sounds and 1 music to review" */
 function toReview(pending: Proposal[], slides: Set<string>): string {
+  const music = pending.filter((p) => p.music).length;
   const punches = pending.filter((p) => p.punch).length;
   const slideCount = pending.filter((p) => p.overlay && slides.has(p.overlay.assetId)).length;
   const broll = pending.filter((p) => p.overlay).length - slideCount;
   const sounds = pending.filter((p) => p.sound).length;
-  const cuts = pending.length - punches - broll - slideCount - sounds;
+  const cuts = pending.length - punches - broll - slideCount - sounds - music;
   const parts = [
     cuts > 0 && count(cuts, "cut", "cuts"),
     punches > 0 && count(punches, "zoom", "zooms"),
     broll > 0 && `${broll} b-roll`,
     slideCount > 0 && count(slideCount, "slide", "slides"),
     sounds > 0 && count(sounds, "sound", "sounds"),
+    music > 0 && `${music} music`,
   ].filter(Boolean);
   return `${parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}` : parts[0]} to review`;
 }
@@ -61,7 +63,8 @@ export function Proposals({ project, onSeek, onEdit }: Props) {
   const text = new Map(project.transcript.map((w) => [w.id, w.text]));
   const decided = project.proposals.filter((p) => p.status !== "pending" && suggested(p));
   if (pending.length === 0 && decided.length === 0) return null;
-  const what = (p: Proposal) => describe(p, media, slides, text);
+  const tracks = new Map(project.music.map((t) => [t.id, t.name]));
+  const what = (p: Proposal) => describe(p, media, slides, text, tracks);
   const seconds = pending.reduce((n, p) => n + length(p), 0);
   const decide = (ids: string[], status: "accepted" | "rejected") => ids.length > 0 && onEdit({ type: "decide", ids, status });
 
@@ -132,7 +135,7 @@ export function Proposals({ project, onSeek, onEdit }: Props) {
 type Described = { label: string; type: string; reason: string; words: string };
 
 /** What a suggestion is, in the words the list shows. */
-function describe(p: Proposal, media: Map<string, string>, slides: Map<string, Asset>, text: Map<string, string>): Described {
+function describe(p: Proposal, media: Map<string, string>, slides: Map<string, Asset>, text: Map<string, string>, tracks: Map<string, string>): Described {
   const words = p.wordIds.map((id) => text.get(id) ?? "").join(" ");
   const slide = p.overlay ? slides.get(p.overlay.assetId) : undefined;
   const label = slide ? "Slide" : (TYPE_LABEL[p.type] ?? p.type);
@@ -144,7 +147,9 @@ function describe(p: Proposal, media: Map<string, string>, slides: Map<string, A
         ? `${label}, ${media.get(p.overlay.assetId) ?? "media"}, ${PLACEMENT_LABEL[p.overlay.placement]}`
         : p.sound
           ? `${label}, ${EFFECT_NAME.get(p.sound.effect) ?? p.sound.effect}`
-          : label;
+          : p.music
+            ? `${label}, ${tracks.get(p.music.trackId) ?? "a track"}`
+            : label;
   return { label, type, reason: p.reason || `${length(p).toFixed(1)} seconds of silence`, words };
 }
 
@@ -163,7 +168,7 @@ function Row({ p, what, onSeek, status, children }: RowProps) {
   const { label, type, reason, words } = what(p);
   return (
     <li className={status && p.status === "rejected" ? "proposal-row proposal-row--kept" : "proposal-row"}>
-      <button type="button" className="proposal" onClick={() => onSeek(p.sourceId, p.punch?.range[0] ?? p.overlay?.range[0] ?? p.sound?.at ?? p.cuts[0]?.[0] ?? 0)}>
+      <button type="button" className="proposal" onClick={() => onSeek(p.sourceId, p.punch?.range[0] ?? p.overlay?.range[0] ?? p.sound?.at ?? p.music?.range[0] ?? p.cuts[0]?.[0] ?? 0)}>
         <span className="proposal__type">
           {status && <span className={`proposal__status proposal__status--${p.status}`}>{status}: </span>}
           {type}

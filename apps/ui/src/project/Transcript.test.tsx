@@ -3,6 +3,11 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Transcript } from "./Transcript";
 
+globalThis.ResizeObserver ??= class {
+  observe() {}
+  disconnect() {}
+} as unknown as typeof ResizeObserver;
+
 const project = Project.parse({
   version: 1,
   id: "p1",
@@ -61,6 +66,24 @@ describe("Transcript", () => {
     fireEvent.keyDown(input, { key: "Escape" });
     fireEvent.blur(input);
     expect(onEdit).not.toHaveBeenCalled();
+  });
+
+  it("shows a chevron at each end with more actions that way", () => {
+    setup();
+    const row = document.querySelector<HTMLElement>(".editor__actions")!;
+    Object.defineProperty(row, "clientWidth", { value: 200 });
+    Object.defineProperty(row, "scrollWidth", { value: 600 });
+    row.scrollBy = vi.fn();
+    expect(screen.queryByRole("button", { name: "More actions" })).toBeNull();
+    fireEvent.scroll(row);
+    fireEvent.click(screen.getByRole("button", { name: "More actions" }));
+    expect(row.scrollBy).toHaveBeenCalledWith({ left: 150 });
+    expect(screen.queryByRole("button", { name: "Earlier actions" })).toBeNull();
+
+    row.scrollLeft = 400;
+    fireEvent.scroll(row);
+    expect(screen.queryByRole("button", { name: "More actions" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Earlier actions" })).toBeTruthy();
   });
 
   it("won't save more than one word", () => {

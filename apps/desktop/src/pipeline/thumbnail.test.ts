@@ -38,6 +38,16 @@ async function setup(coverage = 0.3) {
 }
 
 describe("ThumbnailPipeline", () => {
+  it("grabs the frame from the preview copy when the original is gone", async () => {
+    const { store, queue, pipeline, grabbed, id } = await setup();
+    await store.update(id, null, (p) => {
+      p.sources[0]!.prep = { proxy: "media/s1/proxy.mp4", wav: "", waveform: "", thumbs: "" };
+    });
+    await pipeline.pick(id, "s1", 3);
+    await queue.idle(id);
+    expect(grabbed).toEqual([{ file: join(store.dir(id), "media/s1/proxy.mp4"), time: 3 }]);
+  });
+
   it("grabs the frame from the original recording and cuts the subject out of it", async () => {
     const { store, queue, pipeline, grabbed, id } = await setup();
     await pipeline.pick(id, "s1", 12.5);

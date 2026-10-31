@@ -79,6 +79,7 @@ export async function claudePrompt(text: string, images: string[] = []): Promise
 export function claudeAgent(host: HostEnv, appVersion: string, model: string | null = null): Agent {
   return {
     label: "Claude",
+    model: async () => model,
     run: async (run: AgentRun) => {
       const binary = resolveBinary("claude", host);
       if (!binary) throw new Error("Claude Code isn't installed. Install it, then reopen ClipCat.");

@@ -11,6 +11,8 @@ import {
   AgentWriteup,
   type Asset,
   CHAPTERS,
+  MUSIC,
+  type MusicTrack,
   type Project,
   SLIDE,
   SOUND_EFFECTS,
@@ -45,9 +47,12 @@ export type AgentTask = {
 
 const JSON_ONLY = "Don't run commands or read files; everything you need is below.";
 
+/** One of `values` or null. The Claude API refuses an enum beside `type: ["string", "null"]`, so null is its own branch. */
+const nullableEnum = (...values: string[]) => ({ anyOf: [{ type: "string", enum: values }, { type: "null" }] });
+
 export const ANALYSIS_TASK: AgentTask = {
   tool: "submit_analysis",
-  description: "Submit the cut, punch-in, b-roll, slide and sound proposals for this video. Call once with every proposal; if problems come back, fix them and call again.",
+  description: "Submit the cut, punch-in, b-roll, slide, sound and music proposals for this video. Call once with every proposal; if problems come back, fix them and call again.",
   shape: AgentAnalysis.shape,
   jsonSchema: {
     type: "object",
@@ -59,19 +64,20 @@ export const ANALYSIS_TASK: AgentTask = {
         items: {
           type: "object",
           additionalProperties: false,
-          required: ["type", "from", "to", "keepFrom", "keepTo", "punchStyle", "media", "placement", "brief", "look", "sound", "reason", "confidence"],
+          required: ["type", "from", "to", "keepFrom", "keepTo", "punchStyle", "media", "placement", "brief", "look", "sound", "track", "reason", "confidence"],
           properties: {
-            type: { type: "string", enum: ["retake", "cleanup", "tighten", "punch-in", "visual", "slide", "sound"] },
+            type: { type: "string", enum: ["retake", "cleanup", "tighten", "punch-in", "visual", "slide", "sound", "music"] },
             from: { type: "integer" },
             to: { type: "integer" },
             keepFrom: { type: ["integer", "null"] },
             keepTo: { type: ["integer", "null"] },
-            punchStyle: { type: ["string", "null"], enum: ["cut", "zoom-in", "slow-zoom", null] },
+            punchStyle: nullableEnum("cut", "zoom-in", "slow-zoom"),
             media: { type: ["integer", "null"] },
-            placement: { type: ["string", "null"], enum: ["full", "pip", null] },
+            placement: nullableEnum("full", "pip"),
             brief: { type: ["string", "null"] },
-            look: { type: ["string", "null"], enum: ["paper", "ink", "overlay", null] },
+            look: nullableEnum("paper", "ink", "overlay"),
             sound: { type: ["string", "null"] },
+            track: { type: ["integer", "null"] },
             reason: { type: "string" },
             confidence: { type: "number" },
           },
@@ -82,7 +88,7 @@ export const ANALYSIS_TASK: AgentTask = {
   },
   toolAnswer:
     "Call submit_analysis once with every proposal. If it reports problems, fix them and call it again with the whole analysis. Once it says the analysis is saved, stop. Don't write anything else.",
-  jsonAnswer: `Answer with only the JSON object the output schema describes: every proposal, and suggestedTitle. Use null for keepFrom and keepTo except on retakes, for punchStyle except on punch-ins, for media and placement except on b-roll, for brief and look except on slides, and for sound except on sounds. ${JSON_ONLY}`,
+  jsonAnswer: `Answer with only the JSON object the output schema describes: every proposal, and suggestedTitle. Use null for keepFrom and keepTo except on retakes, for punchStyle except on punch-ins, for media and placement except on b-roll, for brief and look except on slides, for sound except on sounds, and for track except on music. ${JSON_ONLY}`,
 };
 
 export const CORRECTIONS_TASK: AgentTask = {
@@ -290,7 +296,7 @@ Article:
 
 Write in the transcript's language. Follow the user's brief when there is one.`;
 
-export const EDITOR_PROMPT = `You are ClipCat's editor. You read the transcript of a talking-head recording and propose cuts that make it tight and watchable, punch-ins that give its best lines weight, b-roll from the user's own media, motion slides and sound effects. You never change anything yourself: every proposal is shown to the user, who accepts or rejects it.
+export const EDITOR_PROMPT = `You are ClipCat's editor. You read the transcript of a talking-head recording and propose cuts that make it tight and watchable, punch-ins that give its best lines weight, b-roll from the user's own media, motion slides, sound effects and music from the user's own tracks. You never change anything yourself: every proposal is shown to the user, who accepts or rejects it.
 
 Words are numbered [n] across the whole project. Ranges are inclusive word indices.
 
@@ -301,6 +307,7 @@ Proposal types:
 - punch-in: not a cut. The picture zooms toward the speaker over from..to to give a line weight: the key claim, a punchline, a number worth remembering. from..to covers the words that land it, 1.5 to 8 seconds. Set punchStyle: "cut" snaps in (a punchline or a blunt statement), "zoom-in" pushes in quickly (a key point), "slow-zoom" creeps in over the range (a story building to its point).
 - slide: not a cut. A motion slide ClipCat designs from your brief and shows full-frame over from..to: a title card for a new section, a list of steps as they're named, a number or a short quote worth seeing. from..to covers the words it goes with, ${SLIDE.min} to ${SLIDE.max} seconds. Set brief to exactly what the slide says, in order, in a few words (a heading and up to four short lines), and look: "paper" (ink on warm paper) or "ink" (paper on ink) for a full card, or "overlay" for a short label over the speaker, such as a name or a key term.
 - sound: not a cut. A sound effect from the list after the transcript plays as word from is spoken (to = from). Set sound to its id; pick the one whose meaning fits the moment.
+- music: not a cut. One of the user's music tracks (listed after the transcript, if there are any) plays under from..to and takes over from any whole-video track while it does. Set track to its number. from..to covers the words it goes with, at least ${MUSIC.min} seconds: a section with its own mood, an intro, a story, an ending. Pick from the track's name and description.
 - visual: b-roll, not a cut. One of the user's media items (listed after the transcript, if there are any) shows over from..to while the speaker keeps talking. Set media to its number and placement: "full" covers the whole frame (the speaker is heard, not seen), "pip" shows it in a window in the corner beside the speaker. from..to covers the words it illustrates, 1.5 to 15 seconds.
 
 Rules:
@@ -310,9 +317,10 @@ Rules:
 - Punch-ins are seasoning: at most one every 10 seconds of the finished video, with at least 6 seconds without one in between. Fewer, well-placed ones are better; skip them in a video that has no line that needs one.
 - Use b-roll only where a media item's description matches what is being said, and never two over the same words. Each item can be used more than once, but don't. With no media list, propose no b-roll.
 - Sound effects are seasoning too: at most one every 15 seconds, on a moment that earns it (a transition, a reveal, a list item appearing, a punchline), and none in a video where they'd feel silly. Never two within 1.5 seconds.
+- Music changes with the video's mood, not with every sentence: never two tracks over the same words, each stretch long enough to settle in, and none in a video that doesn't need them. Each track can be used more than once. With no music list, propose no music.
 - Slides are b-roll too: never over the same words as other b-roll. Use them where seeing the words helps: at most one every 30 seconds, and none in a video that doesn't need them.
 - reason: one short sentence the user reads in the editor, e.g. "Second take is complete; first stumbles".
-- confidence: 0 to 1, how sure you are the user wants this cut, punch-in, b-roll, slide or sound.
+- confidence: 0 to 1, how sure you are the user wants this cut, punch-in, b-roll, slide, sound or music.
 - suggestedTitle: a short, plain title for the finished video.
 - Follow the user's brief when there is one.`;
 
@@ -370,11 +378,18 @@ export function mediaList(assets: Pick<Asset, "name" | "kind" | "media" | "descr
     .join("\n");
 }
 
+/** The music tracks the AI editor can place, numbered [t] in the project's order. It can't hear them, so it goes by name and description. */
+export function musicList(tracks: Pick<MusicTrack, "name" | "duration" | "description" | "whole">[]): string {
+  return tracks
+    .map((t, i) => `[${i}] ${t.name} (${seconds(t.duration)}${t.whole ? ", already plays under the whole video" : ""}): ${t.description || "no description"}`)
+    .join("\n");
+}
+
 /** The media the AI editor is shown: the user's own, prepared, so they can be placed. Slides are made for one spot. */
 export const placeableAssets = (project: Pick<Project, "assets">) => project.assets.filter((a) => a.prep && a.kind !== "slide");
 
 /** The user turn: the brief (or a one-off request), then the transcript, then the media for b-roll. */
-export function analysisPrompt(project: Pick<Project, "sources" | "transcript" | "brief" | "language" | "assets">, request?: string): string {
+export function analysisPrompt(project: Pick<Project, "sources" | "transcript" | "brief" | "language" | "assets" | "music">, request?: string): string {
   const brief = project.brief.trim();
   const media = placeableAssets(project);
   return [
@@ -387,6 +402,7 @@ export function analysisPrompt(project: Pick<Project, "sources" | "transcript" |
     "",
     numberedTranscript(project),
     ...(media.length > 0 ? ["", "## Media for b-roll", mediaList(media)] : []),
+    ...(project.music.length > 0 ? ["", "## Music", musicList(project.music)] : []),
     "",
     "## Sound effects",
     ...SOUND_EFFECTS.map((e) => `[${e.id}] ${e.meaning}`),

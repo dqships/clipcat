@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import { applyEdit } from "./editor";
 import { counter, source, words } from "./fixtures";
 import { initialSegments, setRange } from "./edits";
-import { Project } from "./project";
+import { type MusicTrack, Project, type Proposal } from "./project";
 import { validateProposals } from "./proposals";
-import { SOUND_EFFECTS, soundIds, soundProposal, timedSounds } from "./sounds";
+import { MUSIC, SOUND_EFFECTS, musicAt, musicFade, musicProposal, musicTime, soundIds, soundProposal, timedMusic, timedSounds } from "./sounds";
 import { buildTimeline } from "./timeline";
 
 const ws = words("a", "hi I am Dan and today we start");
@@ -74,15 +74,103 @@ describe("sound effects", () => {
 });
 
 describe("music", () => {
-  it("sets its level and ducking, and comes out, without undo steps", () => {
+  const track = (id: string, fields: Partial<MusicTrack> = {}): MusicTrack => ({ id, path: `/m/${id}.mp3`, name: `${id}.mp3`, duration: 90, volume: 0.15, duck: true, prep: null, description: "", whole: false, ...fields });
+
+  it("reads a project saved with one track, or none", () => {
+    const saved = { ...project(), music: { path: "/m/song.mp3", name: "song.mp3", duration: 90, volume: 0.3, duck: false, prep: "media/music/a.m4a" } };
+    expect(Project.parse(saved).music).toEqual([{ id: "t1", path: "/m/song.mp3", name: "song.mp3", duration: 90, volume: 0.3, duck: false, prep: "media/music/a.m4a", description: "", whole: true }]);
+    expect(Project.parse({ ...project(), music: null }).music).toEqual([]);
+  });
+
+  it("sets a track's level, ducking and description, and takes it out, without undo steps", () => {
     expect(() => applyEdit(project(), { type: "music", volume: 0.3 }, counter("n"))).toThrow("There is no music");
-    const withMusic = { ...project(), music: { path: "/m/song.mp3", name: "song.mp3", duration: 90, volume: 0.15, duck: true, prep: null } };
+    const withMusic = { ...project(), music: [track("t1", { whole: true })] };
     const quieter = applyEdit(withMusic, { type: "music", volume: 0.08 }, counter("n"));
-    expect(quieter.music).toMatchObject({ volume: 0.08, duck: true });
-    expect(applyEdit(quieter, { type: "music", duck: false }, counter("n")).music).toMatchObject({ volume: 0.08, duck: false });
+    expect(quieter.music[0]).toMatchObject({ volume: 0.08, duck: true });
+    expect(applyEdit(quieter, { type: "music", id: "t1", duck: false, description: "Soft piano" }, counter("n")).music[0]).toMatchObject({ volume: 0.08, duck: false, description: "Soft piano" });
     const gone = applyEdit(quieter, { type: "remove-music" }, counter("n"));
-    expect(gone.music).toBeNull();
+    expect(gone.music).toEqual([]);
     expect(gone.history.past).toHaveLength(0);
+  });
+
+  it("asks which track when there are several, and lets one play under the whole video", () => {
+    const two = { ...project(), music: [track("t1", { whole: true }), track("t2")] };
+    expect(() => applyEdit(two, { type: "music", volume: 0.3 }, counter("n"))).toThrow("Say which music track");
+    expect(() => applyEdit(two, { type: "music", id: "t9", volume: 0.3 }, counter("n"))).toThrow("Unknown music");
+    expect(applyEdit(two, { type: "music", id: "t2", whole: true }, counter("n")).music.map((t) => t.whole)).toEqual([false, true]);
+  });
+
+  it("places a track over words as one undo step, and taking the track out takes its placements", () => {
+    const two = { ...project(), music: [track("t1"), track("t2")] };
+    expect(() => applyEdit(two, { type: "place-music", wordIds: ["a-w3"], trackId: "t9" }, counter("n"))).toThrow("Unknown music");
+    const placed = applyEdit(two, { type: "place-music", wordIds: ["a-w3", "a-w4"], trackId: "t2" }, counter("n"));
+    expect(placed.proposals.at(-1)).toMatchObject({ type: "music", status: "accepted", wordIds: ["a-w3", "a-w4"], cuts: [], music: { trackId: "t2" } });
+    expect(placed.history.past).toHaveLength(1);
+    expect(applyEdit(placed, { type: "remove-music", id: "t2" }, counter("n")).proposals.filter((p) => p.music)).toEqual([]);
+  });
+
+  const placement = (id: string, range: [number, number], trackId: string, status: Proposal["status"] = "accepted") =>
+    musicProposal({ id, sourceId: "a", wordIds: ["a-w3"], reason: "", confidence: 1, status }, { range, trackId });
+  const timed = (music: MusicTrack[], proposals: Proposal[]) => {
+    const p = { ...project(), segments: initialSegments("a", 20, counter("s")), sources: [source("a", 20)], music, proposals };
+    return timedMusic(p, buildTimeline(p));
+  };
+
+  it("plays the whole-video track end to end, fading out at the end", () => {
+    const [m, ...rest] = timed([track("t1", { whole: true })], []);
+    expect(rest).toEqual([]);
+    expect(m).toMatchObject({ start: 0, end: 20, offset: 0, fadeIn: MUSIC.fadeIn, fadeOut: MUSIC.fadeOut });
+  });
+
+  it("lets placed tracks take over from the whole-video track, which picks up on the output clock", () => {
+    const list = timed([track("t1", { whole: true }), track("t2")], [placement("m1", [5, 10], "t2"), placement("m2", [12, 12.5], "t9"), placement("m3", [15, 18], "t1", "pending")]);
+    expect(list.map((m) => [m.track.id, m.start, m.end, m.offset])).toEqual([
+      ["t1", 0, 5, 0],
+      ["t2", 5, 10, 0],
+      ["t1", 10, 20, 10],
+    ]);
+    expect(list[0]!.fadeOut).toBe(MUSIC.handover);
+    expect(musicAt(list, 7)?.track.id).toBe("t2");
+    expect(musicTime(list[1]!, 7)).toBe(2);
+    expect(musicTime(list[2]!, 12)).toBe(12);
+    expect(musicFade(list[1]!, 5)).toBe(0);
+    expect(musicFade(list[1]!, 7)).toBe(1);
+  });
+
+  it("plays only what's placed when no track plays throughout, and never two at once", () => {
+    const list = timed([track("t1"), track("t2")], [placement("m1", [2, 8], "t1"), placement("m2", [6, 12], "t2")]);
+    expect(list.map((m) => [m.track.id, m.start, m.end])).toEqual([
+      ["t1", 2, 6],
+      ["t2", 6, 12],
+    ]);
+    expect(musicAt(list, 15)).toBeNull();
+  });
+
+  it("loops a track shorter than its stretch", () => {
+    const [m] = timed([track("t1", { duration: 3, whole: true })], []);
+    expect(musicTime(m!, 7)).toBe(1);
+  });
+
+  it("checks the AI editor's placements against the track list", () => {
+    const long = words("a", Array.from({ length: 30 }, (_, i) => `w${i}`).join(" "));
+    const ask = (p: object) => validateProposals({ proposals: [{ reason: "Mood shift", confidence: 0.9, ...p }] as never }, long, [source("a", 20)], counter("n"), [], [], [{ id: "t1" }, { id: "t2" }]);
+    const ok = ask({ type: "music", from: 2, to: 20, track: 1 });
+    expect(ok.errors).toEqual([]);
+    expect(ok.proposals[0]).toMatchObject({ type: "music", status: "pending", cuts: [], music: { trackId: "t2", range: [long[2]!.start, long[20]!.end] } });
+    expect(ask({ type: "music", from: 2, to: 20, track: 5 }).errors[0]).toContain("music must set track to a number from the music list (0..1)");
+    expect(ask({ type: "music", from: 2, to: 3, track: 0 }).errors[0]).toContain("music covers at least");
+    expect(ask({ type: "cleanup", from: 2, to: 3, track: 0 }).errors[0]).toContain("only music may set track");
+  });
+
+  it("keeps the more confident of two tracks over the same words", () => {
+    const long = words("a", Array.from({ length: 30 }, (_, i) => `w${i}`).join(" "));
+    const base = { type: "music" as const, reason: "x" };
+    const { proposals, errors } = validateProposals(
+      { proposals: [{ ...base, from: 0, to: 15, track: 0, confidence: 0.5 }, { ...base, from: 10, to: 25, track: 1, confidence: 0.9 }] },
+      long, [source("a", 20)], counter("n"), [], [], [{ id: "t1" }, { id: "t2" }],
+    );
+    expect(proposals.map((p) => p.music?.trackId)).toEqual(["t2"]);
+    expect(errors[0]).toContain("overlaps a more confident proposal");
   });
 });
 
