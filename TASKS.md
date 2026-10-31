@@ -9,6 +9,7 @@
 
 ## Done
 
+- 2026-10-31: CI builds Apple Silicon on macos-15, because GitHub retires macos-14 on November 2.
 - 2026-10-31: Exports no longer hang on music. ffmpeg froze when an endless loop restarted a file after its stretch ended, and when ducked music ended before the speech.
 - 2026-10-31: Exported captions match the preview's size, and boxed word-by-word captions are one clean box.
 - 2026-10-31: OpenAI and OpenRouter runs ask once more when the connection drops mid-request, and the error says why it dropped.
