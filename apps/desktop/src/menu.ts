@@ -2,7 +2,7 @@
 // the window shows, so a test can check it without Electron; main.ts hands it
 // to Menu.buildFromTemplate and builds it again whenever the window changes.
 //
-// The editor answers its own keys (Cmd+Z, Space, J/K/L, the arrows) before the
+// The editor answers its own keys (Cmd+Z, Space, Enter, J/K/L, the arrows) before the
 // menu sees them, so the menu's items for those are for clicking and for
 // showing the key. Keys without Cmd or Ctrl aren't given to the menu on macOS,
 // where it would take them even while you type.
@@ -132,6 +132,7 @@ function playbackMenu(deps: MenuDeps): MenuItemConstructorOptions {
     label: "Playback",
     submenu: [
       item("Play or Pause", "play-pause", "Space"),
+      item("Play from the Beginning", "play-from-start", "Enter"),
       separator,
       item("Play Backwards", "play-backwards", "J"),
       item("Pause", "pause", "K"),

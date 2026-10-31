@@ -2,7 +2,7 @@
 title: ClipCat keyboard shortcuts for Mac and Windows
 description: Every keyboard shortcut in ClipCat: playback, stepping frames, cutting and fixing words, undo and redo, the menu bar, and moving panels and text.
 order: 16
-updated: 2026-10-29
+updated: 2026-10-31
 ---
 
 # Keyboard shortcuts
@@ -11,11 +11,12 @@ On Windows, use Ctrl where a Mac uses Cmd. The one exception is help, which is F
 
 ## Playback
 
-These work anywhere in the editor, except while you type in a box.
+These work anywhere in the editor, except while you type in a box. In a box, Enter does its usual job, such as saving a fixed word or sending a request. If you moved to a button with Tab, Enter presses that button, but after you click a button, Enter plays from the beginning.
 
 | Key | What it does |
 | --- | --- |
 | Space | Play or pause |
+| Enter | Play from the beginning of the edit, even if it's already playing |
 | K | Pause |
 | L | Play forwards. Press again to play faster. |
 | J | Play backwards. Press again to play faster. |

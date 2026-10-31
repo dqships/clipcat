@@ -78,30 +78,32 @@ describe("applyEdit", () => {
 });
 
 describe("caption edits", () => {
-  it("changes the style without an undo step", () => {
-    let p = applyEdit(project(), { type: "captions", captions: { mode: "word", case: "upper" } }, id);
-    p = applyEdit(p, { type: "captions", captions: { enabled: false } }, id);
-    expect(p.captions).toMatchObject({ mode: "word", case: "upper", enabled: false });
-    expect(p.history.past).toHaveLength(0);
+  it("changes the style as undo steps", () => {
+    const p = project();
+    let next = applyEdit(p, { type: "captions", captions: { mode: "word", case: "upper" } }, id);
+    next = applyEdit(next, { type: "captions", captions: { enabled: false } }, id);
+    expect(next.captions).toMatchObject({ mode: "word", case: "upper", enabled: false });
+    expect(next.history.past).toHaveLength(2);
+    expect(applyEdit(applyEdit(next, { type: "undo" }, id), { type: "undo" }, id).captions).toEqual(p.captions);
   });
 
-  it("sets the speed without an undo step", () => {
+  it("sets the speed as an undo step", () => {
     const p = applyEdit(project(), { type: "speed", speed: 1.25 }, id);
     expect(p.speed).toBe(1.25);
-    expect(p.history.past).toHaveLength(0);
+    expect(p.history.past).toHaveLength(1);
     expect(EditOp.safeParse({ type: "speed", speed: 3 }).success).toBe(false);
   });
 });
 
 describe("applyEdit framing", () => {
-  it("sets the shape and a hand-set framing without an undo step, and goes back to auto", () => {
+  it("sets the shape and a hand-set framing as undo steps, and goes back to auto", () => {
     const p = project();
     const tall = applyEdit(p, { type: "aspect", aspectRatio: "9:16" }, counter("g"));
     expect(tall.aspectRatio).toBe("9:16");
     const set = applyEdit(tall, { type: "frame", sourceId: "a", x: 0.3 }, counter("g"));
     expect(set.sources[0]).toMatchObject({ framing: "manual", frameX: 0.3 });
     expect(applyEdit(set, { type: "frame", sourceId: "a", x: null }, counter("g")).sources[0]!.framing).toBe("auto");
-    expect(set.history.past).toHaveLength(0);
+    expect(set.history.past).toHaveLength(2);
     expect(() => applyEdit(p, { type: "frame", sourceId: "nope", x: 0.5 }, counter("g"))).toThrow("Unknown source");
   });
 
@@ -114,7 +116,7 @@ describe("applyEdit framing", () => {
 });
 
 describe("applyEdit punch-ins", () => {
-  it("punches in on words as one undo step, and changes the style without one", () => {
+  it("punches in on words as one undo step, and changes the style as another", () => {
     const p = project();
     const punched = applyEdit(p, { type: "punch", wordIds: ["a-w4", "a-w3"], style: "zoom-in" }, counter("n"));
     const added = punched.proposals.at(-1)!;
@@ -127,9 +129,11 @@ describe("applyEdit punch-ins", () => {
 
     const snapped = applyEdit(punched, { type: "punch-style", id: added.id, style: "cut" }, counter("n"));
     expect(snapped.proposals.at(-1)!.punch).toMatchObject({ style: "cut", scale: 1.25 });
-    expect(snapped.history.past).toHaveLength(1);
+    expect(snapped.history.past).toHaveLength(2);
 
-    const undone = applyEdit(snapped, { type: "undo" }, counter("n"));
+    const restyled = applyEdit(snapped, { type: "undo" }, counter("n"));
+    expect(restyled.proposals.at(-1)!.punch).toMatchObject({ style: "zoom-in", scale: 1.2 });
+    const undone = applyEdit(restyled, { type: "undo" }, counter("n"));
     expect(undone.proposals.at(-1)!.status).toBe("rejected");
     expect(applyEdit(undone, { type: "redo" }, counter("n")).proposals.at(-1)!.status).toBe("accepted");
   });
@@ -144,7 +148,7 @@ describe("applyEdit punch-ins", () => {
 describe("applyEdit b-roll", () => {
   const withMedia = () => Project.parse({ ...project(), assets: [asset("m1")] });
 
-  it("adds b-roll on words as one undo step, and restyles it without one", () => {
+  it("adds b-roll on words as one undo step, and restyles it as another", () => {
     const p = withMedia();
     const added = applyEdit(p, { type: "overlay", wordIds: ["a-w2", "a-w3"], assetId: "m1", placement: "full" }, counter("n"));
     const o = added.proposals.at(-1)!;
@@ -154,8 +158,10 @@ describe("applyEdit b-roll", () => {
 
     const styled = applyEdit(added, { type: "overlay-style", id: o.id, placement: "pip", shape: "circle" }, counter("n"));
     expect(styled.proposals.at(-1)!.overlay).toMatchObject({ placement: "pip", shape: "circle", size: 0.35 });
-    expect(styled.history.past).toHaveLength(1);
-    expect(applyEdit(styled, { type: "undo" }, counter("n")).proposals.at(-1)!.status).toBe("rejected");
+    expect(styled.history.past).toHaveLength(2);
+    const unstyled = applyEdit(styled, { type: "undo" }, counter("n"));
+    expect(unstyled.proposals.at(-1)!.overlay).toMatchObject({ placement: "full", shape: "rectangle" });
+    expect(applyEdit(unstyled, { type: "undo" }, counter("n")).proposals.at(-1)!.status).toBe("rejected");
   });
 
   it("describes and removes media, and the b-roll that used it goes too", () => {
@@ -197,7 +203,7 @@ describe("applyEdit slides", () => {
     const word = p.transcript.find((w) => w.id === "a-w3")!;
     expect(word).toMatchObject({ text: "started", heard: "start", end: 2.3 });
     expect(kept(p)).toEqual(["so", "we", "started", "now"]);
-    expect(p.history.past).toHaveLength(1);
+    expect(p.history.past).toHaveLength(2);
     p = applyEdit(p, { type: "fix-word", wordId: "a-w3", text: "Start" }, id);
     expect(p.transcript.find((w) => w.id === "a-w3")).toMatchObject({ text: "Start", heard: "start" });
     p = applyEdit(p, { type: "fix-word", wordId: "a-w3", text: "start" }, id);
@@ -209,13 +215,14 @@ describe("applyEdit slides", () => {
 });
 
 describe("thumbnail edits", () => {
-  it("change the text and colours once there is a frame, and are not undo steps", () => {
+  it("change the text and colours once there is a frame, as an undo step", () => {
     const p = project();
     expect(() => applyEdit(p, { type: "thumbnail", text: "Hi" }, counter("t"))).toThrow("Pick a frame");
     p.thumbnail = { sourceId: p.sources[0]!.id, time: 3, frame: "media/thumbnail/frame-1.jpg", subject: null, text: "", textColor: "paper", background: "frame", textSide: "left", textBox: null, behind: true };
     const next = applyEdit(p, { type: "thumbnail", text: "Cut the fluff", background: "blur", textSide: "right" }, counter("t"));
     expect(next.thumbnail).toMatchObject({ text: "Cut the fluff", background: "blur", textSide: "right", textColor: "paper" });
-    expect(next.history.past).toHaveLength(0);
+    expect(next.history.past).toHaveLength(1);
+    expect(applyEdit(next, { type: "undo" }, counter("t")).thumbnail).toEqual(p.thumbnail);
     expect(EditOp.safeParse({ type: "thumbnail", textColor: "pink" }).success).toBe(true);
     expect(EditOp.safeParse({ type: "thumbnail", textColor: "#FF0000" }).success).toBe(false);
     // The text can be moved anywhere on the thumbnail, and put back.

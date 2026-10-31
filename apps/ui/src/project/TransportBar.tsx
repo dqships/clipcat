@@ -1,5 +1,5 @@
 import { type Project, buildTimeline } from "@clipcat/core";
-import { FastForward, Pause, Play, Rewind, StepBack, StepForward } from "lucide-react";
+import { FastForward, Pause, Play, Rewind, SkipBack, StepBack, StepForward } from "lucide-react";
 import { type RefObject, useMemo } from "react";
 import { formatTimecode } from "../format";
 import { ICON_STROKE } from "../icons";
@@ -13,9 +13,9 @@ type Props = {
 };
 
 /**
- * The preview's own controls: shuttle back, a frame back, play or pause, a
- * frame on, shuttle forward, and where the playhead is in the edit. Each
- * button names its key (usePlaybackKeys).
+ * The preview's own controls: play from the beginning, shuttle back, a frame
+ * back, play or pause, a frame on, shuttle forward, and where the playhead is
+ * in the edit. Each button names its key (usePlaybackKeys).
  */
 export function TransportBar({ project, playhead, transport, preview }: Props) {
   const timeline = useMemo(() => buildTimeline(project), [project]);
@@ -27,6 +27,16 @@ export function TransportBar({ project, playhead, transport, preview }: Props) {
 
   return (
     <div className="transport" role="toolbar" aria-label="Playback">
+      <button
+        type="button"
+        className="button button--icon"
+        title="Play from the beginning (Enter)"
+        aria-label="Play from the beginning"
+        disabled={timeline.items.length === 0}
+        onClick={() => preview.current?.restart()}
+      >
+        <SkipBack {...icon} />
+      </button>
       <button type="button" className="button button--icon" title="Play backwards, faster each press (J)" onClick={() => preview.current?.shuttle(-1)}>
         <Rewind {...icon} />
       </button>

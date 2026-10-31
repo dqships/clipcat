@@ -115,6 +115,7 @@ describe("the menu bar", () => {
     expect(items(menu(menuTemplate(deps("darwin")), "Playback")).every((i) => i.accelerator === undefined)).toBe(true);
     expect(clickAll(deps("darwin"), "Playback")).toEqual([
       "play-pause",
+      "play-from-start",
       "play-backwards",
       "pause",
       "play-forwards",

@@ -4,6 +4,7 @@ export * from "./edits";
 export * from "./proposals";
 export * from "./silence";
 export * from "./editor";
+export * from "./history";
 export * from "./captions";
 export * from "./corrections";
 export * from "./shorts";
