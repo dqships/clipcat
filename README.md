@@ -266,7 +266,11 @@ signed app; an unsigned one says a new version is out and opens the release
 page. To sign and notarize Mac releases, add these repository secrets:
 `MACOS_CERT_P12` (a Developer ID Application certificate, base64) and
 `MACOS_CERT_PASSWORD`, plus `APPLE_ID`, `APPLE_PASSWORD` (an app-specific
-password) and `APPLE_TEAM_ID`. Locally, `npm run make` signs with the Developer
+password) and `APPLE_TEAM_ID`. Notarizing needs an active Apple Developer
+membership and runs only when all three of those are set. Without them a
+release is signed but not notarized, and a new install needs Open Anyway in
+System Settings. `APPLE_PASSWORD` isn't set for now.
+Locally, `npm run make` signs with the Developer
 ID in your keychain (`APPLE_SIGN_IDENTITY` picks one) unless `SKIP_SIGN=1`.
 Windows builds are signed when `WINDOWS_SIGNTOOL_PATH`, `WINDOWS_SIGN_DLIB` and
 `WINDOWS_SIGN_METADATA` are set (Azure Artifact Signing). The Electron fuses

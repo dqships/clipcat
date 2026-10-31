@@ -285,6 +285,7 @@ export const PAGES = [
       {
         h2: "After installing",
         list: [
+          "On a Mac, macOS stops ClipCat the first time you open it and says it can't verify the app, because ClipCat isn't notarized by Apple. Open System Settings, then Privacy & Security, scroll down to Security, choose Open Anyway next to ClipCat, and enter your password. You only do this once.",
           "For AI cuts, install [Claude Code](https://claude.com/claude-code) and sign in, or install the Codex CLI and sign in, or paste a Claude API key in ClipCat.",
           "The first transcription downloads the speech model once, a few hundred megabytes, from Hugging Face. To download it sooner, open Settings, then Transcription. See [which languages it hears](/languages).",
           "ClipCat checks for updates every few hours and installs them when you restart.",

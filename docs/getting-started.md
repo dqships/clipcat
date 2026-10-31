@@ -2,7 +2,7 @@
 title: Make your first video with ClipCat
 description: Install ClipCat, set up the AI that suggests your edit, and go from a raw talking-head take to an exported video, the shorts and a description.
 order: 1
-updated: 2026-10-29
+updated: 2026-10-31
 ---
 
 # Make your first video
@@ -20,6 +20,8 @@ This page takes you from installing ClipCat to an exported video. Each step link
 1. Download the installer from [the download page](https://clipcat.followusai.com/download). Pick the Intel version if your Mac's About This Mac says Processor rather than Chip.
 2. On a Mac, open the DMG and drag ClipCat to Applications. On Windows, run the installer.
 3. Open ClipCat. You see the library, which is empty the first time.
+
+The first time you open ClipCat on a Mac, macOS stops it and says it can't verify the app, because ClipCat isn't notarized by Apple. Choose **Done**, then open **System Settings > Privacy & Security**, scroll down to **Security**, choose **Open Anyway** next to ClipCat, and enter your password. You only do this once.
 
 ## 2. Bring in a take
 

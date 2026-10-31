@@ -4,6 +4,7 @@
 
 - Test by hand: recording (camera, microphone, screen), Claude Code as the AI editor (it isn't installed on the dev Mac), Connect and Disconnect, the menu bar and its shortcuts, and Windows.
 - Check ducking on a normal recording: it dipped only 1 to 2 dB on a quiet test clip.
+- If the Apple Developer membership is renewed: make a new app-specific password, add it back as the `APPLE_PASSWORD` secret, and remove the Open Anyway steps from `docs/getting-started.md`, `docs/troubleshooting.md` and the download page.
 
 ## On hold
 
@@ -40,3 +41,4 @@
 - 2026-10-31: Replace the How to use it walkthrough with Things to ask and the full guide link, since Help covers the rest.
 - 2026-10-31: Nothing ships until it has been tested in a local build.
 - 2026-10-31: Slide editing is on hold; build Play from the beginning now.
+- 2026-10-31: The Apple Developer membership has lapsed and won't be renewed for now, so Mac releases ship signed but not notarized.

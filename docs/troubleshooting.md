@@ -7,6 +7,16 @@ updated: 2026-10-31
 
 # Fix a problem
 
+## macOS won't open ClipCat
+
+ClipCat is signed but isn't notarized by Apple, so macOS stops it the first time and says it can't verify the app. Your Mac hasn't found a problem with it.
+
+1. Choose **Done**. Don't choose **Move to Trash**.
+2. Open **System Settings > Privacy & Security** and scroll down to **Security**.
+3. Choose **Open Anyway** next to ClipCat, then enter your password.
+
+If you don't see **Open Anyway**, open ClipCat from Applications once more, then look again. The button stays for about an hour after macOS stops the app.
+
 ## The AI editor isn't ready
 
 The **AI editor** section on the **Edit** tab says what's wrong, and so does its row in **Settings > AI models**.
