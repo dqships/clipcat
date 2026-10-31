@@ -849,6 +849,8 @@ describe("App", () => {
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "talk" }));
     expect(await screen.findByText("Language: English")).toBeTruthy();
+    // Let the panel's first effects run, or the one that syncs the language can undo the change below.
+    await act(async () => {});
     fireEvent.change(screen.getByLabelText("Language of the speech"), { target: { value: "es" } });
     fireEvent.click(screen.getByRole("button", { name: "Transcribe again" }));
     expect(invoke).toHaveBeenCalledWith("project:language", { id: "p1", language: "es" });
