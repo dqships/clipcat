@@ -7,7 +7,7 @@ import { mkdtemp, readFile, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { applyEdit, buildTimeline, defaultOverlay, overlayBox, overlayProposal, punchProposal, slideAsset, soundProposal, timedOverlays, timedSounds } from "@clipcat/core";
+import { applyEdit, buildTimeline, defaultOverlay, musicProposal, overlayBox, overlayProposal, punchProposal, slideAsset, soundProposal, timedOverlays, timedSounds } from "@clipcat/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { JobQueue, type JobEvent } from "../jobs/queue";
 import { runFfmpeg } from "../media/run";
@@ -377,6 +377,16 @@ describe.skipIf(!binDir)("prep with real ffmpeg", () => {
     // The boom's low thump at its moment, and the music past the end of its file, looped.
     expect((await peak(out, boom!.time, boom!.time + 0.4, "lowpass=f=120")) - (await peak(plain, boom!.time, boom!.time + 0.4, "lowpass=f=120"))).toBeGreaterThan(12);
     expect((await peak(out, 2.6, 3.0, "highpass=f=1500")) - (await peak(plain, 2.6, 3.0, "highpass=f=1500"))).toBeGreaterThan(12);
+
+    // Ducked music that stops before the speech does, as a placed track can: the export must still finish.
+    await store.update(projectId, null, (p) => {
+      p.music[0]!.whole = false;
+      p.proposals.push(musicProposal({ id: "cue1", sourceId: s, wordIds: [], reason: "", confidence: 1, status: "accepted" }, { range: [0, 1], trackId: p.music[0]!.id }));
+    });
+    const placed = join(root, "placed.mp4");
+    await new ExportRunner(deps).run(projectId, "16:9", placed, { signal: new AbortController().signal, progress: () => {} });
+    const after = await streamDurations(placed);
+    expect(Math.abs(after.audio - streams.audio)).toBeLessThan(0.05);
   }, 180_000);
 
   it("grabs the thumbnail's frame from the original recording, full size", async () => {

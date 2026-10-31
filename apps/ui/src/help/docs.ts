@@ -29,7 +29,7 @@ const TEXT = new Map(DOCS.map((d) => [d.slug, plain(d.markdown)]));
 
 export type Hit = { doc: Doc; excerpt: string };
 
-/** The pages that have every word of the query, title matches first, each with the words around its first match. */
+/** The pages that have every word of the query, title matches first, then the exact phrase, each with the words around its first match. */
 export function searchDocs(query: string): Hit[] {
   const words = query.toLowerCase().split(/\s+/).filter(Boolean);
   if (!words.length) return [];
@@ -37,11 +37,12 @@ export function searchDocs(query: string): Hit[] {
     const text = TEXT.get(doc.slug)!;
     const lower = text.toLowerCase();
     if (!words.every((w) => lower.includes(w))) return [];
-    const at = lower.indexOf(words[0]!);
+    const exact = lower.indexOf(words.join(" "));
+    const at = exact >= 0 ? exact : lower.indexOf(words[0]!);
     const start = Math.max(0, text.lastIndexOf(" ", Math.max(0, at - 40)) + 1);
     const end = text.indexOf(" ", Math.min(text.length, at + 80));
     const excerpt = `${start > 0 ? "…" : ""}${text.slice(start, end === -1 ? undefined : end)}${end === -1 ? "" : "…"}`;
-    return [{ doc, excerpt, inTitle: words.every((w) => doc.h1.toLowerCase().includes(w)) }];
+    return [{ doc, excerpt, rank: (words.every((w) => doc.h1.toLowerCase().includes(w)) ? 2 : 0) + (exact >= 0 ? 1 : 0) }];
   });
-  return hits.sort((a, b) => Number(b.inTitle) - Number(a.inTitle)).map(({ doc, excerpt }) => ({ doc, excerpt }));
+  return hits.sort((a, b) => b.rank - a.rank).map(({ doc, excerpt }) => ({ doc, excerpt }));
 }

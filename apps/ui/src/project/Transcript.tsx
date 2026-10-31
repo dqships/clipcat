@@ -2,6 +2,7 @@ import { type EditOp, type Project, SOUND_EFFECTS, type SlideLook, type Word, is
 import { AudioLines, Bookmark, Image, Music, Pencil, Presentation, Scissors, Undo2, ZoomIn } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { ICON_STROKE } from "../icons";
+import { ActionRow } from "./ActionRow";
 import type { Playhead } from "./Preview";
 
 const LOOKS: { value: SlideLook; label: string }[] = [
@@ -121,7 +122,7 @@ export function Transcript({ project, playhead, onSeek, onEdit, hideCuts = false
         }
       }}
     >
-      <div className="editor__actions" aria-live="polite">
+      <ActionRow>
         {fixing ? (
           <span className="editor__count">
             {draftOk || !draft
@@ -273,7 +274,7 @@ export function Transcript({ project, playhead, onSeek, onEdit, hideCuts = false
             Click a word to jump to it, or double-click to fix a misheard word. Shift-click to select words, then cut them or add a zoom, b-roll, slide, chapter, sound or music.
           </span>
         )}
-      </div>
+      </ActionRow>
       <p className="transcript">
         {words.map((w, i) => {
           const heading = several && (i === 0 || words[i - 1]!.sourceId !== w.sourceId);

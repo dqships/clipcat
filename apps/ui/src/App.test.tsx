@@ -2,6 +2,11 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 
+globalThis.ResizeObserver ??= class {
+  observe() {}
+  disconnect() {}
+} as unknown as typeof ResizeObserver;
+
 afterEach(() => {
   cleanup();
   delete window.clipcat;

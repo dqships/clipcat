@@ -169,7 +169,25 @@ describe("keys and model lists", () => {
     await expect(verifyProviderKey("openrouter", "or-x", openrouter.fetcher)).rejects.toThrow(/OpenRouter refused the key/);
     expect(openrouter.sent[0]!.url).toBe("https://openrouter.ai/api/v1/key");
     const down = (async () => Promise.reject(new TypeError("fetch failed"))) as typeof fetch;
-    await expect(verifyProviderKey("openai", "sk-x", down)).rejects.toThrow("Couldn't reach OpenAI. Check the connection.");
+    await expect(verifyProviderKey("openai", "sk-x", down)).rejects.toThrow("Couldn't reach OpenAI (fetch failed). Check the connection.");
+  });
+
+  it("asks again once when the connection drops mid-run", async () => {
+    const { fetcher, sent } = fakeFetch([chatCall("t1", good)]);
+    let drops = 1;
+    const dropping = (async (url: string, init?: RequestInit) => {
+      if (drops-- > 0) throw new TypeError("terminated");
+      return fetcher(url, init);
+    }) as typeof fetch;
+    const { r, seen } = run([{ text: "Saved", done: true }]);
+    await providerAgent("openrouter", { key: async () => "k", model: async () => "m/x", fetch: dropping }).run(r);
+    expect(seen).toHaveLength(1);
+    expect(sent).toHaveLength(1);
+
+    const dead = (async () => Promise.reject(new TypeError("terminated"))) as typeof fetch;
+    await expect(providerAgent("openrouter", { key: async () => "k", model: async () => "m/x", fetch: dead }).run(run([]).r)).rejects.toThrow(
+      "Couldn't reach OpenRouter (terminated). Check the connection.",
+    );
   });
 
   it("lists OpenAI's chat models, newest and biggest first", () => {

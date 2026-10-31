@@ -44,7 +44,7 @@ export function Tools({ pending, tab, onTab: setTab, ...panels }: Props) {
             aria-selected={tab === t.id}
             aria-controls={`tools-${t.id}`}
             tabIndex={tab === t.id ? 0 : -1}
-            className={tab === t.id ? "guide__tab guide__tab--on" : "guide__tab"}
+            className={tab === t.id ? "tools__tab tools__tab--on" : "tools__tab"}
             onClick={() => setTab(t.id)}
           >
             {t.label}

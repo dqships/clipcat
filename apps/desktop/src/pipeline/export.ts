@@ -184,6 +184,7 @@ export class ExportRunner {
         timedMusic(project, timeline).map(async ({ track, start, end, offset, fadeIn, fadeOut }) => ({
           // The original, or the copy made for the preview when the original has moved.
           file: (await exists(track.path)) || !track.prep ? track.path : join(store.dir(projectId), track.prep),
+          duration: track.duration,
           volume: track.volume,
           duck: track.duck,
           start,

@@ -25,6 +25,9 @@ const MIN_CUE = 0.4;
 /** Caption sizes are given for a 1080-pixel frame and scaled from there. */
 const BASE = 1080;
 
+/** libass fits a font's full height to its size, where CSS fits the em. Jost stands this many ems tall, so exports match the preview. */
+const FONT_HEIGHT = 1.445;
+
 /** A caption size (given for 1080p) in pixels of `frame`; portrait frames get bigger type, as short-form captions are. */
 export function captionPixels(size: number, frame: Frame): number {
   const tall = frame.height > frame.width;
@@ -159,13 +162,14 @@ export function toAss(cues: Cue[], style: Captions, frame: Frame): string {
     [
       "Style: Default",
       font,
-      size,
+      Math.round(size * FONT_HEIGHT),
       primary,
       primary,
-      box ? assColor(style.boxColor, 0x60) : assColor("#000000", 0x40),
-      assColor("#000000", shadow ? 0x80 : 0xff),
+      assColor("#000000", box ? 0xff : 0x40),
+      box ? assColor(style.boxColor, 0x60) : assColor("#000000", shadow ? 0x80 : 0xff),
       0, 0, 0, 0, 100, 100, 0, 0,
-      box ? 3 : 1,
+      // Style 4 is one box around the cue; style 3 boxes each run of colour, and they overlap in dark seams.
+      box ? 4 : 1,
       outline,
       shadow && !box ? Math.max(1, Math.round(3 * scale)) : 0,
       2,

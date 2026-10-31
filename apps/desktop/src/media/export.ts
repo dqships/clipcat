@@ -369,7 +369,7 @@ export type AudioPlan = Shape & {
   music?: MusicMix[] | null;
 };
 
-export type MusicMix = Pick<TimedMusic, "start" | "end" | "offset" | "fadeIn" | "fadeOut"> & { file: string; volume: number; duck: boolean };
+export type MusicMix = Pick<TimedMusic, "start" | "end" | "offset" | "fadeIn" | "fadeOut"> & { file: string; duration: number; volume: number; duck: boolean };
 
 /**
  * Lays the effects and music under the speech: each effect placed so the
@@ -406,7 +406,9 @@ function bedLines(plan: AudioPlan, args: string[], firstInput: number, speech: s
   const under: string[] = [];
   music.forEach((m, k) => {
     const length = m.end - m.start;
-    args.push("-stream_loop", "-1", "-i", m.file);
+    // Only the plays this stretch reads: ffmpeg hangs if an endless loop restarts the file after the stretch is over.
+    const plays = Math.ceil((m.offset + length) / m.duration);
+    args.push("-stream_loop", String(Math.max(0, plays - 1)), "-i", m.file);
     const delay = Math.round(m.start * 1000);
     lines.push(
       `[${input++}:a:0]${format},atrim=${sec(m.offset)}:${sec(m.offset + length)},asetpts=PTS-STARTPTS,afade=t=in:d=${m.fadeIn},afade=t=out:st=${sec(length - m.fadeOut)}:d=${m.fadeOut},volume=${m.volume.toFixed(3)}${delay > 0 ? `,adelay=${delay}:all=1` : ""}[m${k}]`,
@@ -417,7 +419,9 @@ function bedLines(plan: AudioPlan, args: string[], firstInput: number, speech: s
     const single = under.length === 1;
     if (!single) lines.push(`${under.join("")}amix=inputs=${under.length}:duration=longest:dropout_transition=0:normalize=0[mus]`);
     lines.push(`${speech}asplit=2[sp][key]`);
-    lines.push(`${single ? under[0] : "[mus]"}[key]sidechaincompress=threshold=0.02:ratio=6:attack=30:release=400[bed]`);
+    // Padded because sidechaincompress hangs when its music ends before the speech does, as a placed track does.
+    lines.push(`${single ? under[0] : "[mus]"}apad[pad]`);
+    lines.push(`[pad][key]sidechaincompress=threshold=0.02:ratio=6:attack=30:release=400[bed]`);
     mix.push("[bed]");
   }
   // The speech comes first, so the mix lasts exactly as long as it does.

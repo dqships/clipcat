@@ -169,6 +169,12 @@ its middle. It is the resize handle: on hover, focus or drag it becomes a
 the preview gets narrower or shorter than `--panel-min` (240 px). The layout
 is remembered for every project.
 
+The tools panel's tabs (Edit, Look, Publish, Export) are ghost text on a
+hairline, and the open one is marked with a `--space-1` strip of splice tape,
+as Settings marks its open page. A row of actions that doesn't fit stays one
+row: its scrollbar is hidden, and a secondary icon button with a Lucide
+`chevron-left` or `chevron-right` shows at any end with more that way.
+
 ## Shape and depth
 
 - Radius: `--radius-control` 4 px (buttons, inputs, clips), `--radius-panel` 8 px

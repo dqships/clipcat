@@ -41,6 +41,14 @@ export class ProviderError extends Error {
   }
 }
 
+/** The connection went before an answer came back, so asking again may work. */
+class ConnectionLost extends Error {
+  constructor(provider: Provider, e: unknown) {
+    const why = e instanceof Error ? ((e.cause as Error | undefined)?.message ?? e.message) : String(e);
+    super(`Couldn't reach ${PROVIDER_NAME[provider]} (${why}). Check the connection.`);
+  }
+}
+
 /** Parses a response, turning an error status into a readable error. */
 async function body<T>(provider: Provider, response: Response, signal?: AbortSignal | null): Promise<T> {
   let text: string;
@@ -48,7 +56,7 @@ async function body<T>(provider: Provider, response: Response, signal?: AbortSig
     text = await response.text();
   } catch (e) {
     if (signal?.aborted && (signal.reason as Error | undefined)?.name !== "TimeoutError") throw e;
-    throw new Error(`Couldn't reach ${PROVIDER_NAME[provider]}. Check the connection.`);
+    throw new ConnectionLost(provider, e);
   }
   if (!response.ok) {
     let detail = text.slice(0, 300);
@@ -79,7 +87,7 @@ async function call<T>(provider: Provider, fetcher: Fetch, path: string, key: st
   } catch (e) {
     // A cancelled run stays cancelled; a timeout reads like any other dead connection.
     if (init.signal?.aborted && (init.signal.reason as Error | undefined)?.name !== "TimeoutError") throw e;
-    throw new Error(`Couldn't reach ${PROVIDER_NAME[provider]}. Check the connection.`);
+    throw new ConnectionLost(provider, e);
   }
   return body<T>(provider, response, init.signal);
 }
@@ -276,7 +284,12 @@ export function providerAgent(provider: Provider, options: { key: () => Promise<
         run.activity(turn > 1 ? `${name} is fixing its answer` : pictures.length > 0 ? `${name} is looking at your media` : `${name} is reading the transcript`);
         let answer: Awaited<ReturnType<Transport["turn"]>>;
         try {
-          answer = await talk.turn();
+          // A long request can lose its connection while the provider is still working: that's billed either way, so one more try is worth it.
+          answer = await talk.turn().catch((e: unknown) => {
+            if (!(e instanceof ConnectionLost) || run.signal.aborted) throw e;
+            run.activity(`${name} lost the connection, trying again`);
+            return talk.turn();
+          });
         } catch (e) {
           if (run.signal.aborted) throw new Error("cancelled");
           throw e;

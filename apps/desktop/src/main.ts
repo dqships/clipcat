@@ -292,7 +292,7 @@ function mcpEnv(socket: string): InstallEnv {
 }
 
 /** A file name from the video's title: no characters Windows or macOS refuse. */
-const fileName = (title: string) => title.replace(/[\\/:*?"<>|\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim().slice(0, 120) || "ClipCat export";
+const fileName = (title: string) => title.replace(/[\\/:*?"<>|\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim().slice(0, 120).replace(/[.\s]+$/, "") || "ClipCat export";
 
 /** Writes the edit as a timeline for another editor, named for the video. */
 async function writeTimeline(store: ProjectStore, id: string, format: TimelineFormat, path: string): Promise<void> {
