@@ -6,13 +6,14 @@
 // picks up whatever is missing.
 
 import { randomUUID } from "node:crypto";
-import { mkdir } from "node:fs/promises";
+import { copyFile, mkdir, rm } from "node:fs/promises";
 import { basename, extname, join } from "node:path";
 import {
   type MediaInfo,
   type Project,
   type Source,
   detectSilence,
+  forgetWordFixes,
   frameLevels,
   fromSpeechTime,
   initialSegments,
@@ -60,6 +61,12 @@ export function prepPaths(sourceId: string): PrepOutputs {
 
 const shortId = () => randomUUID().slice(0, 8);
 
+/** Where ClipCat keeps its own copy of a recording that was only lent to it. */
+export const ORIGINALS_DIR = "media/originals";
+
+/** Photos hands over a dragged video as a temporary file that macOS soon deletes. */
+export const isTemporaryFile = (path: string) => /[\\/](TemporaryItems|com\.apple\.Photos\.NSItemProvider)[\\/]/.test(path);
+
 export class ImportPipeline {
   constructor(private readonly deps: PipelineDeps) {}
 
@@ -83,11 +90,35 @@ export class ImportPipeline {
     const first = files[0]!;
     const target = projectId ?? (await store.create(basename(first, extname(first)))).id;
     const language = projectId ? null : ((await this.deps.language?.()) ?? null);
+    const copies: string[] = [];
+    const settled = await Promise.allSettled(
+      probed.map(async (f) => {
+        if (!isTemporaryFile(f.path)) return f;
+        const dir = join(store.dir(target), ORIGINALS_DIR);
+        await mkdir(dir, { recursive: true });
+        const copy = join(dir, `${shortId()}-${basename(f.path)}`);
+        copies.push(copy);
+        try {
+          await copyFile(f.path, copy);
+        } catch (e) {
+          throw new Error(`${basename(f.path)}: ${e instanceof Error ? e.message : String(e)}`);
+        }
+        return { ...f, path: copy };
+      }),
+    );
+    const failed = settled.find((r) => r.status === "rejected");
+    if (failed) {
+      // Photos can delete its file before the copy is made: leave nothing behind, not an empty project.
+      if (projectId) await Promise.all(copies.map((c) => rm(c, { force: true })));
+      else await store.remove(target);
+      throw failed.reason;
+    }
+    const kept = settled.map((r) => (r as PromiseFulfilledResult<(typeof probed)[number]>).value);
     const added: string[] = [];
     const project = await store.update(target, null, (p) => {
       if (language) p.language = language;
       let order = p.sources.reduce((n, s) => Math.max(n, s.order + 1), 0);
-      for (const { path, media } of probed) {
+      for (const { path, media } of kept) {
         const id = `s${shortId()}`;
         const source: Source = {
           id,
@@ -107,7 +138,7 @@ export class ImportPipeline {
         added.push(id);
       }
     });
-    await store.log(project.id, { type: "imported", files: probed.map((f) => f.path) });
+    await store.log(project.id, { type: "imported", files: kept.map((f) => f.path) });
     this.deps.changed(project);
     for (const s of project.sources.filter((x) => added.includes(x.id))) {
       this.enqueue(project.id, s, { prep: true, transcribe: true, silence: true, faces: true });
@@ -225,6 +256,7 @@ export class ImportPipeline {
       p.transcript = [...p.transcript.filter((w) => w.sourceId !== sourceId), ...words].sort(
         (a, b) => (order.get(a.sourceId) ?? 0) - (order.get(b.sourceId) ?? 0) || a.start - b.start,
       );
+      forgetWordFixes(p.history, sourceId);
     });
     const { backend, model, fallback } = heard;
     await this.deps.store.log(projectId, { type: "transcribed", source: sourceId, backend, model, words: words.length, ...(fallback ? { fallback } : {}) });

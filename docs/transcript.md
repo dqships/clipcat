@@ -2,7 +2,7 @@
 title: Edit the transcript to edit the video in ClipCat
 description: Cut and restore words in ClipCat's transcript to cut the video, fix misheard words, teach it the names you use, and hide cuts to read only what's kept.
 order: 5
-updated: 2026-10-29
+updated: 2026-10-31
 ---
 
 # Edit the transcript
@@ -40,6 +40,7 @@ With words selected, the bar also offers:
 - **Slide**: type what the slide says, pick a look, and choose **Add slide**. The AI editor designs it.
 - **Chapter**: starts a chapter on the first selected word. Name it in [Chapters and article](chapters-and-article.md).
 - **Sound…**: lands a sound effect on the first selected word. See [Add sound effects and music](sound.md).
+- **Music…**: plays one of the project's music tracks over the selected words. See [Add sound effects and music](sound.md#music).
 
 Zoom, b-roll and slides need words from one recording.
 

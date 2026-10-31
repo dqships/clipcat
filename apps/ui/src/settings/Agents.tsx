@@ -150,8 +150,8 @@ function OtherApp() {
   );
 }
 
-/** The command-line tool behind an agent row, for the ones that have one. */
-const CLI_OF: Partial<Record<McpAgentIdValue, "claude" | "codex" | "gemini">> = { "claude-code": "claude", codex: "codex", gemini: "gemini" };
+/** The command-line tool behind an agent row. Claude Code's and Codex's show with the AI choices above, on the same page. */
+const CLI_OF: Partial<Record<McpAgentIdValue, "gemini">> = { gemini: "gemini" };
 
 /** Where the desktop apps are downloaded from: each maker's own page, since ClipCat can't install an app for you. */
 const DOWNLOAD: Partial<Record<McpAgentIdValue, { site: string; url: string }>> = {

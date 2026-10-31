@@ -174,6 +174,7 @@ export function silenceProposals(
       punch: null,
       overlay: null,
       sound: null,
+      music: null,
     });
   }
   return proposals;

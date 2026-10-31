@@ -85,8 +85,8 @@ export type AgentRun = {
   signal: AbortSignal;
 };
 
-/** An AI provider that can run one task: Claude Code, Codex, and the API later. */
-export type Agent = { label: string; run: (run: AgentRun) => Promise<void> };
+/** An AI provider that can run one task. `model` says which model it would run, for the logs; null is its own default. */
+export type Agent = { label: string; model?: () => Promise<string | null>; run: (run: AgentRun) => Promise<void> };
 
 export type AnalysisDeps = {
   store: ProjectStore;
@@ -119,6 +119,9 @@ const shortId = () => randomUUID().slice(0, 8);
 
 /** Media described per run: three frames each keeps a run well inside what an agent takes in at once. */
 const DESCRIBE_BATCH = 20;
+
+/** Problems kept per answer in a project's event log. */
+const PROBLEMS_LOGGED = 20;
 
 /** Answers a slide design gets: the first, the one after seeing its stills, and one more if that one had problems. */
 const DESIGN_ATTEMPTS = 3;
@@ -214,18 +217,27 @@ export class AnalysisRunner {
    */
   private async ask<T>(
     ctx: JobContext,
+    projectId: string,
     run: { task: AgentTask; system: string; prompt: string; images?: string[] },
     check: (input: unknown) => Checked<T> | { invalid: string[] } | Promise<Checked<T> | { invalid: string[] }>,
     allowed = ATTEMPTS,
   ): Promise<{ result: T; attempts: number; agent: string }> {
     const agent = await this.deps.agent();
+    const model = (await agent.model?.().catch(() => null)) ?? null;
+    const ranBy = model ? `${agent.label}, ${model}` : agent.label;
+    ctx.ranBy?.(ranBy);
     ctx.progress(null, `Starting ${agent.label}`);
     let attempts = 0;
     let saved: { result: T } | null = null;
+    // Each answer's problems, so a thin result can be explained afterwards.
+    const noted = async (problems: string[]) => {
+      if (problems.length > 0) await this.deps.store.log(projectId, { type: "ai-problems", agent: ranBy, task: run.task.tool, attempt: attempts, problems: problems.slice(0, PROBLEMS_LOGGED) });
+    };
     const submit = async (input: unknown): Promise<SubmitReply> => {
       attempts++;
       const last = attempts >= allowed;
       const checked = await check(input);
+      await noted("invalid" in checked ? checked.invalid : checked.problems);
       if ("invalid" in checked) {
         return last
           ? { text: "The answer still doesn't match the schema, so nothing was saved. Stop here.", done: true }
@@ -238,11 +250,16 @@ export class AnalysisRunner {
       saved = { result: checked.result };
       return { text: `${checked.saved} Stop here.`, done: true };
     };
-    await agent.run({ ...run, submit, activity: (label) => ctx.progress(null, label), signal: ctx.signal });
-    if (ctx.signal.aborted) throw new Error("cancelled");
-    const done = saved as { result: T } | null;
-    if (!done) throw new Error(`${agent.label} finished without suggesting anything. Try again.`);
-    return { result: done.result, attempts, agent: agent.label };
+    try {
+      await agent.run({ ...run, submit, activity: (label) => ctx.progress(null, label), signal: ctx.signal });
+      if (ctx.signal.aborted) throw new Error("cancelled");
+      const done = saved as { result: T } | null;
+      if (!done) throw new Error(`${agent.label} finished without suggesting anything. Try again.`);
+      return { result: done.result, attempts, agent: ranBy };
+    } catch (e) {
+      if (!ctx.signal.aborted) await this.deps.store.log(projectId, { type: "ai-failed", agent: ranBy, task: run.task.tool, attempts, error: e instanceof Error ? e.message : String(e) });
+      throw e;
+    }
   }
 
   async run(projectId: string, ctx: JobContext, request?: string): Promise<void> {
@@ -252,11 +269,12 @@ export class AnalysisRunner {
 
     const { result, attempts, agent } = await this.ask<{ proposals: Proposal[]; slides: Asset[]; title: string }>(
       ctx,
+      projectId,
       { task: ANALYSIS_TASK, system: EDITOR_PROMPT, prompt: analysisPrompt(project, request) },
       (input) => {
         const parsed = AgentAnalysis.safeParse(input);
         if (!parsed.success) return { invalid: parsed.error.issues.map((i) => `${i.path.join(".") || "input"}: ${i.message}`) };
-        const valid = validateProposals(parsed.data, words, project.sources, () => `a${shortId()}`, placeableAssets(project), soundIds);
+        const valid = validateProposals(parsed.data, words, project.sources, () => `a${shortId()}`, placeableAssets(project), soundIds, project.music);
         // Spaced against the punch-ins already accepted; pending ones are being replaced.
         const spaced = spaceProposedPunches(project, valid.proposals, words);
         const { proposals } = spaced;
@@ -272,9 +290,10 @@ export class AnalysisRunner {
 
     let gone: string[] = [];
     const updated = await this.deps.store.update(projectId, null, (p) => {
-      // Words the user has since removed from the project can't be cut.
       const known = new Set(p.transcript.map((w) => w.id));
-      const fresh = result.proposals.filter((x) => x.wordIds.every((id) => known.has(id)));
+      const tracks = new Set(p.music.map((t) => t.id));
+      // Words the user has since removed from the project can't be cut, and a track they've taken out can't play.
+      const fresh = result.proposals.filter((x) => x.wordIds.every((id) => known.has(id)) && (!x.music || tracks.has(x.music.trackId)));
       p.proposals = request ? addRequested(p.proposals, fresh) : replacePending(p.proposals, fresh, (x) => AI_TYPES.includes(x.type));
       // New slides join for the proposals that stayed; slides only a replaced proposal showed go.
       const shown = new Set(p.proposals.map((x) => x.overlay?.assetId));
@@ -286,6 +305,7 @@ export class AnalysisRunner {
     });
     for (const id of gone) this.deps.forget?.(projectId, id);
     await this.deps.store.log(projectId, { type: request ? "requested" : "analyzed", agent, proposals: result.proposals.length, attempts });
+    ctx.note?.(result.proposals.length > 0 ? `${agent} suggested ${result.proposals.length} ${result.proposals.length === 1 ? "edit" : "edits"}.` : `${agent} finished and suggested nothing.`);
     this.deps.changed(updated);
     await this.designMissing(projectId);
   }
@@ -298,6 +318,7 @@ export class AnalysisRunner {
 
     const { result, attempts, agent } = await this.ask<Map<string, string>>(
       ctx,
+      projectId,
       { task: CORRECTIONS_TASK, system: CORRECTOR_PROMPT, prompt: correctionsPrompt(project, dictionary) },
       (input) => {
         const parsed = AgentCorrections.safeParse(input);
@@ -328,6 +349,7 @@ export class AnalysisRunner {
 
     const { result, attempts, agent } = await this.ask<Map<string, string>>(
       ctx,
+      projectId,
       { task: DESCRIBE_TASK, system: DESCRIBER_PROMPT, prompt: describePrompt(assets), images },
       (input) => {
         const parsed = AgentDescriptions.safeParse(input);
@@ -375,6 +397,7 @@ export class AnalysisRunner {
 
     const { result, attempts, agent } = await this.ask<{ html: string } | null>(
       ctx,
+      projectId,
       { task: SLIDE_TASK, system: DESIGNER_PROMPT, prompt: designPrompt(brief, frame, seconds, line) },
       async (input) => {
         const parsed = AgentSlide.safeParse(input);
@@ -426,6 +449,7 @@ export class AnalysisRunner {
 
     const { result, attempts, agent } = await this.ask<ShortPlan[]>(
       ctx,
+      projectId,
       { task: SHORTS_TASK, system: SHORTS_PROMPT, prompt: shortsPrompt(project, limits) },
       (input) => {
         const parsed = AgentShorts.safeParse(input);
@@ -462,6 +486,7 @@ export class AnalysisRunner {
 
     const { result, attempts, agent } = await this.ask<Writeup>(
       ctx,
+      projectId,
       { task: WRITEUP_TASK, system: WRITEUP_PROMPT, prompt: writeupPrompt(project, timeline.duration) },
       (input) => {
         const parsed = AgentWriteup.safeParse(input);

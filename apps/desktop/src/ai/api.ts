@@ -11,8 +11,8 @@ import type { Agent, AgentRun } from "./analyze";
 /** Requests per run: the answer, a retry with the problems (or a slide's stills, and then problems), and room for a nudge if it answers in prose. */
 const TURNS = 5;
 
-const NO_KEY = "Add a Claude API key in Settings > AI editor, or pick another way to run the AI editor.";
-const BAD_KEY = "The Claude API refused the key. Check it in Settings > AI editor.";
+const NO_KEY = "Add a Claude API key in Settings > AI models, or pick another way to run the AI editor.";
+const BAD_KEY = "The Claude API refused the key. Check it in Settings > AI models.";
 
 /** A readable reason for an API failure. */
 export function apiError(e: unknown): Error {
@@ -47,6 +47,7 @@ export async function verifyKey(key: string, model: ApiModel, client = new Anthr
 export function apiAgent(options: { key: () => Promise<string | null>; model: () => Promise<ApiModel>; client?: (key: string) => Anthropic }): Agent {
   return {
     label: "Claude API",
+    model: options.model,
     run: async (run: AgentRun) => {
       const key = await options.key();
       if (!key) throw new Error(NO_KEY);

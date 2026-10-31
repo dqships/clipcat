@@ -34,6 +34,12 @@ describe("searchDocs", () => {
     expect(hits.every((h) => h.excerpt.length > 0)).toBe(true);
   });
 
+  it("puts the exact phrase ahead of pages that only share its words", () => {
+    const hits = searchDocs("picture in picture");
+    expect(hits[0]!.doc.slug).toBe("zooms-and-b-roll");
+    expect(hits[0]!.excerpt.toLowerCase()).toContain("picture in picture");
+  });
+
   it("finds nothing for nothing", () => {
     expect(searchDocs("  ")).toEqual([]);
     expect(searchDocs("zzqx")).toEqual([]);

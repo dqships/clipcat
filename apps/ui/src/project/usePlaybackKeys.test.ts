@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { PreviewHandle } from "./Preview";
 import { usePlaybackKeys } from "./usePlaybackKeys";
 
-const handle = () => ({ seek: vi.fn(), toggle: vi.fn(), pause: vi.fn(), shuttle: vi.fn(), step: vi.fn() }) satisfies PreviewHandle;
+const handle = () => ({ seek: vi.fn(), toggle: vi.fn(), pause: vi.fn(), shuttle: vi.fn(), step: vi.fn(), restart: vi.fn() }) satisfies PreviewHandle;
 
 const press = (target: Element, key: string, init: KeyboardEventInit = {}) => {
   const e = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, ...init });
@@ -33,6 +33,45 @@ describe("usePlaybackKeys", () => {
     const up = new KeyboardEvent("keyup", { key: " ", bubbles: true, cancelable: true });
     word.dispatchEvent(up);
     expect(up.defaultPrevented).toBe(true);
+  });
+
+  it("plays from the beginning on Enter, and holds back the click on a transcript word", () => {
+    const p = handle();
+    renderHook(() => usePlaybackKeys({ current: p }, 30));
+    expect(press(document.body, "Enter").defaultPrevented).toBe(true);
+    expect(press(add(`<button class="word">hello</button>`), "Enter").defaultPrevented).toBe(true);
+    expect(p.restart).toHaveBeenCalledTimes(2);
+  });
+
+  it("restarts once for a held Enter", () => {
+    const p = handle();
+    renderHook(() => usePlaybackKeys({ current: p }, 30));
+    press(document.body, "Enter", { repeat: true });
+    expect(p.restart).not.toHaveBeenCalled();
+  });
+
+  it("leaves Enter to every box, dialog and menu", () => {
+    const p = handle();
+    renderHook(() => usePlaybackKeys({ current: p }, 30));
+    for (const html of [`<input />`, `<textarea></textarea>`, `<select></select>`, `<div contenteditable="true"></div>`, `<dialog open><button>OK</button></dialog>`, `<div role="menu"><button>Rename</button></div>`]) {
+      const el = add(html);
+      expect(press(el.firstElementChild ?? el, "Enter").defaultPrevented).toBe(false);
+    }
+    expect(p.restart).not.toHaveBeenCalled();
+  });
+
+  it("leaves Enter to a button the keyboard reached, but takes it from one that was clicked, until Tab moves on", () => {
+    const p = handle();
+    renderHook(() => usePlaybackKeys({ current: p }, 30));
+    const button = add(`<button><span>Accept</span></button>`);
+    expect(press(button, "Enter").defaultPrevented).toBe(false);
+    expect(p.restart).not.toHaveBeenCalled();
+    button.firstElementChild!.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    expect(press(button, "Enter").defaultPrevented).toBe(true);
+    expect(p.restart).toHaveBeenCalledOnce();
+    press(button, "Tab");
+    expect(press(button, "Enter").defaultPrevented).toBe(false);
+    expect(p.restart).toHaveBeenCalledOnce();
   });
 
   it("leaves keys alone while typing", () => {

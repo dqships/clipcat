@@ -146,7 +146,7 @@ describe("codex", () => {
     const { host } = await fakeCodex([], { version: "0.157.1", refuse: "gpt-6.1-sol" });
     const { r } = run([]);
     await expect(codexAgent(host).run(r)).rejects.toThrow(
-      'Codex 0.157.1 can\'t use the model "gpt-6.1-sol" set in ~/.codex/config.toml. Pick another model under AI editor, or update Codex.',
+      'Codex 0.157.1 can\'t use the model "gpt-6.1-sol" set in ~/.codex/config.toml. Pick another model in Settings > AI models, or update Codex.',
     );
   });
 
@@ -156,7 +156,7 @@ describe("codex", () => {
     expect((await calls())[0]!.args).toEqual(expect.arrayContaining(["--model", "gpt-6-luna"]));
     const refused = await fakeCodex([], { version: "0.157.1", refuse: "gpt-6-luna", folder: join(dir, "refuse") });
     await expect(codexAgent(refused.host, "gpt-6-luna").run(run([]).r)).rejects.toThrow(
-      'Codex 0.157.1 can\'t use the model "gpt-6-luna". Pick another model under AI editor, or update Codex.',
+      'Codex 0.157.1 can\'t use the model "gpt-6-luna". Pick another model in Settings > AI models, or update Codex.',
     );
   });
 

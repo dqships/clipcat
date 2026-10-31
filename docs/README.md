@@ -38,7 +38,7 @@ The Help menu also has:
 - [Edit the transcript](transcript.md): cut and restore words, fix misheard words and names, and hide what's cut.
 - [Review the suggested edit](ai-editor.md): ask your AI for cuts, zooms, b-roll and sounds, then accept or reject each one.
 - [Add zooms, b-roll and slides](zooms-and-b-roll.md): zoom in on a line, show your own pictures and clips, and add motion slides.
-- [Add sound effects and music](sound.md): land an effect on a word and put music under the whole video.
+- [Add sound effects and music](sound.md): land an effect on a word, and put one track or several under the video.
 
 ## Look
 

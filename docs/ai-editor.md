@@ -13,7 +13,7 @@ ClipCat has no AI service of its own. It uses the AI you pick: your Claude Code,
 
 ## Pick the AI
 
-Set up the AI once, in **Settings > AI editor**: which one runs, its model, and your Claude API key. See [Settings](settings.md#ai-editor).
+Set up the AI once, in **Settings > AI models**: which one runs, its model, and your keys. See [Settings](settings.md#ai-models).
 
 - **Claude Code** or **Codex**: ClipCat runs the `claude` or `codex` command already on your computer, signed in to your own plan. Install it and sign in once (`claude auth login` or `codex login` in a terminal), or install it from Settings.
 - **Claude API**, **OpenAI** or **OpenRouter**: paste your own key in Settings. Each run is billed to that account. OpenRouter runs many other makers' models, and how well they edit varies by model.

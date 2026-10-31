@@ -8,7 +8,7 @@ import type { ProjectJobs } from "./useJobs";
  * waiting behind it.
  */
 export function JobLine({ jobs, onCancel }: { jobs: ProjectJobs; onCancel?: () => void }) {
-  const { active, waiting, failed } = jobs;
+  const { active, waiting, failed, note } = jobs;
   if (active) {
     const pct = active.fraction === null ? null : Math.round(active.fraction * 100);
     return (
@@ -31,7 +31,15 @@ export function JobLine({ jobs, onCancel }: { jobs: ProjectJobs; onCancel?: () =
     return (
       <p className="job job--danger" role="status">
         <TriangleAlert className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
-        {failed.label} failed: {failed.error}
+        {failed.label}
+        {failed.agent && ` (${failed.agent})`} failed: {failed.error}
+      </p>
+    );
+  }
+  if (note) {
+    return (
+      <p className="job" role="status">
+        {note.note}
       </p>
     );
   }

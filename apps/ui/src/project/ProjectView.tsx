@@ -139,6 +139,8 @@ export function ProjectView({ projectId, jobs, onBack, onOpen, onRecord, onSetti
         return void addVideos();
       case "play-pause":
         return p?.toggle();
+      case "play-from-start":
+        return p?.restart();
       case "play-backwards":
         return p?.shuttle(-1);
       case "pause":

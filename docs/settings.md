@@ -2,37 +2,41 @@
 title: Every ClipCat setting and what it does
 description: Every ClipCat setting explained: the AI editor and your API keys, coding agents, installing Claude Code or Codex, transcription, updates and diagnostics.
 order: 14
-updated: 2026-10-29
+updated: 2026-10-31
 ---
 
 # Settings
 
 Open Settings with the gear in the library. Settings apply to every project and are saved on your computer.
 
-Settings has five pages, listed on the left: **AI editor**, **Coding agents**, **Transcription**, **Updates** and **Troubleshooting**. Under each name is a few words on where it stands, like how many agents are connected or whether an update is ready, so you can see it without opening the page. Choose a name to open its page. Settings opens on the page you had open last.
+Settings has four pages, listed on the left: **AI models**, **Transcription**, **Updates** and **Troubleshooting**. Under each name is a few words on where it stands, like which AI is picked or whether an update is ready, so you can see it without opening the page. Choose a name to open its page. Settings opens on the page you had open last.
 
 One more setting lives where you use it: the list of names and words to spell right is at the top of the transcript. See [Edit the transcript](transcript.md). It's kept for every project too.
 
-## AI editor
+## AI models
+
+This page holds the AI editor and the coding agents.
+
+### AI editor
 
 Pick the AI that suggests edits, shorts, the write-up and spelling fixes. Each one has a row with a button to pick it, a line that says whether it can run now, and its model. Only one is picked at a time.
 
-**On your plan**:
+**AI editor, on your plan**:
 
 - **Claude Code** and **Codex** run the `claude` or `codex` command on your computer, signed in to your own plan. **Model**, for Claude Code and Codex: leave it on the default to use the agent's own default model, or pick one. Codex lists the models your login can use. If one can't run, its row says why. Fix it, then choose **Check again**. Their rows also have the same install and update line as on the Coding agents page.
 
-**With your own key**: paste a key and choose **Save key**. ClipCat tries the key with one call before saving it, then keeps it encrypted with your system's keychain. **Remove key** deletes it. Each run is billed to that account.
+**AI editor, with your own key**: paste a key and choose **Save key**. ClipCat tries the key with one call before saving it, then keeps it encrypted with your system's keychain. **Remove key** deletes it. Each run is billed to that account.
 
 - **Claude API**: a key from console.anthropic.com. Its model is Opus 5.5 (best), Sonnet 5.5, or Haiku 5.5 (cheapest).
 - **OpenAI**: a key from platform.openai.com, to run GPT models.
-- **OpenRouter**: a key from openrouter.ai, to run any model OpenRouter serves that can use tools, from Anthropic, Google, Meta, Mistral, DeepSeek, Qwen and others. Results vary a lot by model: small models often lose track of the transcript's word numbers. A model that can't see pictures can't design slides, and the list marks those "text only".
+- **OpenRouter**: a key from openrouter.ai, to run any model OpenRouter serves that can read images and use tools, from Anthropic, Google, Meta, Mistral, DeepSeek, Qwen and others. Results vary a lot by model: small models often lose track of the transcript's word numbers. A model that can't see pictures can't design slides, and the list marks those "text only".
 - **Model**, for OpenAI and OpenRouter: the list comes from your key once it's saved. OpenAI starts on its best model. OpenRouter waits for you to pick one.
 
-The list on the left shows which AI is picked, and says "not set up" when it can't run yet. The **Edit** tab of a project can switch between them too. See [Review the suggested edit](ai-editor.md).
+The list on the left shows which AI is picked, and says "not set up" when it can't run yet. If an OpenRouter model you picked before can't read images, ClipCat asks you to pick another. The **Edit** tab of a project can switch between them too. See [Review the suggested edit](ai-editor.md).
 
-## Coding agents
+### Coding agents
 
-Connect Claude Code, Codex, the Claude desktop app, Cursor, VS Code, Windsurf, LM Studio or Gemini CLI, and it can edit your projects while ClipCat is open. Under **Connections**, agents on this computer are listed first, and the rest are folded under **Not found on this computer**. Each agent has a row:
+Connect Claude Code, Codex, the Claude desktop app, Cursor, VS Code, Windsurf, LM Studio or Gemini CLI, and it can edit your projects while ClipCat is open. Agents on this computer are listed first, and the rest are folded under **Not found on this computer**. Each agent has a row:
 
 - The line under its name says whether it's connected, when it last connected, or that it isn't on this computer. You can connect an agent before you install it.
 - The path is the agent's own settings file, where ClipCat adds its entry.
@@ -42,9 +46,9 @@ Connect Claude Code, Codex, the Claude desktop app, Cursor, VS Code, Windsurf, L
 
 **Set up another MCP app**, under the list, shows the entry for any other app that runs local MCP servers: the JSON, and the command, arguments and environment, each with a copy button. See [Use ClipCat from your coding agent](agents.md#set-up-another-mcp-app).
 
-Under **How to use it**, **Steps for** picks the agent to show the steps for.
+**Things to ask** lists prompts to copy into a connected agent. **Read the full guide** opens the steps for each agent.
 
-### Install or update Claude Code, Codex and Gemini CLI
+#### Install or update Claude Code, Codex and Gemini CLI
 
 The Claude Code, Codex and Gemini CLI rows also show the version of the command-line tool on your computer next to the newest release.
 

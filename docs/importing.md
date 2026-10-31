@@ -2,7 +2,7 @@
 title: Add videos to ClipCat and transcribe them
 description: The video and audio files ClipCat opens, what it does after import, how transcription works on your computer, and how to change a project's language.
 order: 4
-updated: 2026-10-29
+updated: 2026-10-31
 ---
 
 # Add videos and transcribe them
@@ -48,3 +48,7 @@ To transcribe one project in another language:
 This replaces the transcript, including words you fixed, and clears suggested edits you haven't reviewed. Cuts you made stay.
 
 If a recording comes back with no words, the transcript says "No speech found" and shows the language picker, since the most common reason is the wrong language.
+
+## Videos from Photos
+
+Photos only lends ClipCat a video you drag in, and macOS deletes that copy soon after. So ClipCat keeps its own copy in the project. If a recording's original file moves or is deleted later, ClipCat exports from its preview copy and says so.

@@ -17,7 +17,7 @@ import { apiAgent, verifyKey } from "./ai/api";
 import { CLAUDE_MODELS, claudeAgent, probeClaude } from "./ai/claude";
 import { type CliDeps, cliStatus, runCli } from "./ai/cli";
 import { codexAgent, codexModels, probeCodex, resolveCodex } from "./ai/codex";
-import { type ModelChoice, listModels, providerAgent, verifyProviderKey } from "./ai/openai";
+import { type ModelChoice, listModels, offered, providerAgent, verifyProviderKey } from "./ai/openai";
 import { hydrateEnv } from "./ai/env";
 import { type Binary, binaryPath, probeVersion } from "./tools";
 import { broadcast, registerIpc, send } from "./ipc";
@@ -60,6 +60,36 @@ import { SettingsStore } from "./store/settings";
 import { SpeechLibrary } from "./transcribe/library";
 import type { ModelId } from "./transcribe/models";
 import { startSmokeTimer, finishSmoke, isSmokeRun, recordSmokeJob, smokeImport, smokeMcp } from "./smoke";
+
+// Each key's model list, fetched once per key: listing needs the network, and the lists change rarely.
+// A failed listing is tried again after a minute, so a dead connection isn't asked on every status.
+const modelLists = new Map<string, { list: Promise<ModelChoice[]>; failedAt: number | null }>();
+const LIST_RETRY_MS = 60_000;
+// The status doesn't wait long for a list: the AI picked may not need it, and a slow one arrives on the next status.
+const LIST_WAIT_MS = 3_000;
+
+/** A key's model list, or an empty one when it isn't in within `waitMs`. */
+async function modelChoices(provider: KeyedProviderValue, key: string, waitMs = LIST_WAIT_MS): Promise<ModelChoice[]> {
+  const cacheKey = `${provider}:${key}`;
+  const cached = modelLists.get(cacheKey);
+  if (!cached || (cached.failedAt !== null && Date.now() - cached.failedAt > LIST_RETRY_MS)) {
+    const entry = { list: listModels(provider, key), failedAt: null as number | null };
+    entry.list.catch(() => {
+      entry.failedAt = Date.now();
+    });
+    modelLists.set(cacheKey, entry);
+  }
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const wait = new Promise<ModelChoice[]>((resolve) => {
+    timer = setTimeout(() => resolve([]), waitMs);
+  });
+  try {
+    return await Promise.race([modelLists.get(cacheKey)!.list.catch(() => [] as ModelChoice[]), wait]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 
 const squirrelLaunch = handleSquirrelEvent();
 
@@ -175,7 +205,7 @@ function startPipeline() {
   const jobs = new JobLog();
   const queue = new JobQueue((event) => {
     if (isSmokeRun()) recordSmokeJob(event);
-    if (event.state === "failed") mainLog.write("warn", `job ${event.kind} failed for ${event.projectId}:`, event.error ?? "");
+    if (event.state === "failed") mainLog.write("warn", `job ${event.kind} failed for ${event.projectId}${event.agent ? ` (${event.agent})` : ""}:`, event.error ?? "");
     jobs.record(event);
     broadcast("job", event);
   });
@@ -190,7 +220,10 @@ function startPipeline() {
       if (agent === "openai" || agent === "openrouter") {
         const model = async () => {
           const current = await settings.get();
-          return agent === "openai" ? current.openaiModel : current.openrouterModel;
+          if (agent === "openai") return current.openaiModel;
+          // The same check as Settings, so a run never goes to a model Settings says must be picked again.
+          const key = await providerKeys.openrouter.get();
+          return key ? offered("openrouter", current.openrouterModel, await modelChoices("openrouter", key)) : current.openrouterModel;
         };
         return providerAgent(agent, { key: () => providerKeys[agent].get(), model });
       }
@@ -266,7 +299,7 @@ function startPipeline() {
   const edit = async (id: string, revision: number, op: EditOp) => {
     const next = await store.update(id, revision, (p) => applyEdit(p, op, () => `g${randomUUID().slice(0, 8)}`));
     broadcast("project:changed", { id, revision: next.revision });
-    if (op.type === "remove-asset") void media.forget(id, op.assetId);
+    if (op.type === "remove-asset") void media.sweep(id);
     if (op.type === "remove-music") void music.forget(id);
     if (op.type === "slide" || op.type === "describe") void analysis.designMissing(id);
     return next;
@@ -292,7 +325,7 @@ function mcpEnv(socket: string): InstallEnv {
 }
 
 /** A file name from the video's title: no characters Windows or macOS refuse. */
-const fileName = (title: string) => title.replace(/[\\/:*?"<>|\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim().slice(0, 120) || "ClipCat export";
+const fileName = (title: string) => title.replace(/[\\/:*?"<>|\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim().slice(0, 120).replace(/[.\s]+$/, "") || "ClipCat export";
 
 /** Writes the edit as a timeline for another editor, named for the video. */
 async function writeTimeline(store: ProjectStore, id: string, format: TimelineFormat, path: string): Promise<void> {
@@ -451,6 +484,7 @@ if (!squirrelLaunch && !app.requestSingleInstanceLock()) {
             exporter.export(id, format, path);
           },
           importFiles: (files, projectId) => pipeline.import(files, projectId),
+          addMusic: (id, file) => music.add(id, file),
           exportTimeline: (id, format, path) => writeTimeline(store, id, format, path),
           jobs: (projectId) => jobs.list(projectId),
         });
@@ -471,28 +505,12 @@ if (!squirrelLaunch && !app.requestSingleInstanceLock()) {
       },
     );
     if (!isSmokeRun()) void healRegistrations(installEnv);
-    // Each key's model list, fetched once per key: listing needs the network, and the lists change rarely.
-    // A failed listing is tried again after a minute, so a dead connection isn't asked on every status.
-    const modelLists = new Map<string, { list: Promise<ModelChoice[]>; failedAt: number | null }>();
-    const LIST_RETRY_MS = 60_000;
-    // The status doesn't wait long for a list: the AI picked may not need it, and a slow one arrives on the next status.
-    const LIST_WAIT_MS = 3_000;
     const providerStatus = async (provider: KeyedProviderValue, current: SettingsValue, waitMs = LIST_WAIT_MS) => {
       const key = await providerKeys[provider].get();
       const model = provider === "openai" ? current.openaiModel : current.openrouterModel;
       if (!key) return { hasKey: false, model, choices: [] };
-      const cacheKey = `${provider}:${key}`;
-      const cached = modelLists.get(cacheKey);
-      if (!cached || (cached.failedAt !== null && Date.now() - cached.failedAt > LIST_RETRY_MS)) {
-        const entry = { list: listModels(provider, key), failedAt: null as number | null };
-        entry.list.catch(() => {
-          entry.failedAt = Date.now();
-        });
-        modelLists.set(cacheKey, entry);
-      }
-      const wait = new Promise<ModelChoice[]>((resolve) => setTimeout(() => resolve([]), waitMs));
-      const choices = await Promise.race([modelLists.get(cacheKey)!.list.catch(() => [] as ModelChoice[]), wait]);
-      return { hasKey: true, model, choices };
+      const choices = await modelChoices(provider, key, waitMs);
+      return { hasKey: true, model: offered(provider, model, choices), choices };
     };
     const aiStatus = async () => {
       const host = await hostEnv;
@@ -681,16 +699,16 @@ if (!squirrelLaunch && !app.requestSingleInstanceLock()) {
           const win = BrowserWindow.fromWebContents(event.sender);
           const options: Electron.OpenDialogOptions = {
             title: "Add music",
-            properties: ["openFile"],
+            properties: ["openFile", "multiSelections"],
             filters: [
               { name: "Music", extensions: MUSIC_EXTENSIONS },
               { name: "All files", extensions: ["*"] },
             ],
           };
           const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);
-          return result.canceled ? null : (result.filePaths[0] ?? null);
+          return result.canceled ? [] : result.filePaths;
         },
-        "project:set-music": ({ id, file }) => music.set(id, file),
+        "project:add-music": ({ id, file }) => music.add(id, file),
         "project:import": ({ projectId, files }) => pipeline.import(files, projectId),
         "project:add-media": ({ id, files }) => media.add(id, files),
         "project:get": ({ id }) => store.get(id),

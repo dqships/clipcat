@@ -190,13 +190,13 @@ export function shortProject(parent: Project, plan: ShortPlan, opts: { id: strin
     sources,
     assets: parent.assets.map((a) => structuredClone(a)),
     // Music is picked for a whole video; a short gets its own.
-    music: null,
+    music: [],
     writeup: null,
     thumbnail: null,
     transcript: parent.transcript.filter((w) => used.has(w.sourceId)).map((w) => ({ ...w })),
     segments,
     proposals: parent.proposals
-      .filter((p) => p.status === "pending" && used.has(p.sourceId) && proposalRanges(p).every((c) => inside(p.sourceId, c)))
+      .filter((p) => p.status === "pending" && !p.music && used.has(p.sourceId) && proposalRanges(p).every((c) => inside(p.sourceId, c)))
       .map((p) => structuredClone(p)),
     captions: { ...parent.captions },
     history: { past: [], future: [] },

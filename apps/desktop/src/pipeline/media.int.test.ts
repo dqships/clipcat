@@ -7,7 +7,7 @@ import { mkdtemp, readFile, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { applyEdit, buildTimeline, defaultOverlay, overlayBox, overlayProposal, punchProposal, slideAsset, soundProposal, timedOverlays, timedSounds } from "@clipcat/core";
+import { applyEdit, buildTimeline, defaultOverlay, musicProposal, overlayBox, overlayProposal, punchProposal, slideAsset, soundProposal, timedOverlays, timedSounds } from "@clipcat/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { JobQueue, type JobEvent } from "../jobs/queue";
 import { runFfmpeg } from "../media/run";
@@ -340,12 +340,12 @@ describe.skipIf(!binDir)("prep with real ffmpeg", () => {
     await run(exe("ffmpeg"), ["-hide_banner", "-y", "-f", "lavfi", "-i", "sine=f=2000:d=2.5,volume=0.8", "-ac", "2", song]);
     const events: JobEvent[] = [];
     const music = new MusicPipeline({ ...realMusicDeps({ ffmpeg: exe("ffmpeg"), ffprobe: exe("ffprobe") }), store, queue: new JobQueue((e) => events.push(e)), changed: () => {} });
-    await music.set(projectId, song);
+    await music.add(projectId, song);
     for (let i = 0; i < 200 && !events.some((e) => e.state === "done" || e.state === "failed"); i++) await new Promise((r) => setTimeout(r, 50));
     const q = await store.get(projectId);
-    expect(q.music).toMatchObject({ name: "song.flac", duck: true });
-    expect(q.music!.duration).toBeCloseTo(2.5, 1);
-    expect((await stat(join(store.dir(projectId), q.music!.prep!))).size).toBeGreaterThan(1000);
+    expect(q.music[0]).toMatchObject({ name: "song.flac", duck: true, whole: true });
+    expect(q.music[0]!.duration).toBeCloseTo(2.5, 1);
+    expect((await stat(join(store.dir(projectId), q.music[0]!.prep!))).size).toBeGreaterThan(1000);
 
     const deps = {
       store,
@@ -377,6 +377,16 @@ describe.skipIf(!binDir)("prep with real ffmpeg", () => {
     // The boom's low thump at its moment, and the music past the end of its file, looped.
     expect((await peak(out, boom!.time, boom!.time + 0.4, "lowpass=f=120")) - (await peak(plain, boom!.time, boom!.time + 0.4, "lowpass=f=120"))).toBeGreaterThan(12);
     expect((await peak(out, 2.6, 3.0, "highpass=f=1500")) - (await peak(plain, 2.6, 3.0, "highpass=f=1500"))).toBeGreaterThan(12);
+
+    // Ducked music that stops before the speech does, as a placed track can: the export must still finish.
+    await store.update(projectId, null, (p) => {
+      p.music[0]!.whole = false;
+      p.proposals.push(musicProposal({ id: "cue1", sourceId: s, wordIds: [], reason: "", confidence: 1, status: "accepted" }, { range: [0, 1], trackId: p.music[0]!.id }));
+    });
+    const placed = join(root, "placed.mp4");
+    await new ExportRunner(deps).run(projectId, "16:9", placed, { signal: new AbortController().signal, progress: () => {} });
+    const after = await streamDurations(placed);
+    expect(Math.abs(after.audio - streams.audio)).toBeLessThan(0.05);
   }, 180_000);
 
   it("grabs the thumbnail's frame from the original recording, full size", async () => {

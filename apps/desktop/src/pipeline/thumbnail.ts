@@ -3,7 +3,7 @@
 // text behind them. Only the current frame and cutout are kept.
 
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { type Project, Thumbnail } from "@clipcat/core";
 import type { JobContext, JobQueue } from "../jobs/queue";
@@ -50,7 +50,12 @@ export class ThumbnailPipeline {
     const stamp = randomUUID().slice(0, 8);
     const frame = `${THUMBNAIL_DIR}/frame-${stamp}.jpg`;
     await mkdir(join(root, THUMBNAIL_DIR), { recursive: true });
-    await this.deps.grab(source.path, time, join(root, frame), ctx);
+    // The preview copy stands in for an original that has moved or been deleted.
+    const original = await access(source.path).then(
+      () => true,
+      () => false,
+    );
+    await this.deps.grab(original || !source.prep ? source.path : join(root, source.prep.proxy), time, join(root, frame), ctx);
     ctx.progress(null, "Cutting out the thumbnail's subject");
     // The frame shows at once; the subject follows when it's cut out.
     this.deps.changed(

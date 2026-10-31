@@ -69,8 +69,11 @@ describe("formats", () => {
 
   it("draws the box in its colour, and highlights accent-coloured words in white", () => {
     const cues = [{ start: 0, end: 1, words: [{ text: "Hi", start: 0, end: 0.4 }, { text: "you", start: 0.5, end: 0.9 }] }];
+    // libass fits Jost's full height to the size, so the em comes out at the preview's 54.
+    expect(toAss(cues, Captions.parse({}), wide)).toContain("Style: Default,Jost SemiBold,78,");
+
     const boxed = toAss(cues, Captions.parse({ background: "rounded", boxColor: "#17150F" }), wide);
-    expect(boxed).toMatch(/Style: Default,Jost SemiBold,\d+,&H00FFFFFF,&H00FFFFFF,&H600F1517,/);
+    expect(boxed).toMatch(/Style: Default,Jost SemiBold,\d+,&H00FFFFFF,&H00FFFFFF,&HFF000000,&H600F1517,0,0,0,0,100,100,0,0,4,/);
     const words = toAss(cues, Captions.parse({ mode: "word", color: "#F2B705" }), wide).split("\n").filter((l) => l.startsWith("Dialogue"));
     expect(words[1]).toContain("{\\c&H00FFFFFF}you{\\c&H0005B7F2}");
   });

@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { AgentRun, SubmitReply } from "./analyze";
-import { listModels, openAiChoices, openRouterChoices, providerAgent, verifyProviderKey } from "./openai";
+import { listModels, offered, openAiChoices, openRouterChoices, providerAgent, verifyProviderKey } from "./openai";
 import { ANALYSIS_TASK, EDITOR_PROMPT } from "./prompt";
 
 type Sent = { url: string; headers: Record<string, string>; body: Record<string, unknown> | null };
@@ -169,7 +169,25 @@ describe("keys and model lists", () => {
     await expect(verifyProviderKey("openrouter", "or-x", openrouter.fetcher)).rejects.toThrow(/OpenRouter refused the key/);
     expect(openrouter.sent[0]!.url).toBe("https://openrouter.ai/api/v1/key");
     const down = (async () => Promise.reject(new TypeError("fetch failed"))) as typeof fetch;
-    await expect(verifyProviderKey("openai", "sk-x", down)).rejects.toThrow("Couldn't reach OpenAI. Check the connection.");
+    await expect(verifyProviderKey("openai", "sk-x", down)).rejects.toThrow("Couldn't reach OpenAI (fetch failed). Check the connection.");
+  });
+
+  it("asks again once when the connection drops mid-run", async () => {
+    const { fetcher, sent } = fakeFetch([chatCall("t1", good)]);
+    let drops = 1;
+    const dropping = (async (url: string, init?: RequestInit) => {
+      if (drops-- > 0) throw new TypeError("terminated");
+      return fetcher(url, init);
+    }) as typeof fetch;
+    const { r, seen } = run([{ text: "Saved", done: true }]);
+    await providerAgent("openrouter", { key: async () => "k", model: async () => "m/x", fetch: dropping }).run(r);
+    expect(seen).toHaveLength(1);
+    expect(sent).toHaveLength(1);
+
+    const dead = (async () => Promise.reject(new TypeError("terminated"))) as typeof fetch;
+    await expect(providerAgent("openrouter", { key: async () => "k", model: async () => "m/x", fetch: dead }).run(run([]).r)).rejects.toThrow(
+      "Couldn't reach OpenRouter (terminated). Check the connection.",
+    );
   });
 
   it("lists OpenAI's chat models, newest and biggest first", () => {
@@ -177,18 +195,29 @@ describe("keys and model lists", () => {
     expect(openAiChoices(ids).map((c) => c.id)).toEqual(["gpt-6.1-sol", "gpt-6.1-mini", "gpt-5.5", "gpt-5.5-mini", "o4-mini"]);
   });
 
-  it("lists only OpenRouter models that take tools", async () => {
+  it("lists only OpenRouter models that read images and take tools", async () => {
+    const both = { input_modalities: ["text", "image"] };
     const models = [
-      { id: "z/one", name: "Zed One", supported_parameters: ["tools", "tool_choice"] },
-      { id: "a/two", name: "Alpha Two", supported_parameters: ["temperature"] },
+      { id: "z/one", name: "Zed One", supported_parameters: ["tools", "tool_choice"], architecture: both },
+      { id: "a/two", name: "Alpha Two", supported_parameters: ["temperature"], architecture: both },
       { id: "a/three", name: "Alpha Three", supported_parameters: ["tools"], architecture: { input_modalities: ["text"] } },
+      { id: "a/four", name: "Alpha Four", supported_parameters: ["tools"] },
     ];
-    expect(openRouterChoices(models)).toEqual([
-      { id: "a/three", label: "Alpha Three (a/three), text only" },
-      { id: "z/one", label: "Zed One (z/one)" },
-    ]);
+    expect(openRouterChoices(models)).toEqual([{ id: "z/one", label: "Zed One (z/one)" }]);
     const { fetcher, sent } = fakeFetch([{ data: models }]);
-    expect(await listModels("openrouter", "k", fetcher)).toHaveLength(2);
+    expect(await listModels("openrouter", "k", fetcher)).toHaveLength(1);
     expect(sent[0]!.url).toBe("https://openrouter.ai/api/v1/models?supported_parameters=tools");
+  });
+});
+
+describe("offered", () => {
+  const choices = [{ id: "a/vision", label: "Vision" }];
+  it("drops an OpenRouter model its list no longer offers", () => {
+    expect(offered("openrouter", "b/text-only", choices)).toBeNull();
+    expect(offered("openrouter", "a/vision", choices)).toBe("a/vision");
+  });
+  it("keeps the pick while the list isn't in, and never second-guesses OpenAI", () => {
+    expect(offered("openrouter", "b/text-only", [])).toBe("b/text-only");
+    expect(offered("openai", "gpt-x", choices)).toBe("gpt-x");
   });
 });

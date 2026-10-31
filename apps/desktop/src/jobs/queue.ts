@@ -12,9 +12,20 @@ export type JobEvent = {
   state: JobState;
   fraction: number | null;
   error?: string;
+  /** Which AI ran the job, and its model, once one has started. */
+  agent?: string;
+  /** What the job came to, for jobs where "done" alone doesn't say (an AI run that suggested nothing). */
+  note?: string;
 };
 
-export type JobContext = { signal: AbortSignal; progress: (fraction: number | null, label?: string) => void };
+export type JobContext = {
+  signal: AbortSignal;
+  progress: (fraction: number | null, label?: string) => void;
+  /** Names the AI running this job, so its events and any failure say which one it was. */
+  ranBy?: (agent: string) => void;
+  /** Says what the job came to, on its "done" event. */
+  note?: (text: string) => void;
+};
 export type JobFn = (ctx: JobContext) => Promise<void>;
 
 let nextId = 0;
@@ -33,8 +44,10 @@ export class JobQueue {
     this.controllers.set(projectId, set);
 
     let current = label;
+    let agent: string | undefined;
+    let note: string | undefined;
     const send = (state: JobState, fraction: number | null, error?: string) =>
-      this.emit({ projectId, jobId, kind, label: current, state, fraction, ...(error ? { error } : {}) });
+      this.emit({ projectId, jobId, kind, label: current, state, fraction, ...(error ? { error } : {}), ...(agent ? { agent } : {}), ...(note && state === "done" ? { note } : {}) });
     send("queued", null);
 
     const run = async () => {
@@ -48,6 +61,12 @@ export class JobQueue {
       try {
         await fn({
           signal: controller.signal,
+          ranBy: (name) => {
+            agent = name;
+          },
+          note: (text) => {
+            note = text;
+          },
           progress: (fraction, newLabel) => {
             if (newLabel) current = newLabel;
             // At most ~50 events per job: the UI only needs to see it move.

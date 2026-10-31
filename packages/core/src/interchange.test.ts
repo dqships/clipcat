@@ -23,7 +23,7 @@ function project(over: Partial<Project> = {}): Project {
     suggestedTitle: "",
     sources: [a],
     assets: [],
-    music: null,
+    music: [],
     transcript: words("a", "one two three four five six seven eight nine ten", 0),
     segments,
     proposals: [],

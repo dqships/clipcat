@@ -29,7 +29,7 @@ beforeEach(async () => {
     p.transcript = words("a", "so um this is the launch video");
     p.segments = initialSegments("a", 10, counter("s"));
     p.proposals = [
-      { id: "p1", type: "cleanup", sourceId: "a", cuts: [[0.5, 1.2]], wordIds: ["a-w1"], keepWordIds: [], reason: "Filler", confidence: 0.9, status: "pending", punch: null, overlay: null, sound: null },
+      { id: "p1", type: "cleanup", sourceId: "a", cuts: [[0.5, 1.2]], wordIds: ["a-w1"], keepWordIds: [], reason: "Filler", confidence: 0.9, status: "pending", punch: null, overlay: null, sound: null, music: null },
     ];
   });
   deps = {
@@ -43,6 +43,7 @@ beforeEach(async () => {
     shorts: vi.fn(async () => {}),
     exportVideo: vi.fn(async () => {}),
     importFiles: vi.fn(async () => store.get(projectId)),
+    addMusic: vi.fn(async () => store.get(projectId)),
     exportTimeline: vi.fn(async () => {}),
     jobs: () => [{ projectId, jobId: "job-1", kind: "export", label: "Exporting 16:9", state: "running", fraction: 0.5 }],
   };

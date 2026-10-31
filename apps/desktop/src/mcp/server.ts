@@ -27,6 +27,8 @@ export type McpDeps = {
   shorts: (id: string, count: number, seconds: 30 | 60 | 90) => Promise<void>;
   exportVideo: (id: string, format: ExportFormat, path: string) => Promise<void>;
   importFiles: (files: string[], projectId: string | null) => Promise<Project>;
+  /** Adds a music file as one of the project's tracks. */
+  addMusic: (id: string, file: string) => Promise<Project>;
   /** Writes the edit as a timeline file for another editor. */
   exportTimeline: (id: string, format: TimelineFormat, path: string) => Promise<void>;
   /** The latest state of recent jobs, newest first. */
@@ -99,7 +101,7 @@ export function projectSummary(project: Project) {
     captions: project.captions,
     proposals: counts,
     media: project.assets.map((a) => ({ id: a.id, name: a.name, kind: a.kind, description: a.kind === "slide" ? (a.slide?.brief ?? "") : a.description })),
-    music: project.music ? { name: project.music.name, volume: project.music.volume, duck: project.music.duck } : null,
+    music: project.music.map((t) => ({ id: t.id, name: t.name, seconds: round(t.duration), volume: t.volume, duck: t.duck, whole: t.whole, description: t.description })),
     chapters: (project.writeup?.chapters ?? []).map((c) => ({ word: index.get(c.wordId) ?? null, title: c.title })),
     description: project.writeup?.description || null,
     article: project.writeup?.article.title || (project.writeup?.article.markdown ? "(untitled)" : null),
@@ -112,7 +114,7 @@ export function projectSummary(project: Project) {
 
 // Ops that name words take word numbers here instead of ids: `from`/`to`
 // (inclusive) for the ones over a stretch, `word` for the ones on one word.
-const SPAN_OPS = new Set(["words", "punch", "overlay", "slide"]);
+const SPAN_OPS = new Set(["words", "punch", "overlay", "slide", "place-music"]);
 const WORD_OPS = new Set(["sound", "chapter", "remove-chapter", "fix-word"]);
 
 /** The agent's op, with word numbers turned into the word ids applyEdit takes, then checked against EditOp. */
@@ -207,6 +209,7 @@ export function createMcpServer(deps: McpDeps): McpServer {
             ...(p.punch ? { punch: p.punch.style } : {}),
             ...(p.sound ? { sound: p.sound.effect } : {}),
             ...(p.overlay ? { media: project.assets.find((a) => a.id === p.overlay!.assetId)?.name ?? p.overlay.assetId } : {}),
+            ...(p.music ? { music: project.music.find((t) => t.id === p.music!.trackId)?.name ?? p.music.trackId } : {}),
           }));
         return json({ revision: project.revision, proposals: list });
       }),
@@ -279,7 +282,9 @@ export function createMcpServer(deps: McpDeps): McpServer {
 - {type:"fix-word", word, text}: retype one misheard word (one word, no spaces); captions, the write-up and find_cuts read the new text
 - {type:"captions", captions:{enabled, mode:"word"|"sentence", font, size, color:"#RRGGBB", effect:"none"|"shadow", case:"regular"|"upper"|"lower", background:"none"|"rounded", boxColor:"#RRGGBB", position:0..1}} (any subset)
 - {type:"speed", speed:0.5..2} / {type:"aspect", aspectRatio:"16:9"|"9:16"|"1:1"} / {type:"bars", bars:"black"|"blur"} (what fills the sides when a recording of another shape is shown whole in a wide video)
-- {type:"music", volume?:0..1, duck?:boolean} / {type:"remove-music"}
+- {type:"music", id?, volume?:0..1, duck?:boolean, whole?:boolean, description?}: a music track's settings (id from get_project; it can be left out when there is one track). whole plays it under the whole video; one track at a time can. description says how it sounds, for find_cuts
+- {type:"place-music", from, to, trackId}: play a music track over those words; it takes over from the whole-video track while it plays
+- {type:"remove-music", id?}: take a track out, with its placements
 - {type:"writeup", description?, articleTitle?, article?}
 - {type:"thumbnail", text?, textColor?:"paper"|"ink"|"tape"|"red"|"orange"|"lime"|"green"|"sky"|"blue"|"pink"|"violet", background?:"frame"|"blur"|"paper"|"ink"|"tape", textSide?:"left"|"right", textBox?:{x,y,width,height} as 0..1 shares of the thumbnail or null for the side's default, behind?:boolean}
 - {type:"undo"} / {type:"redo"}
@@ -397,6 +402,22 @@ A mistake in the op comes back as an error saying what to fix.`,
       guard(async () => {
         const project = await deps.importFiles(files, projectId ?? null);
         return json({ projectId: project.id, name: project.name, revision: project.revision });
+      }),
+  );
+
+  server.registerTool(
+    "add_music",
+    {
+      title: "Add music",
+      description: "Adds audio files (absolute paths) as music tracks on a project. The first track plays under the whole video. Place the others with edit_project's place-music, or describe them with its music op and let find_cuts place them. Tracks are listed under music in get_project.",
+      inputSchema: { projectId: ProjectId, files: z.array(z.string().min(1).max(4096)).min(1).max(50) },
+      annotations: change,
+    },
+    ({ projectId, files }) =>
+      guard(async () => {
+        let project: Project | null = null;
+        for (const file of files) project = await deps.addMusic(projectId, file);
+        return json({ revision: project!.revision, music: project!.music.map((t) => ({ id: t.id, name: t.name, whole: t.whole })) });
       }),
   );
 
