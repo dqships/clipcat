@@ -1,7 +1,8 @@
 # ClipCat's site
 
 The marketing site: a Next.js app (Pages Router) whose pages are plain,
-prerendered HTML with no JavaScript. Vercel serves it, and `proxy.ts` answers
+prerendered HTML whose only JavaScript is Vercel Web Analytics, added as a
+plain tag in `pages/_document.tsx`. Vercel serves it, and `proxy.ts` answers
 `Accept: text/markdown`, and every `.md` address, with the page's Markdown.
 
 | File | What it is |

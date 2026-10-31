@@ -1,7 +1,8 @@
 // Checks the built site, served by `next start`, against the launch
 // checklist: each page's head, one H1 and real content in the raw HTML, links
 // that resolve, Markdown at every URL, real 404s, and the headers.
-// Run with `npm run test:server`, which builds first with SITE_URL set to the
+// Run with `npm run test:server`, which builds first with VERCEL_ENV=production
+// (so the analytics tag is in the HTML) and SITE_URL set to the
 // origin below.
 
 import { after, before, test } from "node:test";
@@ -98,7 +99,8 @@ for (const page of [...ALL, NOT_FOUND]) {
     assert.ok(text(html).length / html.length >= 0.05, `content is ${Math.round((100 * text(html).length) / html.length)}% of the markup`);
     for (const img of html.match(/<img [^>]*>/g) ?? []) assert.match(img, / alt="[^"]+"/);
     assert.doesNotMatch(html, /tabindex="[1-9]/);
-    assert.doesNotMatch(html, /<script(?! type="application\/ld\+json")/, "no JavaScript on the pages");
+    assert.match(html, /<script [^>]*src="\/_vercel\/insights\/script\.js"/, "Vercel Web Analytics loads");
+    assert.doesNotMatch(html, /<script(?! type="application\/ld\+json")(?![^>]*src="\/_vercel\/insights\/script\.js")/, "no other JavaScript on the pages");
     for (const [, href] of html.matchAll(/<a [^>]*href="(\/[^"#]*)"/g)) {
       const res = await get(href);
       assert.equal(res.status, 200, `${href} resolves`);

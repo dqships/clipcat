@@ -57,7 +57,7 @@ export const PAGES = [
     lede:
       "ClipCat transcribes your recordings, then your Claude or Codex suggests the cuts, zooms, b-roll and captions. You accept or reject each change and export the video, the shorts and the description. There's no account, and your videos are saved on your computer.",
     hero: true,
-    updated: UPDATED,
+    updated: "2026-10-31",
     sections: [
       {
         kind: "timeline",
@@ -139,7 +139,7 @@ export const PAGES = [
         cards: [
           { title: "Your video stays here", text: "ClipCat transcribes speech on your computer and never uploads your recordings. Projects and exports are saved on your computer too." },
           { title: "The transcript goes to your AI", text: "Only when you ask it for suggestions. For b-roll and thumbnails, a few still frames go with it." },
-          { title: "No account and no tracking", text: "ClipCat has no server of its own, no analytics, no watermark and no export limit." },
+          { title: "No account and no tracking in the app", text: "The app has no server of its own, no analytics, no watermark and no export limit." },
         ],
         more: "[Read the privacy page](/privacy)",
       },
@@ -379,10 +379,10 @@ export const PAGES = [
     nav: "Privacy",
     title: "ClipCat privacy: your videos stay on your computer",
     description:
-      "ClipCat keeps your videos, audio and projects on your computer. It has no account, no analytics and no servers. Here is what leaves your machine, and when.",
+      "The ClipCat app keeps your videos, audio and projects on your computer, with no account, analytics or servers. Here is what leaves your machine, and when.",
     h1: "Privacy",
-    lede: "Your videos and projects are saved on your computer. ClipCat has no account, no analytics and no server of its own.",
-    updated: UPDATED,
+    lede: "Your videos and projects are saved on your computer. The ClipCat app has no account, no analytics and no server of its own.",
+    updated: "2026-10-31",
     sections: [
       {
         h2: "What stays on your computer",
@@ -397,12 +397,16 @@ export const PAGES = [
         list: [
           "**When you ask the AI for something**: the text of the transcript (and, for b-roll and thumbnails, a few still frames) goes to the AI you chose: your Claude Code, your Codex or the Claude API with your key. Their own privacy terms apply.",
           "**Downloads**: the speech model is downloaded once from Hugging Face, and update checks read the release list on GitHub.",
-          "Nothing else. ClipCat sends no analytics, usage data or crash reports anywhere.",
+          "Nothing else. The app sends no analytics, usage data or crash reports anywhere.",
         ],
       },
       {
         h2: "This website",
-        body: ["This site sets no cookies and runs no analytics or third-party scripts. It's served by Vercel, which keeps standard request logs."],
+        body: [
+          "This site counts visits with Vercel Web Analytics. The app itself doesn't use it. It sets no cookies, and the site runs no other third-party scripts.",
+          "For each page view, Vercel records the page address, the site you came from, your approximate location, and your browser, operating system and device type. It tells visitors apart with a hash made from the request, which is thrown away after 24 hours, and we only see totals. Read [Vercel's analytics privacy page](https://vercel.com/docs/analytics/privacy-policy).",
+          "Vercel also hosts the site and keeps standard request logs.",
+        ],
       },
     ],
   },
