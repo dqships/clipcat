@@ -11,11 +11,10 @@
     "check": "next typegen && tsc --noEmit",
     "docs": "node scripts/docs.mjs",
     "test": "node --test \"test/*.test.mjs\"",
-    "test:server": "SITE_URL=https://clipcat.example npm run build && node --test \"test/server/*.test.mjs\"",
+    "test:server": "SITE_URL=https://clipcat.example VERCEL_ENV=production npm run build && node --test \"test/server/*.test.mjs\"",
     "og": "node scripts/og.mjs"
   },
   "dependencies": {
-    "@vercel/analytics": "^2.0.1",
     "next": "^16.4.3",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"

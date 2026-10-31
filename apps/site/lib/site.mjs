@@ -8,8 +8,9 @@ export function siteOrigin(env = process.env) {
   return "https://clipcat.followusai.com";
 }
 
-// The pages run no JavaScript at all. Inline styles are allowed for the
-// timeline's clip lengths on the home page.
+// The only JavaScript on the pages is Vercel Web Analytics, which loads from
+// and reports to this origin. Inline styles are allowed for the timeline's
+// clip lengths on the home page.
 const CSP = [
   "default-src 'self'",
   "img-src 'self' data:",
