@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -68,7 +68,7 @@ function setup(over: Partial<PipelineDeps> = {}) {
     changed: (p) => changes.push(p),
     ...over,
   };
-  return { pipeline: new ImportPipeline(deps), store, events, changes, heard, seconds, languages };
+  return { pipeline: new ImportPipeline(deps), store, queue, events, changes, heard, seconds, languages };
 }
 
 const settle = async (events: JobEvent[], n: number) => {
@@ -202,5 +202,18 @@ describe("ImportPipeline", () => {
     await new Promise((r) => setTimeout(r, 20));
     expect(events).toEqual([]);
     expect(looked).toBe(1);
+  });
+
+  it("keeps its own copy of a video Photos only lent it", async () => {
+    const { pipeline, store, queue } = setup();
+    const lent = join(root, "com.apple.Photos.NSItemProvider", "IMG_1.mov");
+    await mkdir(join(root, "com.apple.Photos.NSItemProvider"), { recursive: true });
+    await writeFile(lent, "video");
+    const { sources, id } = await pipeline.import([lent], null);
+    await queue.idle(id);
+    expect(sources[0]!.path).toContain(join(id, "media", "originals"));
+    expect(sources[0]!.name).toMatch(/IMG_1\.mov$/);
+    expect(await readFile(sources[0]!.path, "utf8")).toBe("video");
+    expect(sources[0]!.path.startsWith(store.dir(id))).toBe(true);
   });
 });

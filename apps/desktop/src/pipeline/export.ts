@@ -18,6 +18,7 @@ import {
   timedChapters,
   timedOverlays,
   timedPunches,
+  timedMusic,
   timedSounds,
   toAss,
   toSrt,
@@ -146,13 +147,25 @@ export class ExportRunner {
       // Slides are rendered once per design and shape, before anything else.
       const slides = await this.renderSlides(projectId, project, size, fps, ctx);
 
+      // Originals that have moved or been deleted, played from the copy made for the preview.
+      const moved: string[] = [];
+      const present = async (path: string, copy: string | null, name: string) => {
+        if (!copy || (await exists(path))) return path;
+        moved.push(name);
+        return join(store.dir(projectId), copy);
+      };
       const inputs = new Map(
-        project.sources.map((s) => [s.id, s.media.videoCodec || !s.prep ? s.path : join(store.dir(projectId), s.prep.proxy)]),
+        await Promise.all(
+          project.sources.map(async (s): Promise<[string, string]> => [s.id, s.media.videoCodec || !s.prep ? await present(s.path, s.prep?.proxy ?? null, s.name) : join(store.dir(projectId), s.prep.proxy)]),
+        ),
       );
       // B-roll video is read from the original; a picture from its prepared PNG, which ffmpeg reads whatever the original was.
       const overlayInputs = new Map(
-        project.assets.map((a) => [a.id, slides.get(a.id) ?? (a.kind === "video" || !a.prep ? a.path : join(store.dir(projectId), a.prep.preview))]),
+        await Promise.all(
+          project.assets.map(async (a): Promise<[string, string]> => [a.id, slides.get(a.id) ?? (a.kind === "video" || !a.prep ? await present(a.path, a.prep?.preview ?? null, a.name) : join(store.dir(projectId), a.prep.preview))]),
+        ),
       );
+      if (moved.length > 0) ctx.note?.(`${moved.join(", ")} ${moved.length === 1 ? "isn't" : "aren't"} where ${moved.length === 1 ? "it was" : "they were"}, so this export used ClipCat's preview ${moved.length === 1 ? "copy" : "copies"}.`);
       const overlays = timedOverlays(project, timeline);
       const shape = { project, punches: timedPunches(project, timeline), overlays, overlayInputs, format, fps, inputs, graphFile: "graph.txt" };
       const ffmpeg = async ({ graph, args }: { graph: string; args: string[] }, duration: number, from: number, to: number) => {
@@ -167,12 +180,19 @@ export class ExportRunner {
         files: new Map(SOUND_EFFECTS.map((e) => [e.id, soundFile(this.deps.sfxDir, e.id)])),
         hits: new Map(SOUND_EFFECTS.map((e) => [e.id, e.hit])),
       };
-      const music = project.music && {
-        // The original, or the copy made for the preview when the original has moved.
-        file: (await exists(project.music.path)) || !project.music.prep ? project.music.path : join(store.dir(projectId), project.music.prep),
-        volume: project.music.volume,
-        duck: project.music.duck,
-      };
+      const music = await Promise.all(
+        timedMusic(project, timeline).map(async ({ track, start, end, offset, fadeIn, fadeOut }) => ({
+          // The original, or the copy made for the preview when the original has moved.
+          file: (await exists(track.path)) || !track.prep ? track.path : join(store.dir(projectId), track.prep),
+          volume: track.volume,
+          duck: track.duck,
+          start,
+          end,
+          offset,
+          fadeIn,
+          fadeOut,
+        })),
+      );
       await ffmpeg(audioCommand({ ...shape, timeline, sounds, music, out: "audio.m4a" }), timeline.duration, 0, AUDIO_SHARE);
       const chunks = exportChunks(timeline, Math.max(1, Math.round((this.deps.chunkSeconds ?? CHUNK_SECONDS) * fps)));
       const files = chunks.map((_, i) => `chunk-${String(i).padStart(3, "0")}.mp4`);

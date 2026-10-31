@@ -340,12 +340,12 @@ describe.skipIf(!binDir)("prep with real ffmpeg", () => {
     await run(exe("ffmpeg"), ["-hide_banner", "-y", "-f", "lavfi", "-i", "sine=f=2000:d=2.5,volume=0.8", "-ac", "2", song]);
     const events: JobEvent[] = [];
     const music = new MusicPipeline({ ...realMusicDeps({ ffmpeg: exe("ffmpeg"), ffprobe: exe("ffprobe") }), store, queue: new JobQueue((e) => events.push(e)), changed: () => {} });
-    await music.set(projectId, song);
+    await music.add(projectId, song);
     for (let i = 0; i < 200 && !events.some((e) => e.state === "done" || e.state === "failed"); i++) await new Promise((r) => setTimeout(r, 50));
     const q = await store.get(projectId);
-    expect(q.music).toMatchObject({ name: "song.flac", duck: true });
-    expect(q.music!.duration).toBeCloseTo(2.5, 1);
-    expect((await stat(join(store.dir(projectId), q.music!.prep!))).size).toBeGreaterThan(1000);
+    expect(q.music[0]).toMatchObject({ name: "song.flac", duck: true, whole: true });
+    expect(q.music[0]!.duration).toBeCloseTo(2.5, 1);
+    expect((await stat(join(store.dir(projectId), q.music[0]!.prep!))).size).toBeGreaterThan(1000);
 
     const deps = {
       store,

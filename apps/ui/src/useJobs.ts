@@ -2,10 +2,23 @@ import type { JobEventValue } from "@clipcat/ipc";
 import { useEffect, useState } from "react";
 import { bridge } from "./bridge";
 
-/** What the UI shows for a project's work: the job in progress, how many wait, and the last failure. */
-export type ProjectJobs = { active: JobEventValue | null; waiting: number; failed: JobEventValue | null };
+/** What the UI shows for a project's work: the job in progress, how many wait, the last failure still standing, and what the last AI run came to. */
+export type ProjectJobs = { active: JobEventValue | null; waiting: number; failed: JobEventValue | null; note: JobEventValue | null };
 
-const IDLE: ProjectJobs = { active: null, waiting: 0, failed: null };
+const IDLE: ProjectJobs = { active: null, waiting: 0, failed: null, note: null };
+
+/** Jobs about one recording or file: another of the kind says nothing about this one's failure. */
+const PER_FILE = new Set(["prep", "transcribe", "silence", "faces", "media", "music"]);
+
+/**
+ * The jobs still worth reporting: the newest of each kind, so a failure goes
+ * once the same work has run again, whichever AI ran it.
+ */
+function standing(events: JobEventValue[]): JobEventValue[] {
+  const newest = new Map<string, JobEventValue>();
+  for (const e of events) newest.set(PER_FILE.has(e.kind) ? e.jobId : e.kind, e);
+  return [...newest.values()];
+}
 
 /** Live job state per project, from the main process's job events. */
 export function useJobs(): (projectId: string) => ProjectJobs {
@@ -31,7 +44,8 @@ export function useJobs(): (projectId: string) => ProjectJobs {
     return {
       active: events.find((e) => e.state === "running") ?? null,
       waiting: events.filter((e) => e.state === "queued").length,
-      failed: events.filter((e) => e.state === "failed").at(-1) ?? null,
+      failed: standing(events).filter((e) => e.state === "failed").at(-1) ?? null,
+      note: standing(events).filter((e) => e.state === "done" && e.note).at(-1) ?? null,
     };
   };
 }

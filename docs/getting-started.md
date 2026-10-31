@@ -35,13 +35,13 @@ Long pauses are already suggested as cuts. They're listed under **Suggested edit
 
 ## 4. Set up the AI editor
 
-Open **Settings > AI editor** (the gear in the library, or **Set up** in the **AI editor** section of the **Edit** tab) and pick one:
+Open **Settings > AI models** (the gear in the library, or **Set up** in the **AI editor** section of the **Edit** tab) and pick one:
 
 - **Claude Code**: install it and sign in once by running `claude auth login` in a terminal. Or install it from the same page.
 - **Codex**: install the Codex CLI and run `codex login` once.
 - **Claude API**, **OpenAI** or **OpenRouter**: paste your key and choose **Save key**.
 
-If the AI isn't ready, its row says why. See [Settings](settings.md#ai-editor).
+If the AI isn't ready, its row says why. See [Settings](settings.md#ai-models).
 
 ## 5. Get the suggested edit
 

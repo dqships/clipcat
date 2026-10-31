@@ -59,7 +59,7 @@ export const Segment = z.object({
   included: z.boolean(),
 });
 
-export const ProposalType = z.enum(["silence", "retake", "cleanup", "tighten", "visual", "punch-in", "sound"]);
+export const ProposalType = z.enum(["silence", "retake", "cleanup", "tighten", "visual", "punch-in", "sound", "music"]);
 export const ProposalStatus = z.enum(["pending", "accepted", "rejected"]);
 
 /** How a punch-in zooms: snaps in, pushes in quickly, or creeps in over its length. */
@@ -99,18 +99,35 @@ export const SoundCue = z.object({
 });
 
 /**
- * Music under the whole video: the user's file, a copy prepared for the
- * preview (relative to the project folder; null until made), how loud it
- * plays, and whether it dips while someone speaks.
+ * One music track: the user's file, a copy prepared for the preview (relative
+ * to the project folder; null until made), how loud it plays, whether it dips
+ * while someone speaks, what it sounds like (the AI editor reads this to pick
+ * a track, since it can't hear them), and whether it plays under the whole
+ * video. At most one track does; the others play where they're placed.
  */
-export const Music = z.object({
+export const MusicTrack = z.object({
+  id: z.string(),
   path: z.string(),
   name: z.string(),
   duration: z.number().positive(),
   volume: z.number().min(0).max(1).default(0.15),
   duck: z.boolean().default(true),
   prep: z.string().nullable().default(null),
+  description: z.string().max(1000).default(""),
+  whole: z.boolean().default(false),
 });
+
+/** A music track placed over a source range. It takes over from the whole-video track while it plays. */
+export const MusicCue = z.object({
+  range: z.tuple([z.number(), z.number()]),
+  trackId: z.string(),
+});
+
+/** Projects saved when there could be only one track kept it (or null) here. */
+const musicTracks = (saved: unknown): unknown => {
+  if (saved === null || saved === undefined) return [];
+  return Array.isArray(saved) ? saved : [{ id: "t1", whole: true, ...(saved as object) }];
+};
 
 export const Proposal = z.object({
   id: z.string(),
@@ -129,6 +146,8 @@ export const Proposal = z.object({
   overlay: Overlay.nullable().default(null),
   /** Set on a sound effect, which cuts nothing; accepted, it plays. */
   sound: SoundCue.nullable().default(null),
+  /** Set on a music placement, which cuts nothing either; accepted, it plays. */
+  music: MusicCue.nullable().default(null),
 });
 
 /** How a motion slide looks: on warm paper, on ink, or over the speaker with no background of its own. */
@@ -296,8 +315,8 @@ export const Project = z.object({
   sources: z.array(Source),
   /** Pictures and videos for b-roll. */
   assets: z.array(Asset).default([]),
-  /** Music under the video, or none. */
-  music: Music.nullable().default(null),
+  /** The project's music tracks. */
+  music: z.preprocess(musicTracks, z.array(MusicTrack)),
   transcript: z.array(Word),
   segments: z.array(Segment),
   proposals: z.array(Proposal),
@@ -332,7 +351,8 @@ export type PipCorner = z.infer<typeof PipCorner>;
 export type Overlay = z.infer<typeof Overlay>;
 export type Asset = z.infer<typeof Asset>;
 export type SoundCue = z.infer<typeof SoundCue>;
-export type Music = z.infer<typeof Music>;
+export type MusicTrack = z.infer<typeof MusicTrack>;
+export type MusicCue = z.infer<typeof MusicCue>;
 export type SlideLook = z.infer<typeof SlideLook>;
 export type Slide = z.infer<typeof Slide>;
 export type Captions = z.infer<typeof Captions>;

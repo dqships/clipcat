@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { asset, source, words } from "@clipcat/core/fixtures";
-import { analysisPrompt, describePrompt, numberedTranscript, orderedWords } from "./prompt";
+import { ANALYSIS_TASK, CORRECTIONS_TASK, DESCRIBE_TASK, SHORTS_TASK, SLIDE_TASK, WRITEUP_TASK, analysisPrompt, describePrompt, musicList, numberedTranscript, orderedWords } from "./prompt";
 
 const second = { ...source("b", 3, 1), name: "take2.mov" };
 const first = { ...source("a", 9, 0), name: "take1.mov" };
@@ -11,6 +11,7 @@ const project = {
   brief: "",
   language: "en",
   assets: [],
+  music: [],
 };
 
 describe("numberedTranscript", () => {
@@ -49,5 +50,35 @@ describe("media for b-roll", () => {
     expect(describePrompt([drone, { ...asset("m3", "image"), name: "chart.png" }])).toBe(
       ["Describe these 2 items. The attached frames come in this order.", "", "[0] drone.mp4: video, 12.0s, 1 frame", "[1] chart.png: picture, 1 frame"].join("\n"),
     );
+  });
+});
+
+describe("music for the AI editor", () => {
+  const track = { name: "calm.mp3", duration: 90, description: "Soft piano", whole: true };
+  it("lists the tracks by number, with how they sound", () => {
+    expect(musicList([track, { ...track, name: "drive.mp3", description: "", whole: false }])).toBe(
+      "[0] calm.mp3 (90.0s, already plays under the whole video): Soft piano\n[1] drive.mp3 (90.0s): no description",
+    );
+    expect(analysisPrompt({ ...project, music: [{ ...track, id: "t1", path: "/m", volume: 0.15, duck: true, prep: null }] })).toContain("## Music\n[0] calm.mp3");
+    expect(analysisPrompt(project)).not.toContain("## Music");
+  });
+});
+
+describe("answer schemas", () => {
+  /** Every sub-schema in a schema. */
+  const walk = (node: unknown): Record<string, unknown>[] =>
+    typeof node !== "object" || node === null ? [] : [...(Array.isArray(node) ? [] : [node as Record<string, unknown>]), ...Object.values(node).flatMap(walk)];
+
+  // The Claude API answers 400 ("Enum value 'cut' does not match declared type") to an enum beside a list of types.
+  it("never sets an enum beside a list of types, which the Claude API refuses", () => {
+    for (const task of [ANALYSIS_TASK, CORRECTIONS_TASK, SHORTS_TASK, WRITEUP_TASK, DESCRIBE_TASK, SLIDE_TASK]) {
+      expect(walk(task.jsonSchema).filter((s) => "enum" in s && Array.isArray(s.type))).toEqual([]);
+    }
+  });
+
+  it("requires every property, as strict mode wants", () => {
+    for (const s of walk(ANALYSIS_TASK.jsonSchema).filter((x) => x.type === "object" && "properties" in x)) {
+      expect([...(s.required as string[])].sort()).toEqual(Object.keys(s.properties as object).sort());
+    }
   });
 });

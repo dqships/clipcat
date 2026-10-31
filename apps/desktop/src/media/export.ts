@@ -8,10 +8,10 @@
 
 import {
   type Bars,
-  MUSIC,
   PUNCH,
   type Project,
   type Source,
+  type TimedMusic,
   type TimedOverlay,
   type Timeline,
   type TimelineItem,
@@ -365,26 +365,29 @@ export type AudioPlan = Shape & {
   timeline: FramedTimeline;
   /** Sound effects in play order (see timedSounds), with each effect's file and how far into it the sound lands. */
   sounds?: { cues: TimedSound[]; files: Map<string, string>; hits: Map<string, number> };
-  /** Music under the whole video: the file, how loud, and whether it dips under speech. */
-  music?: { file: string; volume: number; duck: boolean } | null;
+  /** The stretches of music in play order (see timedMusic): each one's file, how loud it is and whether it dips under speech. */
+  music?: MusicMix[] | null;
 };
+
+export type MusicMix = Pick<TimedMusic, "start" | "end" | "offset" | "fadeIn" | "fadeOut"> & { file: string; volume: number; duck: boolean };
 
 /**
  * Lays the effects and music under the speech: each effect placed so the
- * sound lands on its moment, the music looped to the length, faded in and
- * out and (when asked) pressed down while someone speaks, all mixed at their
- * own levels and kept off the ceiling by a limiter. Only used when there
- * is one or the other, so speech alone is left untouched.
+ * sound lands on its moment, each stretch of music looped to its length,
+ * faded in and out and (when asked) pressed down while someone speaks, all
+ * mixed at their own levels and kept off the ceiling by a limiter. Only used
+ * when there is one or the other, so speech alone is left untouched.
  */
 function bedLines(plan: AudioPlan, args: string[], firstInput: number, speech: string): string[] {
   const cues = plan.sounds?.cues ?? [];
-  const music = plan.music ?? null;
+  const music = plan.music ?? [];
   const lines: string[] = [];
   const format = `aformat=sample_rates=${SAMPLE_RATE}:channel_layouts=stereo`;
   const effects = [...new Set(cues.map((c) => c.effect))];
   const mix: string[] = [];
   let input = firstInput;
-  const speechOut = music?.duck ? "[sp]" : speech;
+  const ducked = music.some((m) => m.duck);
+  const speechOut = ducked ? "[sp]" : speech;
   effects.forEach((effect, e) => {
     const file = plan.sounds!.files.get(effect);
     if (!file) throw new Error(`No file for the sound effect "${effect}"`);
@@ -400,20 +403,22 @@ function bedLines(plan: AudioPlan, args: string[], firstInput: number, speech: s
       mix.push(`[x${e}_${k}]`);
     });
   });
-  if (music) {
-    const d = plan.timeline.duration;
-    args.push("-stream_loop", "-1", "-i", music.file);
-    const fadeOut = Math.min(MUSIC.fadeOut, d / 2);
+  const under: string[] = [];
+  music.forEach((m, k) => {
+    const length = m.end - m.start;
+    args.push("-stream_loop", "-1", "-i", m.file);
+    const delay = Math.round(m.start * 1000);
     lines.push(
-      `[${input++}:a:0]${format},atrim=0:${sec(d)},asetpts=PTS-STARTPTS,afade=t=in:d=${Math.min(MUSIC.fadeIn, d / 2)},afade=t=out:st=${sec(d - fadeOut)}:d=${fadeOut},volume=${music.volume.toFixed(3)}[mus]`,
+      `[${input++}:a:0]${format},atrim=${sec(m.offset)}:${sec(m.offset + length)},asetpts=PTS-STARTPTS,afade=t=in:d=${m.fadeIn},afade=t=out:st=${sec(length - m.fadeOut)}:d=${m.fadeOut},volume=${m.volume.toFixed(3)}${delay > 0 ? `,adelay=${delay}:all=1` : ""}[m${k}]`,
     );
-    if (music.duck) {
-      lines.push(`${speech}asplit=2[sp][key]`);
-      lines.push("[mus][key]sidechaincompress=threshold=0.02:ratio=6:attack=30:release=400[bed]");
-      mix.push("[bed]");
-    } else {
-      mix.push("[mus]");
-    }
+    (m.duck ? under : mix).push(`[m${k}]`);
+  });
+  if (ducked) {
+    const single = under.length === 1;
+    if (!single) lines.push(`${under.join("")}amix=inputs=${under.length}:duration=longest:dropout_transition=0:normalize=0[mus]`);
+    lines.push(`${speech}asplit=2[sp][key]`);
+    lines.push(`${single ? under[0] : "[mus]"}[key]sidechaincompress=threshold=0.02:ratio=6:attack=30:release=400[bed]`);
+    mix.push("[bed]");
   }
   // The speech comes first, so the mix lasts exactly as long as it does.
   lines.push(`${speechOut}${mix.join("")}amix=inputs=${mix.length + 1}:duration=first:dropout_transition=0:normalize=0,alimiter=limit=0.95:level=false[outa]`);
@@ -444,7 +449,7 @@ export function audioCommand(plan: AudioPlan): { graph: string; args: string[] }
     lines.push(`[s${i}a${b}]atrim=start_sample=${a}:end_sample=${e},asetpts=PTS-STARTPTS[a${k}]`);
     parts.push(`[a${k}]`);
   });
-  const bed = (plan.sounds?.cues.length ?? 0) > 0 || plan.music;
+  const bed = (plan.sounds?.cues.length ?? 0) > 0 || (plan.music?.length ?? 0) > 0;
   const speech = bed ? "[speech]" : "[outa]";
   lines.push(`${parts.join("")}concat=n=${parts.length}:v=0:a=1${project.speed === 1 ? speech : `[ca];\n[ca]atempo=${project.speed}${speech}`}`);
   if (bed) lines.push(...bedLines(plan, args, used.length, speech));

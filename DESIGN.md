@@ -148,7 +148,7 @@ Settings is set like the Help window: the list of pages in a `--color-surface`
 column of `--panel-min` on a hairline, the open one on `--color-background` and
 marked with a `--space-1` strip of splice tape. Each entry is a Lucide icon at
 `--icon-size-md`, the page's name, and a caption under it saying where that page
-stands ("2 of 3 connected", "Up to date"), so the list reads at a glance. The
+stands ("Claude API", "Up to date"), so the list reads at a glance. The
 open page has a `--text-title` heading and one sentence, then its parts, each
 under a hairline with a small uppercase muted label (`--text-caption`,
 `--tracking-caps`). Pages are no wider than `--space-9` × 7.

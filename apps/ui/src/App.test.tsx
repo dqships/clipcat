@@ -20,6 +20,7 @@ const info = (over: object = {}) => ({
 });
 
 const project = {
+  music: [],
   version: 1,
   id: "p1",
   name: "talk",
@@ -151,6 +152,19 @@ describe("App", () => {
     expect(screen.getByRole("progressbar", { name: "Transcribing talk.mp4" }).getAttribute("value")).toBe("40");
     emit("job", { ...job, state: "failed", fraction: null, error: "whisper-cli exited with 1" });
     expect(screen.getByText(/Transcribing talk.mp4 failed: whisper-cli exited with 1/)).toBeTruthy();
+  });
+
+  it("drops an AI failure once the work runs again, and says which AI it was", async () => {
+    const { emit } = fakeBridge({ "app:info": info(), "library:list": [summary], "project:get": project, "ai:status": { claude: { status: "ready", version: "2.1.0", detail: null }, codex: { status: "ready", version: "0.165.0", detail: null }, api: { hasKey: true, model: "claude-sonnet-5-5" }, openai: noKey, openrouter: noKey, agent: "api", models } });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "talk" }));
+    await screen.findByRole("button", { name: "Suggest an edit" });
+    const job = { projectId: "p1", kind: "analyze", label: "Claude is reading the transcript", fraction: null };
+    emit("job", { ...job, jobId: "j1", state: "failed", agent: "Claude API, claude-sonnet-5-5", error: "The Claude API returned 400" });
+    expect(await screen.findByText(/Claude API, claude-sonnet-5-5 failed: The Claude API returned 400/)).toBeTruthy();
+    emit("job", { ...job, jobId: "j2", state: "done", fraction: 1, agent: "OpenRouter, a/b", note: "OpenRouter, a/b suggested 2 edits." });
+    expect(await screen.findByText("OpenRouter, a/b suggested 2 edits.")).toBeTruthy();
+    expect(screen.queryByText(/The Claude API returned 400/)).toBeNull();
   });
 
   it("opens a project with its transcript and pauses", async () => {
@@ -560,7 +574,7 @@ describe("App", () => {
       sound: { at: 3, effect, volume: 0.7 },
     });
     const withSounds = { ...project, revision: 4, proposals: [...project.proposals, sound("f1", "accepted", "ding"), sound("f2", "pending", "whoosh")] };
-    const withMusic = { ...withSounds, revision: 5, music: { path: "/m/song.mp3", name: "song.mp3", duration: 120, volume: 0.15, duck: true, prep: null } };
+    const withMusic = { ...withSounds, revision: 5, music: [{ id: "t1", path: "/m/song.mp3", name: "song.mp3", duration: 120, volume: 0.15, duck: true, prep: null, description: "", whole: true }] };
     // Main announces the music once it is on, and the editor loads it again.
     let current: object = project;
     const { invoke, emit } = fakeBridge({
@@ -569,8 +583,8 @@ describe("App", () => {
       "project:get": () => current,
       "ai:status": ready,
       "project:edit": withSounds,
-      "music:pick": "/m/song.mp3",
-      "project:set-music": () => {
+      "music:pick": ["/m/song.mp3"],
+      "project:add-music": () => {
         current = withMusic;
         return withMusic;
       },
@@ -588,11 +602,13 @@ describe("App", () => {
     await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:edit", { id: "p1", revision: 4, op: { type: "sound-volume", id: "f1", volume: 1 } }));
 
     fireEvent.click(screen.getByRole("button", { name: "Add music" }));
-    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:set-music", { id: "p1", file: "/m/song.mp3" }));
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:add-music", { id: "p1", file: "/m/song.mp3" }));
     emit("project:changed", { id: "p1", revision: 5 });
     expect(await screen.findByText("Preparing…")).toBeTruthy();
-    fireEvent.click(screen.getByLabelText("Lower the music while you talk"));
-    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:edit", expect.objectContaining({ op: { type: "music", duck: false } })));
+    fireEvent.click(screen.getByLabelText("Lower song.mp3 while you talk"));
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:edit", expect.objectContaining({ op: { type: "music", id: "t1", duck: false } })));
+    fireEvent.change(screen.getByLabelText("Where song.mp3 plays"), { target: { value: "placed" } });
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("project:edit", expect.objectContaining({ op: { type: "music", id: "t1", whole: false } })));
   });
 
   it("writes up the video, edits its chapters and copies them for YouTube", async () => {
@@ -699,9 +715,9 @@ describe("App", () => {
     expect(await screen.findByText(/Claude Code isn't set up. Install Claude Code, then reopen ClipCat/)).toBeTruthy();
     expect((screen.getByRole("button", { name: "Suggest an edit" }) as HTMLButtonElement).disabled).toBe(true);
 
-    // Setting it up happens in Settings, on the AI editor page, and Back returns to the project.
+    // Setting it up happens in Settings, on the AI models page, and Back returns to the project.
     fireEvent.click(screen.getByRole("button", { name: "Set up Claude Code" }));
-    expect(await screen.findByRole("heading", { name: "AI editor" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "AI models" })).toBeTruthy();
     expect(screen.getByRole("radio", { name: /Claude Code/ })).toHaveProperty("checked", true);
     expect(screen.getAllByText("Run `codex login` in a terminal, then try again.").length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "Back to project" }));
@@ -955,7 +971,7 @@ describe("App", () => {
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
     expect(await screen.findByRole("heading", { level: 1, name: "Settings" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: /^Coding agents/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^AI models/ }));
     expect(await screen.findByRole("button", { name: "Connect Codex" })).toBeTruthy();
     expect(screen.getByText("Not found on this computer. You can still connect it for later.")).toBeTruthy();
 
@@ -982,15 +998,6 @@ describe("App", () => {
     expect(await screen.findByText("Connected now (claude-code 2.1.312).")).toBeTruthy();
     expect(screen.getByText("Claude Code is connected now (claude-code 2.1.312).")).toBeTruthy();
 
-    // The walkthrough opens on the agent just connected, and switches per agent.
-    const pick = screen.getByRole("combobox", { name: "Steps for" }) as HTMLSelectElement;
-    expect(pick.value).toBe("claude-code");
-    expect(screen.getByRole("option", { name: "Claude Code (connected)" })).toBeTruthy();
-    expect(screen.getByRole("list", { name: "Steps for Claude Code" }).textContent).toContain("Type /mcp.");
-    fireEvent.change(pick, { target: { value: "claude-desktop" } });
-    expect(screen.getByRole("list", { name: "Steps for Claude desktop app" }).textContent).toContain("Settings > Developer");
-    fireEvent.change(pick, { target: { value: "vscode" } });
-    expect(screen.getByRole("list", { name: "Steps for VS Code" }).textContent).toContain("MCP: List Servers");
     fireEvent.click(screen.getByRole("button", { name: "Back to library" }));
     expect(await screen.findByRole("heading", { level: 2, name: "No projects yet" })).toBeTruthy();
   });
@@ -1009,7 +1016,7 @@ describe("App", () => {
     });
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
-    fireEvent.click(screen.getByRole("button", { name: /^Coding agents/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^AI models/ }));
     expect(await screen.findByText("Not found on this computer: Cursor, Gemini CLI")).toBeTruthy();
     expect(screen.getByRole("list", { name: "Coding agents" }).textContent).not.toContain("Cursor");
     expect(screen.getByRole("button", { name: "Connect Cursor" })).toBeTruthy();
@@ -1024,13 +1031,13 @@ describe("App", () => {
     await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith(json));
   });
 
-  it("copies an example prompt from the agent walkthrough", async () => {
+  it("copies an example prompt for a coding agent", async () => {
     const writeText = vi.fn(async () => {});
     Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
     fakeBridge({ "app:info": info(), "library:list": [], "mcp:status": [] });
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
-    fireEvent.click(screen.getByRole("button", { name: /^Coding agents/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^AI models/ }));
     const prompts = within(await screen.findByRole("list", { name: "Example prompts" })).getAllByRole("listitem");
     fireEvent.click(within(prompts[0]!).getByRole("button", { name: "Copy prompt" }));
     expect(writeText).toHaveBeenCalledWith(prompts[0]!.textContent);
@@ -1083,9 +1090,8 @@ describe("App", () => {
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
     const list = screen.getByRole("navigation", { name: "Settings" });
-    expect(await within(list).findByText("1 of 2 connected")).toBeTruthy();
     expect(await within(list).findByText("Japanese")).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "AI editor" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "AI models" })).toBeTruthy();
 
     fireEvent.click(within(list).getByRole("button", { name: /^Transcription/ }));
     expect(within(list).getByRole("button", { name: /^Transcription/ }).getAttribute("aria-current")).toBe("page");

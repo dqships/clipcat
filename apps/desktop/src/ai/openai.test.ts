@@ -177,18 +177,17 @@ describe("keys and model lists", () => {
     expect(openAiChoices(ids).map((c) => c.id)).toEqual(["gpt-6.1-sol", "gpt-6.1-mini", "gpt-5.5", "gpt-5.5-mini", "o4-mini"]);
   });
 
-  it("lists only OpenRouter models that take tools", async () => {
+  it("lists only OpenRouter models that read images and take tools", async () => {
+    const both = { input_modalities: ["text", "image"] };
     const models = [
-      { id: "z/one", name: "Zed One", supported_parameters: ["tools", "tool_choice"] },
-      { id: "a/two", name: "Alpha Two", supported_parameters: ["temperature"] },
+      { id: "z/one", name: "Zed One", supported_parameters: ["tools", "tool_choice"], architecture: both },
+      { id: "a/two", name: "Alpha Two", supported_parameters: ["temperature"], architecture: both },
       { id: "a/three", name: "Alpha Three", supported_parameters: ["tools"], architecture: { input_modalities: ["text"] } },
+      { id: "a/four", name: "Alpha Four", supported_parameters: ["tools"] },
     ];
-    expect(openRouterChoices(models)).toEqual([
-      { id: "a/three", label: "Alpha Three (a/three), text only" },
-      { id: "z/one", label: "Zed One (z/one)" },
-    ]);
+    expect(openRouterChoices(models)).toEqual([{ id: "z/one", label: "Zed One (z/one)" }]);
     const { fetcher, sent } = fakeFetch([{ data: models }]);
-    expect(await listModels("openrouter", "k", fetcher)).toHaveLength(2);
+    expect(await listModels("openrouter", "k", fetcher)).toHaveLength(1);
     expect(sent[0]!.url).toBe("https://openrouter.ai/api/v1/models?supported_parameters=tools");
   });
 });

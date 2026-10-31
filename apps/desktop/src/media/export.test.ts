@@ -271,7 +271,7 @@ describe("audioCommand", () => {
         files: new Map([["whoosh", "/sfx/whoosh.wav"], ["pop", "/sfx/pop.wav"]]),
         hits: new Map([["whoosh", 0.4], ["pop", 0]]),
       },
-      music: { file: "/music.mp3", volume: 0.15, duck: true },
+      music: [{ file: "/music.mp3", volume: 0.15, duck: true, start: 0, end: 4, offset: 0, fadeIn: 1, fadeOut: 2 }],
     });
     expect(args.join(" ")).toContain("-i /sfx/whoosh.wav -i /sfx/pop.wav -stream_loop -1 -i /music.mp3");
     expect(graph).toContain("concat=n=3:v=0:a=1[speech]");
@@ -280,9 +280,9 @@ describe("audioCommand", () => {
     expect(graph).toContain("[e0c0]atrim=start=0.200000,asetpts=PTS-STARTPTS,volume=0.700,adelay=0:all=1[x0_0]");
     expect(graph).toContain("[e0c1]volume=0.700,adelay=3600:all=1[x0_1]");
     expect(graph).toContain("[e1c0]volume=1.000,adelay=2000:all=1[x1_0]");
-    expect(graph).toMatch(/\[4:a:0\]aformat=[^;]*atrim=0:[\d.]+,asetpts=PTS-STARTPTS,afade=t=in:d=1,afade=t=out:st=[\d.]+:d=[\d.]+,volume=0\.150\[mus\]/);
+    expect(graph).toMatch(/\[4:a:0\]aformat=[^;]*atrim=0\.000000:4\.000000,asetpts=PTS-STARTPTS,afade=t=in:d=1,afade=t=out:st=2\.000000:d=2,volume=0\.150\[m0\]/);
     expect(graph).toContain("[speech]asplit=2[sp][key]");
-    expect(graph).toContain("[mus][key]sidechaincompress=threshold=0.02:ratio=6:attack=30:release=400[bed]");
+    expect(graph).toContain("[m0][key]sidechaincompress=threshold=0.02:ratio=6:attack=30:release=400[bed]");
     expect(graph).toContain("[sp][x0_0][x0_1][x1_0][bed]amix=inputs=5:duration=first:dropout_transition=0:normalize=0,alimiter=limit=0.95:level=false[outa]");
   });
 
@@ -290,9 +290,29 @@ describe("audioCommand", () => {
     const { timeline, shape } = setup();
     const plain = audioCommand({ ...shape, timeline, out: "a.m4a" }).graph;
     expect(audioCommand({ ...shape, timeline, out: "a.m4a", sounds: { cues: [], files: new Map(), hits: new Map() }, music: null }).graph).toBe(plain);
-    const { graph } = audioCommand({ ...shape, timeline, out: "a.m4a", music: { file: "/m.wav", volume: 0.3, duck: false } });
+    const { graph } = audioCommand({ ...shape, timeline, out: "a.m4a", music: [{ file: "/m.wav", volume: 0.3, duck: false, start: 0, end: 3, offset: 0, fadeIn: 1, fadeOut: 1 }] });
     expect(graph).not.toContain("sidechaincompress");
-    expect(graph).toContain("[speech][mus]amix=inputs=2:");
+    expect(graph).toContain("[speech][m0]amix=inputs=2:");
+  });
+
+  it("lays each stretch of music at its time, ducking the ones that ask for it together", () => {
+    const { timeline, shape } = setup();
+    const { graph, args } = audioCommand({
+      ...shape,
+      timeline,
+      out: "a.m4a",
+      music: [
+        { file: "/a.mp3", volume: 0.15, duck: true, start: 0, end: 2, offset: 0, fadeIn: 1, fadeOut: 1 },
+        { file: "/b.mp3", volume: 0.3, duck: true, start: 2, end: 4, offset: 0, fadeIn: 1, fadeOut: 1 },
+        { file: "/a.mp3", volume: 0.15, duck: false, start: 4, end: 5, offset: 4, fadeIn: 0.5, fadeOut: 0.5 },
+      ],
+    });
+    expect(args.join(" ")).toContain("-stream_loop -1 -i /a.mp3 -stream_loop -1 -i /b.mp3 -stream_loop -1 -i /a.mp3");
+    expect(graph).toContain("volume=0.300,adelay=2000:all=1[m1]");
+    expect(graph).toContain("atrim=4.000000:5.000000");
+    expect(graph).toContain("[m0][m1]amix=inputs=2:duration=longest:dropout_transition=0:normalize=0[mus]");
+    expect(graph).toContain("[mus][key]sidechaincompress");
+    expect(graph).toContain("[sp][m2][bed]amix=inputs=3:");
   });
 });
 

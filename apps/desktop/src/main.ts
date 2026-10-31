@@ -175,7 +175,7 @@ function startPipeline() {
   const jobs = new JobLog();
   const queue = new JobQueue((event) => {
     if (isSmokeRun()) recordSmokeJob(event);
-    if (event.state === "failed") mainLog.write("warn", `job ${event.kind} failed for ${event.projectId}:`, event.error ?? "");
+    if (event.state === "failed") mainLog.write("warn", `job ${event.kind} failed for ${event.projectId}${event.agent ? ` (${event.agent})` : ""}:`, event.error ?? "");
     jobs.record(event);
     broadcast("job", event);
   });
@@ -451,6 +451,7 @@ if (!squirrelLaunch && !app.requestSingleInstanceLock()) {
             exporter.export(id, format, path);
           },
           importFiles: (files, projectId) => pipeline.import(files, projectId),
+          addMusic: (id, file) => music.add(id, file),
           exportTimeline: (id, format, path) => writeTimeline(store, id, format, path),
           jobs: (projectId) => jobs.list(projectId),
         });
@@ -492,7 +493,9 @@ if (!squirrelLaunch && !app.requestSingleInstanceLock()) {
       }
       const wait = new Promise<ModelChoice[]>((resolve) => setTimeout(() => resolve([]), waitMs));
       const choices = await Promise.race([modelLists.get(cacheKey)!.list.catch(() => [] as ModelChoice[]), wait]);
-      return { hasKey: true, model, choices };
+      // A model OpenRouter's list no longer offers (it can't read images, say) has to be picked again.
+      const gone = provider === "openrouter" && choices.length > 0 && !choices.some((c) => c.id === model);
+      return { hasKey: true, model: gone ? null : model, choices };
     };
     const aiStatus = async () => {
       const host = await hostEnv;
@@ -681,16 +684,16 @@ if (!squirrelLaunch && !app.requestSingleInstanceLock()) {
           const win = BrowserWindow.fromWebContents(event.sender);
           const options: Electron.OpenDialogOptions = {
             title: "Add music",
-            properties: ["openFile"],
+            properties: ["openFile", "multiSelections"],
             filters: [
               { name: "Music", extensions: MUSIC_EXTENSIONS },
               { name: "All files", extensions: ["*"] },
             ],
           };
           const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);
-          return result.canceled ? null : (result.filePaths[0] ?? null);
+          return result.canceled ? [] : result.filePaths;
         },
-        "project:set-music": ({ id, file }) => music.set(id, file),
+        "project:add-music": ({ id, file }) => music.add(id, file),
         "project:import": ({ projectId, files }) => pipeline.import(files, projectId),
         "project:add-media": ({ id, files }) => media.add(id, files),
         "project:get": ({ id }) => store.get(id),

@@ -1,8 +1,8 @@
 ---
 title: Add sound effects and music to a ClipCat video
-description: Land a sound effect on the word it belongs to, set how loud each one plays, and put music under the whole video that gets quieter while you talk.
+description: Land a sound effect on the word it belongs to, set how loud each one plays, and put one or more music tracks under the video that get quieter while you talk.
 order: 8
-updated: 2026-10-29
+updated: 2026-10-31
 ---
 
 # Add sound effects and music
@@ -37,10 +37,19 @@ Open **Sound library** at the bottom of the section and choose the play button t
 
 ## Music
 
-1. Choose **Add music** and pick an audio file (MP3, M4A, AAC, WAV, FLAC, OGG, Opus or AIFF).
-2. Pick the volume: **Quiet**, **Low**, **Medium** or **Loud**.
-3. Leave **Lower the music while you talk** ticked to have the music dip under your voice.
+A project can have as many tracks as you like.
 
-The music loops to the length of the edit and fades in and out. **Change music** swaps the file, and the cross removes it.
+1. Choose **Add music** and pick one or more audio files (MP3, M4A, AAC, WAV, FLAC, OGG, Opus or AIFF).
+2. Pick each track's volume: **Quiet**, **Low**, **Medium** or **Loud**.
+3. Leave **Lower** (the track's name) **while you talk** ticked to have it dip under your voice.
+4. Pick where it plays: **Whole video**, or **Where placed**.
+
+The first track you add plays under the whole video. One track at a time can.
+
+**Give part of the video its own music**: select words in the transcript and pick a track from **Music…**. It plays from its beginning over those words and takes over from the whole-video track, which comes back after. Placements follow their words through your edits. They're listed under the tracks: click one to play it, and the cross removes it.
+
+**Let the AI editor place tracks**: say how each track sounds in its description, like "slow piano, reflective" or "upbeat drums". The AI can't hear your music, so it goes by the description and the file name. When there's a track to place, **Suggest an edit** can suggest music alongside its other edits, and you accept or reject each one.
+
+Every track loops to fit and fades in and out. The cross next to a track removes it, with its placements.
 
 In the export, speech, effects and music are mixed with a limiter so nothing clips. The preview's dip under your voice is close to the export's, not exact.

@@ -2,14 +2,14 @@
 title: Fix a problem in ClipCat and report a bug
 description: What to do when ClipCat's AI, transcription, recording, export or agent connection doesn't work, and how to report a bug with a diagnostics file.
 order: 19
-updated: 2026-10-29
+updated: 2026-10-31
 ---
 
 # Fix a problem
 
 ## The AI editor isn't ready
 
-The **AI editor** section on the **Edit** tab says what's wrong, and so does its row in **Settings > AI editor**.
+The **AI editor** section on the **Edit** tab says what's wrong, and so does its row in **Settings > AI models**.
 
 - **Claude Code or Codex isn't installed**: install it from [Settings](settings.md), or with its maker's instructions.
 - **It isn't signed in**: run `claude auth login` or `codex login` in a terminal, then choose **Check again** next to it in Settings.
@@ -35,7 +35,7 @@ The error shows in the AI editor section. Try again: a busy or rate-limited AI i
 
 ## Export fails or looks wrong
 
-- **An original recording was moved or deleted**: export reads the originals. Put the file back where it was.
+- **An original recording was moved or deleted**: export reads the originals, and uses ClipCat's lighter preview copy when one is missing. Put the file back where it was for full quality.
 - **The vertical crop misses you**: on the **Look** tab, untick **Follow the speaker** and drag **Position**.
 - **The disk is full**: export needs room for the video while it works. Free some space and export again.
 

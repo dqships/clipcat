@@ -31,7 +31,7 @@ import { defaultOverlay, overlayProposal } from "./overlays";
 import { PUNCH_SCALE, punchProposal, punchRange } from "./punchins";
 import { CHAPTERS } from "./writeup";
 import { slideAsset, slideName } from "./slides";
-import { soundProposal } from "./sounds";
+import { musicProposal, soundProposal } from "./sounds";
 
 export const EditOp = z.discriminatedUnion("type", [
   /** Cut (included: false) or restore (included: true) these words. */
@@ -60,10 +60,22 @@ export const EditOp = z.discriminatedUnion("type", [
   z.object({ type: z.literal("sound"), wordId: z.string(), effect: z.string().regex(/^[a-z0-9-]+$/) }),
   /** How loud an effect plays. Not an undo step: the list shows it. */
   z.object({ type: z.literal("sound-volume"), id: z.string(), volume: z.number().min(0).max(1) }),
-  /** How loud the music plays, and whether it dips under speech. Not an undo step. */
-  z.object({ type: z.literal("music"), volume: z.number().min(0).max(1).optional(), duck: z.boolean().optional() }),
-  /** Takes the music out. Not an undo step. */
-  z.object({ type: z.literal("remove-music") }),
+  /**
+   * A music track's settings: how loud it plays, whether it dips under speech, what it sounds like and
+   * whether it plays under the whole video. `id` can be left out when there is only one. Not an undo step.
+   */
+  z.object({
+    type: z.literal("music"),
+    id: z.string().optional(),
+    volume: z.number().min(0).max(1).optional(),
+    duck: z.boolean().optional(),
+    description: z.string().max(1000).optional(),
+    whole: z.boolean().optional(),
+  }),
+  /** Takes a music track out, with its placements. `id` can be left out when there is only one. Not an undo step. */
+  z.object({ type: z.literal("remove-music"), id: z.string().optional() }),
+  /** Plays a music track over these words (one recording's). An undo step, like b-roll. */
+  z.object({ type: z.literal("place-music"), wordIds: z.array(z.string()).min(1).max(10_000), trackId: z.string() }),
   /** Retypes a word speech recognition got wrong. Its timing and the cuts stay; captions, the write-up and the AI editor read the new text. Not an undo step: the transcript shows it. */
   z.object({
     type: z.literal("fix-word"),
@@ -122,6 +134,14 @@ function restore(p: Project, s: Snapshot): void {
   p.segments = structuredClone(s.segments);
   // Proposals made since the snapshot keep their status; ones it knew get theirs back.
   for (const x of p.proposals) x.status = s.statuses[x.id] ?? x.status;
+}
+
+/** The music track `id` names, or the only one when no id is given. */
+function musicTrack(p: Project, id: string | undefined): Project["music"][number] {
+  if (id === undefined && p.music.length > 1) throw new Error(`Say which music track: ${p.music.map((t) => `${t.id} (${t.name})`).join(", ")}`);
+  const track = id === undefined ? p.music[0] : p.music.find((t) => t.id === id);
+  if (!track) throw new Error(id === undefined ? "There is no music" : `Unknown music: ${id}`);
+  return track;
 }
 
 /** Runs of consecutive words (by index within each source), as source ranges to cut or restore. */
@@ -212,14 +232,21 @@ export function applyEdit(project: Project, op: EditOp, id: IdFactory): Project 
   }
 
   if (op.type === "music") {
-    if (!p.music) throw new Error("There is no music");
-    if (op.volume !== undefined) p.music.volume = op.volume;
-    if (op.duck !== undefined) p.music.duck = op.duck;
+    const track = musicTrack(p, op.id);
+    if (op.volume !== undefined) track.volume = op.volume;
+    if (op.duck !== undefined) track.duck = op.duck;
+    if (op.description !== undefined) track.description = op.description;
+    if (op.whole !== undefined) {
+      for (const t of p.music) t.whole = false;
+      track.whole = op.whole;
+    }
     return p;
   }
 
   if (op.type === "remove-music") {
-    p.music = null;
+    const track = musicTrack(p, op.id);
+    p.music = p.music.filter((t) => t.id !== track.id);
+    p.proposals = p.proposals.filter((x) => x.music?.trackId !== track.id);
     return p;
   }
 
@@ -295,12 +322,12 @@ export function applyEdit(project: Project, op: EditOp, id: IdFactory): Project 
     );
     p.proposals.push(added);
   }
-  if (op.type === "punch" || op.type === "overlay" || op.type === "slide") {
+  if (op.type === "punch" || op.type === "overlay" || op.type === "slide" || op.type === "place-music") {
     const ids = new Set(op.wordIds);
     const words = p.transcript.filter((w) => ids.has(w.id));
     if (words.length !== ids.size) throw new Error(`Unknown words: ${op.wordIds.filter((w) => !p.transcript.some((x) => x.id === w)).slice(0, 5).join(", ")}`);
     const sourceId = words[0]!.sourceId;
-    const what = op.type === "punch" ? "A punch-in" : op.type === "slide" ? "A slide" : "B-roll";
+    const what = op.type === "punch" ? "A punch-in" : op.type === "slide" ? "A slide" : op.type === "place-music" ? "Music" : "B-roll";
     if (words.some((w) => w.sourceId !== sourceId)) throw new Error(`${what} stays inside one recording`);
     const fields = { id: id(), sourceId, wordIds: words.sort((a, b) => a.start - b.start).map((w) => w.id), reason: "", confidence: 1, status: "rejected" as const };
     if (op.type === "punch") {
@@ -310,6 +337,9 @@ export function applyEdit(project: Project, op: EditOp, id: IdFactory): Project 
       const asset = slideAsset(id(), op.brief, op.look, range[1] - range[0]);
       p.assets.push(asset);
       added = overlayProposal(fields, defaultOverlay(range, asset.id, "full"));
+    } else if (op.type === "place-music") {
+      if (!p.music.some((t) => t.id === op.trackId)) throw new Error(`Unknown music: ${op.trackId}`);
+      added = musicProposal(fields, { range: punchRange(words), trackId: op.trackId });
     } else {
       if (!p.assets.some((a) => a.id === op.assetId)) throw new Error(`Unknown media: ${op.assetId}`);
       added = overlayProposal(fields, defaultOverlay(punchRange(words), op.assetId, op.placement));

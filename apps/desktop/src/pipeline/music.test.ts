@@ -36,41 +36,50 @@ async function setup() {
 }
 
 describe("MusicPipeline", () => {
-  it("puts the music on at once and prepares a copy for the preview", async () => {
+  it("adds a track at once, under the whole video, and prepares a copy for the preview", async () => {
     const { store, queue, music, prepared, id } = await setup();
-    const set = await music.set(id, "/m/song.mp3");
-    expect(set.music).toEqual({ path: "/m/song.mp3", name: "song.mp3", duration: 95, volume: 0.15, duck: true, prep: null });
+    const added = await music.add(id, "/m/song.mp3");
+    expect(added.music).toEqual([{ id: expect.stringMatching(/^t/), path: "/m/song.mp3", name: "song.mp3", duration: 95, volume: 0.15, duck: true, prep: null, description: "", whole: true }]);
     await queue.idle(id);
-    const prep = (await store.get(id)).music!.prep!;
+    const prep = (await store.get(id)).music[0]!.prep!;
     expect(prep).toMatch(new RegExp(`^${MUSIC_DIR}/[a-f0-9-]{8}\\.m4a$`));
     expect(prepared).toEqual([join(store.dir(id), prep)]);
   });
 
-  it("keeps the level and ducking of the music it replaces, and only the new copy", async () => {
+  it("keeps every track it's given, each with the level and ducking of the last, and only the first plays throughout", async () => {
     const { store, queue, music, id } = await setup();
-    await music.set(id, "/m/one.mp3");
+    await music.add(id, "/m/one.mp3");
     await queue.idle(id);
     await store.update(id, null, (p) => {
-      p.music!.volume = 0.3;
-      p.music!.duck = false;
+      p.music[0]!.volume = 0.3;
+      p.music[0]!.duck = false;
     });
-    const next = await music.set(id, "/m/two.wav");
-    expect(next.music).toMatchObject({ name: "two.wav", volume: 0.3, duck: false, prep: null });
+    const next = await music.add(id, "/m/two.wav");
+    expect(next.music.map((t) => t.name)).toEqual(["one.mp3", "two.wav"]);
+    expect(next.music[1]).toMatchObject({ volume: 0.3, duck: false, prep: null, whole: false });
     await queue.idle(id);
-    expect(await readdir(join(store.dir(id), MUSIC_DIR))).toHaveLength(1);
+    expect(await readdir(join(store.dir(id), MUSIC_DIR))).toHaveLength(2);
   });
 
-  it("refuses a file without sound, and keeps only the copy of the music that stayed", async () => {
-    const { store, queue, music, id } = await setup();
-    await expect(music.set(id, "/m/notes.txt")).rejects.toThrow("notes.txt: This file has no sound in it.");
-    expect((await store.get(id)).music).toBeNull();
-    await music.set(id, "/m/one.mp3");
-    await music.set(id, "/m/two.mp3");
+  it("doesn't add the same file twice", async () => {
+    const { queue, music, id } = await setup();
+    await music.add(id, "/m/one.mp3");
+    expect((await music.add(id, "/m/one.mp3")).music).toHaveLength(1);
     await queue.idle(id);
-    const kept = (await store.get(id)).music!;
-    expect(kept.name).toBe("two.mp3");
-    expect(await readdir(join(store.dir(id), MUSIC_DIR))).toEqual([kept.prep!.slice(MUSIC_DIR.length + 1)]);
+  });
+
+  it("refuses a file without sound, and forgets only the copies no track uses", async () => {
+    const { store, queue, music, id } = await setup();
+    await expect(music.add(id, "/m/notes.txt")).rejects.toThrow("notes.txt: This file has no sound in it.");
+    expect((await store.get(id)).music).toEqual([]);
+    await music.add(id, "/m/one.mp3");
+    await music.add(id, "/m/two.mp3");
+    await queue.idle(id);
+    await store.update(id, null, (p) => {
+      p.music = p.music.filter((t) => t.name === "two.mp3");
+    });
     await music.forget(id);
-    await expect(readdir(join(store.dir(id), MUSIC_DIR))).rejects.toThrow();
+    const kept = (await store.get(id)).music[0]!;
+    expect(await readdir(join(store.dir(id), MUSIC_DIR))).toEqual([kept.prep!.slice(MUSIC_DIR.length + 1)]);
   });
 });

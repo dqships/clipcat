@@ -33,7 +33,7 @@ export class ProviderError extends Error {
     const name = PROVIDER_NAME[provider];
     super(
       status === 401 || status === 403
-        ? `${name} refused the key. Check it in Settings > AI editor.`
+        ? `${name} refused the key. Check it in Settings > AI models.`
         : status === 429
           ? `${name} is rate limiting this key, or it's out of credit. Try again in a minute.`
           : `${name} returned ${status}${detail ? `: ${detail}` : ""}`,
@@ -108,14 +108,16 @@ export function openAiChoices(ids: string[]): ModelChoice[] {
 
 type OpenRouterModel = { id: string; name?: string; supported_parameters?: string[]; architecture?: { input_modalities?: string[] } };
 
-/** OpenRouter's models that take tools, by name; one that can't see pictures says so, since it can't design slides. */
+/**
+ * OpenRouter's models that can do all of the AI editor's work, by name: they
+ * read text, look at pictures (b-roll and slides need that) and use tools. A
+ * model that doesn't say what it reads isn't offered.
+ */
 export function openRouterChoices(models: OpenRouterModel[]): ModelChoice[] {
+  const reads = (m: OpenRouterModel, kind: string) => m.architecture?.input_modalities?.includes(kind) ?? false;
   return models
-    .filter((m) => m.supported_parameters?.includes("tools") ?? false)
-    .map((m) => {
-      const textOnly = m.architecture?.input_modalities ? !m.architecture.input_modalities.includes("image") : false;
-      return { id: m.id, label: `${m.name ? `${m.name} (${m.id})` : m.id}${textOnly ? ", text only" : ""}` };
-    })
+    .filter((m) => (m.supported_parameters?.includes("tools") ?? false) && reads(m, "text") && reads(m, "image"))
+    .map((m) => ({ id: m.id, label: m.name ? `${m.name} (${m.id})` : m.id }))
     .sort((a, b) => a.label.localeCompare(b.label));
 }
 
@@ -260,11 +262,12 @@ export function providerAgent(provider: Provider, options: { key: () => Promise<
   const name = PROVIDER_NAME[provider];
   return {
     label: name,
+    model: options.model,
     run: async (run: AgentRun) => {
       const key = await options.key();
-      if (!key) throw new Error(`Add an ${name} key in Settings > AI editor, or pick another way to run the AI editor.`);
+      if (!key) throw new Error(`Add an ${name} key in Settings > AI models, or pick another way to run the AI editor.`);
       const model = await options.model();
-      if (!model) throw new Error(`Pick an ${name} model in Settings > AI editor.`);
+      if (!model) throw new Error(`Pick an ${name} model in Settings > AI models.`);
       const fetcher = options.fetch ?? fetch;
       const pictures = await dataUrls(run.images);
       const talk = (provider === "openai" ? responses : chat)(run, pictures, { key, model, fetcher });

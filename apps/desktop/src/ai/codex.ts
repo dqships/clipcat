@@ -188,7 +188,7 @@ function exec(
       if (refused) {
         const cli = version ? `Codex ${version}` : "This Codex CLI";
         const where = model ? "" : " set in ~/.codex/config.toml";
-        return reject(new Error(`${cli} can't use the model "${refused}"${where}. Pick another model under AI editor, or update Codex.`));
+        return reject(new Error(`${cli} can't use the model "${refused}"${where}. Pick another model in Settings > AI models, or update Codex.`));
       }
       reject(new Error(isCodexAuthFailure(stderr) ? `Codex is signed out. ${CODEX_SIGN_IN_HINT}` : `Codex exited with ${code}${tail ? `: ${tail}` : ""}`));
     });
@@ -200,6 +200,7 @@ function exec(
 export function codexAgent(host: HostEnv, model: string | null = null): Agent {
   return {
     label: "Codex",
+    model: async () => model,
     run: async (run: AgentRun) => {
       const binary = await resolveCodex(host);
       if (!binary) throw new Error("Codex isn't installed. Install the Codex CLI, then reopen ClipCat.");
