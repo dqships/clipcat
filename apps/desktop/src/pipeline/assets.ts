@@ -4,9 +4,9 @@
 // as it is prepared; `resume` prepares whatever an earlier run didn't.
 
 import { randomUUID } from "node:crypto";
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir, readdir, rm } from "node:fs/promises";
 import { basename, join } from "node:path";
-import type { Asset, Project } from "@clipcat/core";
+import { type Asset, type Project, heldByHistory } from "@clipcat/core";
 import type { JobContext, JobQueue } from "../jobs/queue";
 import type { AssetKind, AssetMedia } from "../media/assets";
 import { VIDEO_FRAMES } from "../media/assets";
@@ -69,6 +69,17 @@ export class AssetPipeline {
       const waiting = p.assets.filter((a) => !a.prep && a.kind !== "slide");
       for (const a of waiting) this.enqueue(p.id, a);
       if (waiting.length > 0) this.deps.describe(p.id);
+      await this.sweep(p.id);
+    }
+  }
+
+  /** Deletes the prepared files of media neither the project nor its undo history has any more. */
+  async sweep(projectId: string): Promise<void> {
+    const project = await this.deps.store.get(projectId);
+    const held = heldByHistory(project.history).assets;
+    const root = join(this.deps.store.dir(projectId), "media", "assets");
+    for (const id of await readdir(root).catch(() => [] as string[])) {
+      if (!held.has(id) && !project.assets.some((a) => a.id === id)) await this.forget(projectId, id);
     }
   }
 

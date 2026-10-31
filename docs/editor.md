@@ -2,7 +2,7 @@
 title: Find your way around the ClipCat editor
 description: The parts of ClipCat: the library, the preview and its playback controls, the strip, the transcript and tools panels, hiding cuts, and the menu bar.
 order: 2
-updated: 2026-10-29
+updated: 2026-10-31
 ---
 
 # Find your way around the editor
@@ -33,7 +33,7 @@ Open a project to edit it. The title bar has:
 - The project's name. Click it to rename the project.
 - **Record another take** (the camera): records a new take into this project.
 - **Hide cuts** (the eye): leaves cut words out of the transcript and closes up the cuts in the strip, so you read and see only what's kept. Choose it again to show cuts. ClipCat remembers your choice.
-- **Undo** and **Redo**. Every change is one step, including ones an agent makes. Cmd+Z and Shift+Cmd+Z do the same on a Mac, Ctrl+Z and Shift+Ctrl+Z on Windows.
+- **Undo** and **Redo**. Every change you make to the edit is one step, including ones an agent makes, and one drag of a slider is one step. Importing, adding media and AI jobs finishing aren't steps. Cmd+Z and Shift+Cmd+Z do the same on a Mac, Ctrl+Z and Shift+Ctrl+Z on Windows.
 
 ClipCat saves every change as you make it. There's no Save button.
 
@@ -43,6 +43,7 @@ The preview plays the edit: cuts are skipped, and zooms, b-roll, slides, caption
 
 Under the preview are the playback controls, from left to right:
 
+- **Play from the beginning** (Enter): jumps to the first kept moment of the edit and plays, even if it's already playing. If the start of the video is cut, it starts after that cut.
 - **Play backwards** (J): each press plays backwards faster.
 - **Back one frame** (Left arrow). Shift+Left goes back a second.
 - **Play** or **Pause** (Space, or K to pause).
@@ -88,6 +89,6 @@ On a Mac the menus are at the top of the screen; on Windows they're at the top o
   - On Windows, **Settings** and **Exit** are here too.
 - **Edit**: **Undo** and **Redo** undo the last change to the project, or your typing when you're in a text box. Cut, Copy, Paste and Select All work in text boxes.
 - **View**: the four tools tabs, **Hide Cuts**, the zoom of the whole window, and full screen.
-- **Playback**: play, pause, play backwards or forwards, and step a frame or a second.
+- **Playback**: play, pause, play from the beginning, play backwards or forwards, and step a frame or a second.
 - **Window**: minimize the window, or on a Mac zoom it and bring it to the front.
 - **Help**: see [Help in the app](README.md#help-in-the-app).

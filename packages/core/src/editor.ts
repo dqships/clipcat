@@ -6,6 +6,7 @@
 import { z } from "zod";
 import { respell } from "./corrections";
 import { type IdFactory, setRange, wordSpanRange } from "./edits";
+import { type Tracked, applyChange, diffProject } from "./history";
 import {
   AspectRatio,
   Bars,
@@ -38,31 +39,31 @@ export const EditOp = z.discriminatedUnion("type", [
   z.object({ type: z.literal("words"), wordIds: z.array(z.string()).min(1).max(100_000), included: z.boolean() }),
   /** Accept, reject, or put back to pending these proposals. */
   z.object({ type: z.literal("decide"), ids: z.array(z.string()).min(1).max(10_000), status: ProposalStatus }),
-  /** Caption style. Not an undo step: it changes no cut, and the controls show it. */
+  /** Caption style. */
   z.object({ type: z.literal("captions"), captions: CaptionsPatch }),
-  /** Playback speed of the finished video. Not an undo step either, for the same reason. */
+  /** Playback speed of the finished video. */
   z.object({ type: z.literal("speed"), speed: z.number().min(0.5).max(2) }),
-  /** The shape the preview shows and the project is made for. Not an undo step. */
+  /** The shape the preview shows and the project is made for. */
   z.object({ type: z.literal("aspect"), aspectRatio: AspectRatio }),
-  /** What fills the sides of a recording that doesn't fill a wide video. Not an undo step. */
+  /** What fills the sides of a recording that doesn't fill a wide video. */
   z.object({ type: z.literal("bars"), bars: Bars }),
-  /** Where a recording's speaker is (0..1 across), set by hand; null goes back to following the faces found. Not an undo step. */
+  /** Where a recording's speaker is (0..1 across), set by hand; null goes back to following the faces found. */
   z.object({ type: z.literal("frame"), sourceId: z.string(), x: z.number().min(0).max(1).nullable() }),
-  /** Punch in on these words (one recording's). An undo step, like accepting a suggested punch-in. */
+  /** Punch in on these words (one recording's). */
   z.object({ type: z.literal("punch"), wordIds: z.array(z.string()).min(1).max(10_000), style: PunchStyle }),
-  /** Another style for a punch-in. Not an undo step: the list shows it. */
+  /** Another style for a punch-in. */
   z.object({ type: z.literal("punch-style"), id: z.string(), style: PunchStyle }),
-  /** Show b-roll over these words (one recording's). An undo step, like a punch-in. */
+  /** Show b-roll over these words (one recording's). */
   z.object({ type: z.literal("overlay"), wordIds: z.array(z.string()).min(1).max(10_000), assetId: z.string(), placement: OverlayPlacement }),
-  /** A motion slide over these words, for the AI editor to design from the brief. An undo step, like b-roll. */
+  /** A motion slide over these words, for the AI editor to design from the brief. */
   z.object({ type: z.literal("slide"), wordIds: z.array(z.string()).min(1).max(10_000), brief: z.string().trim().min(1).max(1000), look: SlideLook }),
-  /** A sound effect from the library, landing on this word. An undo step, like a punch-in. */
+  /** A sound effect from the library, landing on this word. */
   z.object({ type: z.literal("sound"), wordId: z.string(), effect: z.string().regex(/^[a-z0-9-]+$/) }),
-  /** How loud an effect plays. Not an undo step: the list shows it. */
+  /** How loud an effect plays. */
   z.object({ type: z.literal("sound-volume"), id: z.string(), volume: z.number().min(0).max(1) }),
   /**
    * A music track's settings: how loud it plays, whether it dips under speech, what it sounds like and
-   * whether it plays under the whole video. `id` can be left out when there is only one. Not an undo step.
+   * whether it plays under the whole video. `id` can be left out when there is only one.
    */
   z.object({
     type: z.literal("music"),
@@ -72,28 +73,28 @@ export const EditOp = z.discriminatedUnion("type", [
     description: z.string().max(1000).optional(),
     whole: z.boolean().optional(),
   }),
-  /** Takes a music track out, with its placements. `id` can be left out when there is only one. Not an undo step. */
+  /** Takes a music track out, with its placements. `id` can be left out when there is only one. */
   z.object({ type: z.literal("remove-music"), id: z.string().optional() }),
-  /** Plays a music track over these words (one recording's). An undo step, like b-roll. */
+  /** Plays a music track over these words (one recording's). */
   z.object({ type: z.literal("place-music"), wordIds: z.array(z.string()).min(1).max(10_000), trackId: z.string() }),
-  /** Retypes a word speech recognition got wrong. Its timing and the cuts stay; captions, the write-up and the AI editor read the new text. Not an undo step: the transcript shows it. */
+  /** Retypes a word speech recognition got wrong. Its timing and the cuts stay; captions, the write-up and the AI editor read the new text. */
   z.object({
     type: z.literal("fix-word"),
     wordId: z.string(),
     text: z.string().trim().min(1).max(60).regex(/^\S+$/, "Type one word, without spaces"),
   }),
-  /** Starts a chapter on this word with this title, or renames the one there. Not an undo step: the write-up shows it. */
+  /** Starts a chapter on this word with this title, or renames the one there. */
   z.object({ type: z.literal("chapter"), wordId: z.string(), title: z.string().trim().min(1).max(100) }),
-  /** Takes out the chapter that starts on this word. Not an undo step. */
+  /** Takes out the chapter that starts on this word. */
   z.object({ type: z.literal("remove-chapter"), wordId: z.string() }),
-  /** Changes the description or the article. Not an undo step. */
+  /** Changes the description or the article. */
   z.object({
     type: z.literal("writeup"),
     description: z.string().max(5000).optional(),
     articleTitle: z.string().max(200).optional(),
     article: z.string().max(100_000).optional(),
   }),
-  /** The thumbnail's text and colours. Not an undo step. */
+  /** The thumbnail's text and colours. */
   z.object({
     type: z.literal("thumbnail"),
     text: z.string().max(80).optional(),
@@ -104,7 +105,7 @@ export const EditOp = z.discriminatedUnion("type", [
     textBox: ThumbnailBox.nullable().optional(),
     behind: z.boolean().optional(),
   }),
-  /** Where and how b-roll shows. Not an undo step: the list shows it. */
+  /** Where and how b-roll shows. */
   z.object({
     type: z.literal("overlay-style"),
     id: z.string(),
@@ -113,9 +114,9 @@ export const EditOp = z.discriminatedUnion("type", [
     corner: PipCorner.optional(),
     size: z.number().min(0.2).max(0.6).optional(),
   }),
-  /** What a picture or video shows, for the AI editor; for a slide, its brief, which has it designed again. Not an undo step. */
+  /** What a picture or video shows, for the AI editor; for a slide, its brief, which has it designed again. */
   z.object({ type: z.literal("describe"), assetId: z.string(), description: z.string().max(1000) }),
-  /** Takes a picture or video out of the project, with the b-roll that used it. Not an undo step. */
+  /** Takes a picture or video out of the project, with the b-roll that used it. */
   z.object({ type: z.literal("remove-asset"), assetId: z.string() }),
   z.object({ type: z.literal("undo") }),
   z.object({ type: z.literal("redo") }),
@@ -125,6 +126,38 @@ export type EditOp = z.infer<typeof EditOp>;
 
 /** Undo steps kept per project. */
 export const HISTORY_LIMIT = 100;
+/** Changes from one control this close together are one undo step, so a drag is one step however many edits it sends. */
+export const SAME_STEP_MS = 1000;
+
+/** What each change outside the cuts can touch; the rest make their undo step in `change`. */
+const TOUCHES: Partial<Record<EditOp["type"], Tracked[]>> = {
+  captions: ["captions"],
+  speed: ["speed"],
+  aspect: ["aspectRatio"],
+  bars: ["bars"],
+  frame: ["sources"],
+  "punch-style": ["proposals"],
+  "overlay-style": ["proposals"],
+  "sound-volume": ["proposals"],
+  music: ["music"],
+  "remove-music": ["music", "proposals"],
+  "fix-word": ["transcript"],
+  chapter: ["writeup"],
+  "remove-chapter": ["writeup"],
+  writeup: ["writeup"],
+  thumbnail: ["thumbnail"],
+  describe: ["assets"],
+  "remove-asset": ["assets", "proposals"],
+};
+
+/** The control behind a change that can repeat as it is dragged or typed: the op, what it is on, and the settings it sets. */
+function stepKey(op: EditOp): string | undefined {
+  const { type, ...rest } = op;
+  if (!["captions", "speed", "frame", "overlay-style", "sound-volume", "music", "writeup", "thumbnail"].includes(type)) return undefined;
+  const settings = op.type === "captions" ? op.captions : rest;
+  const target = "sourceId" in op ? op.sourceId : "id" in op ? (op.id ?? "") : "";
+  return [type, target, ...Object.keys(settings).filter((k) => k !== "id" && k !== "sourceId").sort()].join(":");
+}
 
 function snapshot(p: Project): Snapshot {
   return { segments: structuredClone(p.segments), statuses: Object.fromEntries(p.proposals.map((x) => [x.id, x.status])) };
@@ -162,13 +195,37 @@ function wordRanges(project: Project, ids: Set<string>): { sourceId: string; ran
   return out;
 }
 
+/** `next` with an undo step for what `op` changed from `project`, if it changed anything. */
+function remember(project: Project, next: Project, op: EditOp, keys: Tracked[], now: number): Project {
+  const change = diffProject(project, next, keys);
+  if (!change) return next;
+  const { past } = next.history;
+  const key = stepKey(op);
+  const last = past.at(-1);
+  if (key && last?.key === key && last.at !== undefined && now - last.at < SAME_STEP_MS) {
+    // The drag goes on: the step keeps what was there before it started.
+    last.at = now;
+  } else {
+    past.push({ ...snapshot(project), change, key, at: now });
+    if (past.length > HISTORY_LIMIT) past.splice(0, past.length - HISTORY_LIMIT);
+  }
+  next.history.future = [];
+  return next;
+}
+
 /**
- * Applies `op` to a copy of `project` and returns it. Cuts and decisions
- * record an undo step, and so does a new punch-in or b-roll; caption style,
- * speed, shape, framing, punch-in and b-roll style, media, undo and redo don't. Unknown word or proposal ids are an error,
- * not a silent no-op, so a stale UI finds out.
+ * Applies `op` to a copy of `project` and returns it, as one undo step: cuts
+ * and decisions keep the segments and statuses, anything else what it replaced.
+ * Unknown word or proposal ids are an error, not a silent no-op, so a stale UI
+ * finds out.
  */
-export function applyEdit(project: Project, op: EditOp, id: IdFactory): Project {
+export function applyEdit(project: Project, op: EditOp, id: IdFactory, now: number = Date.now()): Project {
+  const next = edit(project, op, id);
+  const keys = TOUCHES[op.type];
+  return keys ? remember(project, next, op, keys, now) : next;
+}
+
+function edit(project: Project, op: EditOp, id: IdFactory): Project {
   const p = structuredClone(project);
   const history = p.history;
 
@@ -176,7 +233,9 @@ export function applyEdit(project: Project, op: EditOp, id: IdFactory): Project 
     const [from, to] = op.type === "undo" ? [history.past, history.future] : [history.future, history.past];
     const step = from.pop();
     if (!step) return p;
-    to.push(snapshot(p));
+    const back = snapshot(p);
+    if (step.change) back.change = applyChange(p, step.change);
+    to.push(back);
     restore(p, step);
     return p;
   }
