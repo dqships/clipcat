@@ -388,14 +388,14 @@ export const PAGES = [
         h2: "What stays on your computer",
         list: [
           "Your videos, audio, pictures and music, and everything ClipCat makes from them: proxies, waveforms, transcripts, faces found, cutouts and exports.",
-          "Your settings and your Claude API key, which is stored encrypted with your system's keychain.",
+          "Your settings, and any Claude, OpenAI or OpenRouter API keys you saved. The keys are stored encrypted with your system's keychain.",
           "Crash reports and the app's log, which are only shared if you attach a diagnostics file to an issue yourself.",
         ],
       },
       {
         h2: "What leaves it, and when",
         list: [
-          "**When you ask the AI for something**: the text of the transcript (and, for b-roll and thumbnails, a few still frames) goes to the AI you chose: your Claude Code, your Codex or the Claude API with your key. Their own privacy terms apply.",
+          "**When you ask the AI for something**: the text of the transcript (and, for b-roll and thumbnails, a few still frames) goes to the AI you chose: your Claude Code, your Codex, or the Claude, OpenAI or OpenRouter API with your key. Their own privacy terms apply.",
           "**Downloads**: the speech model is downloaded once from Hugging Face, and update checks read the release list on GitHub.",
           "Nothing else. The app sends no analytics, usage data or crash reports anywhere.",
         ],
