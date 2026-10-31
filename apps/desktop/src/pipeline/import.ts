@@ -64,7 +64,7 @@ const shortId = () => randomUUID().slice(0, 8);
 export const ORIGINALS_DIR = "media/originals";
 
 /** Photos hands over a dragged video as a temporary file that macOS soon deletes. */
-export const isTemporaryFile = (path: string) => /\/(TemporaryItems|com\.apple\.Photos\.NSItemProvider)\//.test(path);
+export const isTemporaryFile = (path: string) => /[\\/](TemporaryItems|com\.apple\.Photos\.NSItemProvider)[\\/]/.test(path);
 
 export class ImportPipeline {
   constructor(private readonly deps: PipelineDeps) {}
