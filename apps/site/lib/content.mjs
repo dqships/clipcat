@@ -138,7 +138,7 @@ export const PAGES = [
         h2: "What leaves your computer",
         cards: [
           { title: "Your video stays here", text: "ClipCat transcribes speech on your computer and never uploads your recordings. Projects and exports are saved on your computer too." },
-          { title: "The transcript goes to your AI", text: "Only when you ask it for suggestions. For b-roll and thumbnails, a few still frames go with it." },
+          { title: "The transcript goes to your AI", text: "Only when you ask it for suggestions. For b-roll and slides, a few still frames go with it." },
           { title: "No account and no tracking in the app", text: "The app has no server of its own, no analytics, no watermark and no export limit." },
         ],
         more: "[Read the privacy page](/privacy)",
@@ -395,8 +395,9 @@ export const PAGES = [
       {
         h2: "What leaves it, and when",
         list: [
-          "**When you ask the AI for something**: the text of the transcript (and, for b-roll and thumbnails, a few still frames) goes to the AI you chose: your Claude Code, your Codex, or the Claude, OpenAI or OpenRouter API with your key. Their own privacy terms apply.",
+          "**When you ask the AI for something**: the text of the transcript (and, for b-roll and slides, a few still frames) goes to the AI you chose: your Claude Code, your Codex, or the Claude, OpenAI or OpenRouter API with your key. Their own privacy terms apply.",
           "**Downloads**: the speech model is downloaded once from Hugging Face, and update checks read the release list on GitHub.",
+          "**Installing or updating Claude Code, Codex or Gemini CLI**: doing this from Settings downloads it through its maker's install script or the package manager that installed it.",
           "Nothing else. The app sends no analytics, usage data or crash reports anywhere.",
         ],
       },

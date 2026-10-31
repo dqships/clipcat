@@ -15,6 +15,7 @@
 
 ## Done
 
+- 2026-10-31: The privacy and home pages say still frames go to the AI for b-roll and slides, not thumbnails, and the privacy page covers installing Claude Code, Codex and Gemini CLI from Settings.
 - 2026-10-31: Vercel Web Analytics loads on the site through a plain tag in `_document.tsx`, because the pages turn off Next's JavaScript and `<Analytics />` never ran. The privacy page and home page now separate the site, which counts visits, from the app, which sends no analytics. Checked on production: a visit to `/privacy` showed in Vercel as 1 page view.
 - 2026-10-31: The privacy page names OpenAI and OpenRouter, for both where the transcript goes and the saved keys.
 - 2026-10-31: Released 0.1.3 with PR 64 and PR 65.
