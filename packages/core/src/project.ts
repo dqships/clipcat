@@ -3,6 +3,7 @@
 // is never stored; `buildTimeline` derives it (see timeline.ts).
 
 import { z } from "zod";
+import { Change } from "./history";
 
 export const AspectRatio = z.enum(["16:9", "9:16", "1:1"]);
 /** What fills the sides when a recording of another shape is shown whole in a wide video: black bars, or the same picture blurred. */
@@ -226,6 +227,11 @@ export const CaptionsPatch = z.object(captionFields).partial();
 export const Snapshot = z.object({
   segments: z.array(Segment),
   statuses: z.record(z.string(), ProposalStatus),
+  /** What a change outside the cuts replaced; older steps don't have it. */
+  change: Change.optional(),
+  /** Which control made this step, and when, so one drag is one step. */
+  key: z.string().optional(),
+  at: z.number().optional(),
 });
 
 export const History = z.object({
@@ -357,6 +363,7 @@ export type SlideLook = z.infer<typeof SlideLook>;
 export type Slide = z.infer<typeof Slide>;
 export type Captions = z.infer<typeof Captions>;
 export type Snapshot = z.infer<typeof Snapshot>;
+export type History = z.infer<typeof History>;
 export type LastExport = z.infer<typeof LastExport>;
 export type Chapter = z.infer<typeof Chapter>;
 export type Article = z.infer<typeof Article>;

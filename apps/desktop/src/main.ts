@@ -266,7 +266,7 @@ function startPipeline() {
   const edit = async (id: string, revision: number, op: EditOp) => {
     const next = await store.update(id, revision, (p) => applyEdit(p, op, () => `g${randomUUID().slice(0, 8)}`));
     broadcast("project:changed", { id, revision: next.revision });
-    if (op.type === "remove-asset") void media.forget(id, op.assetId);
+    if (op.type === "remove-asset") void media.sweep(id);
     if (op.type === "remove-music") void music.forget(id);
     if (op.type === "slide" || op.type === "describe") void analysis.designMissing(id);
     return next;

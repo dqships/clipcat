@@ -19,14 +19,14 @@ function project() {
 }
 
 describe("sound effects", () => {
-  it("lands an effect on a word as one undo step, and sets its volume without one", () => {
+  it("lands an effect on a word as one undo step, and sets its volume as another", () => {
     const p = applyEdit(project(), { type: "sound", wordId: "a-w3", effect: "pop" }, counter("n"));
     const added = p.proposals.at(-1)!;
     expect(added).toMatchObject({ type: "sound", status: "accepted", wordIds: ["a-w3"], sound: { at: ws[3]!.start, effect: "pop", volume: 0.7 } });
     expect(p.history.past).toHaveLength(1);
     const louder = applyEdit(p, { type: "sound-volume", id: added.id, volume: 1 }, counter("n"));
     expect(louder.proposals.at(-1)!.sound!.volume).toBe(1);
-    expect(louder.history.past).toHaveLength(1);
+    expect(louder.history.past).toHaveLength(2);
     expect(() => applyEdit(p, { type: "sound-volume", id: "nope", volume: 1 }, counter("n"))).toThrow("Unknown sound");
   });
 
@@ -82,7 +82,7 @@ describe("music", () => {
     expect(Project.parse({ ...project(), music: null }).music).toEqual([]);
   });
 
-  it("sets a track's level, ducking and description, and takes it out, without undo steps", () => {
+  it("sets a track's level, ducking and description, and takes it out, as undo steps", () => {
     expect(() => applyEdit(project(), { type: "music", volume: 0.3 }, counter("n"))).toThrow("There is no music");
     const withMusic = { ...project(), music: [track("t1", { whole: true })] };
     const quieter = applyEdit(withMusic, { type: "music", volume: 0.08 }, counter("n"));
@@ -90,7 +90,7 @@ describe("music", () => {
     expect(applyEdit(quieter, { type: "music", id: "t1", duck: false, description: "Soft piano" }, counter("n")).music[0]).toMatchObject({ volume: 0.08, duck: false, description: "Soft piano" });
     const gone = applyEdit(quieter, { type: "remove-music" }, counter("n"));
     expect(gone.music).toEqual([]);
-    expect(gone.history.past).toHaveLength(0);
+    expect(gone.history.past).toHaveLength(2);
   });
 
   it("asks which track when there are several, and lets one play under the whole video", () => {

@@ -6,7 +6,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readdir, rm } from "node:fs/promises";
 import { basename, join } from "node:path";
-import type { Project } from "@clipcat/core";
+import { type Project, heldByHistory } from "@clipcat/core";
 import type { JobContext, JobQueue } from "../jobs/queue";
 import type { ProjectStore } from "../store/projects";
 
@@ -57,13 +57,14 @@ export class MusicPipeline {
     for (const summary of await this.deps.store.list()) {
       const p = await this.deps.store.get(summary.id);
       for (const t of p.music) if (!t.prep) this.enqueue(p.id, t.id, t.path);
+      await this.forget(p.id);
     }
   }
 
-  /** Deletes the prepared copies no track uses any more. */
+  /** Deletes the prepared copies neither a track nor the undo history uses any more. */
   async forget(projectId: string): Promise<void> {
     const project = await this.deps.store.get(projectId);
-    const used = new Set(project.music.map((t) => t.prep));
+    const used = new Set<string | null>([...project.music.map((t) => t.prep), ...heldByHistory(project.history).music]);
     const dir = join(this.deps.store.dir(projectId), MUSIC_DIR);
     for (const name of await readdir(dir).catch(() => [] as string[])) {
       if (!used.has(`${MUSIC_DIR}/${name}`)) await rm(join(dir, name), { force: true });

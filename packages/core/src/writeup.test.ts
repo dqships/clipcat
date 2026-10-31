@@ -88,7 +88,7 @@ describe("chapters on the edit", () => {
     expect(renamed.writeup!.chapters.find((c) => c.wordId === "a-w100")!.title).toBe("Last");
     const fewer = applyEdit(renamed, { type: "remove-chapter", wordId: "a-w15" }, counter("n"));
     expect(fewer.writeup!.chapters).toHaveLength(3);
-    expect(fewer.history.past).toHaveLength(0);
+    expect(fewer.history.past).toHaveLength(6);
     expect(() => applyEdit(fewer, { type: "remove-chapter", wordId: "a-w15" }, counter("n"))).toThrow("Unknown chapter");
     expect(() => applyEdit(fewer, { type: "chapter", wordId: "nope", title: "x" }, counter("n"))).toThrow("Unknown words");
   });
