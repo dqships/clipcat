@@ -17,7 +17,7 @@ import { apiAgent, verifyKey } from "./ai/api";
 import { CLAUDE_MODELS, claudeAgent, probeClaude } from "./ai/claude";
 import { type CliDeps, cliStatus, runCli } from "./ai/cli";
 import { codexAgent, codexModels, probeCodex, resolveCodex } from "./ai/codex";
-import { type ModelChoice, listModels, providerAgent, verifyProviderKey } from "./ai/openai";
+import { type ModelChoice, listModels, offered, providerAgent, verifyProviderKey } from "./ai/openai";
 import { hydrateEnv } from "./ai/env";
 import { type Binary, binaryPath, probeVersion } from "./tools";
 import { broadcast, registerIpc, send } from "./ipc";
@@ -60,6 +60,36 @@ import { SettingsStore } from "./store/settings";
 import { SpeechLibrary } from "./transcribe/library";
 import type { ModelId } from "./transcribe/models";
 import { startSmokeTimer, finishSmoke, isSmokeRun, recordSmokeJob, smokeImport, smokeMcp } from "./smoke";
+
+// Each key's model list, fetched once per key: listing needs the network, and the lists change rarely.
+// A failed listing is tried again after a minute, so a dead connection isn't asked on every status.
+const modelLists = new Map<string, { list: Promise<ModelChoice[]>; failedAt: number | null }>();
+const LIST_RETRY_MS = 60_000;
+// The status doesn't wait long for a list: the AI picked may not need it, and a slow one arrives on the next status.
+const LIST_WAIT_MS = 3_000;
+
+/** A key's model list, or an empty one when it isn't in within `waitMs`. */
+async function modelChoices(provider: KeyedProviderValue, key: string, waitMs = LIST_WAIT_MS): Promise<ModelChoice[]> {
+  const cacheKey = `${provider}:${key}`;
+  const cached = modelLists.get(cacheKey);
+  if (!cached || (cached.failedAt !== null && Date.now() - cached.failedAt > LIST_RETRY_MS)) {
+    const entry = { list: listModels(provider, key), failedAt: null as number | null };
+    entry.list.catch(() => {
+      entry.failedAt = Date.now();
+    });
+    modelLists.set(cacheKey, entry);
+  }
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const wait = new Promise<ModelChoice[]>((resolve) => {
+    timer = setTimeout(() => resolve([]), waitMs);
+  });
+  try {
+    return await Promise.race([modelLists.get(cacheKey)!.list.catch(() => [] as ModelChoice[]), wait]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 
 const squirrelLaunch = handleSquirrelEvent();
 
@@ -190,7 +220,10 @@ function startPipeline() {
       if (agent === "openai" || agent === "openrouter") {
         const model = async () => {
           const current = await settings.get();
-          return agent === "openai" ? current.openaiModel : current.openrouterModel;
+          if (agent === "openai") return current.openaiModel;
+          // The same check as Settings, so a run never goes to a model Settings says must be picked again.
+          const key = await providerKeys.openrouter.get();
+          return key ? offered("openrouter", current.openrouterModel, await modelChoices("openrouter", key)) : current.openrouterModel;
         };
         return providerAgent(agent, { key: () => providerKeys[agent].get(), model });
       }
@@ -472,30 +505,12 @@ if (!squirrelLaunch && !app.requestSingleInstanceLock()) {
       },
     );
     if (!isSmokeRun()) void healRegistrations(installEnv);
-    // Each key's model list, fetched once per key: listing needs the network, and the lists change rarely.
-    // A failed listing is tried again after a minute, so a dead connection isn't asked on every status.
-    const modelLists = new Map<string, { list: Promise<ModelChoice[]>; failedAt: number | null }>();
-    const LIST_RETRY_MS = 60_000;
-    // The status doesn't wait long for a list: the AI picked may not need it, and a slow one arrives on the next status.
-    const LIST_WAIT_MS = 3_000;
     const providerStatus = async (provider: KeyedProviderValue, current: SettingsValue, waitMs = LIST_WAIT_MS) => {
       const key = await providerKeys[provider].get();
       const model = provider === "openai" ? current.openaiModel : current.openrouterModel;
       if (!key) return { hasKey: false, model, choices: [] };
-      const cacheKey = `${provider}:${key}`;
-      const cached = modelLists.get(cacheKey);
-      if (!cached || (cached.failedAt !== null && Date.now() - cached.failedAt > LIST_RETRY_MS)) {
-        const entry = { list: listModels(provider, key), failedAt: null as number | null };
-        entry.list.catch(() => {
-          entry.failedAt = Date.now();
-        });
-        modelLists.set(cacheKey, entry);
-      }
-      const wait = new Promise<ModelChoice[]>((resolve) => setTimeout(() => resolve([]), waitMs));
-      const choices = await Promise.race([modelLists.get(cacheKey)!.list.catch(() => [] as ModelChoice[]), wait]);
-      // A model OpenRouter's list no longer offers (it can't read images, say) has to be picked again.
-      const gone = provider === "openrouter" && choices.length > 0 && !choices.some((c) => c.id === model);
-      return { hasKey: true, model: gone ? null : model, choices };
+      const choices = await modelChoices(provider, key, waitMs);
+      return { hasKey: true, model: offered(provider, model, choices), choices };
     };
     const aiStatus = async () => {
       const host = await hostEnv;

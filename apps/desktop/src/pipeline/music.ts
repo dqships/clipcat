@@ -23,6 +23,9 @@ export type MusicDeps = {
 export const MUSIC_DIR = "media/music";
 
 export class MusicPipeline {
+  /** Copies being written right now, which no track points at yet. */
+  private readonly writing = new Set<string>();
+
   constructor(private readonly deps: MusicDeps) {}
 
   /**
@@ -64,9 +67,11 @@ export class MusicPipeline {
   async forget(projectId: string): Promise<void> {
     const project = await this.deps.store.get(projectId);
     const used = new Set(project.music.map((t) => t.prep));
-    const dir = join(this.deps.store.dir(projectId), MUSIC_DIR);
+    const root = this.deps.store.dir(projectId);
+    const dir = join(root, MUSIC_DIR);
     for (const name of await readdir(dir).catch(() => [] as string[])) {
-      if (!used.has(`${MUSIC_DIR}/${name}`)) await rm(join(dir, name), { force: true });
+      const file = join(dir, name);
+      if (!used.has(`${MUSIC_DIR}/${name}`) && !this.writing.has(file)) await rm(file, { force: true });
     }
   }
 
@@ -79,13 +84,22 @@ export class MusicPipeline {
     if (!track || track.prep) return; // removed while queued
     const rel = `${MUSIC_DIR}/${randomUUID().slice(0, 8)}.m4a`;
     const root = this.deps.store.dir(projectId);
+    const out = join(root, rel);
     await mkdir(join(root, MUSIC_DIR), { recursive: true });
-    await this.deps.prep(track.path, track.duration, join(root, rel), ctx);
-    this.deps.changed(
-      await this.deps.store.update(projectId, null, (p) => {
+    this.writing.add(out);
+    try {
+      await this.deps.prep(track.path, track.duration, out, ctx);
+      let kept = false;
+      const project = await this.deps.store.update(projectId, null, (p) => {
         const t = p.music.find((x) => x.id === trackId);
         if (t) t.prep = rel;
-      }),
-    );
+        kept = Boolean(t);
+      });
+      // Removed while it was being prepared: nothing will point at the copy.
+      if (!kept) await rm(out, { force: true });
+      this.deps.changed(project);
+    } finally {
+      this.writing.delete(out);
+    }
   }
 }

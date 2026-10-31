@@ -31,7 +31,8 @@ export function JobLine({ jobs, onCancel }: { jobs: ProjectJobs; onCancel?: () =
     return (
       <p className="job job--danger" role="status">
         <TriangleAlert className="icon-sm" strokeWidth={ICON_STROKE} aria-hidden />
-        {failed.agent ?? failed.label} failed: {failed.error}
+        {failed.label}
+        {failed.agent && ` (${failed.agent})`} failed: {failed.error}
       </p>
     );
   }

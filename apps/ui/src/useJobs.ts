@@ -7,14 +7,14 @@ export type ProjectJobs = { active: JobEventValue | null; waiting: number; faile
 
 const IDLE: ProjectJobs = { active: null, waiting: 0, failed: null, note: null };
 
-/** Jobs about one recording or file: another of the kind says nothing about this one's failure. */
-const PER_FILE = new Set(["prep", "transcribe", "silence", "faces", "media", "music"]);
+/** Jobs about one recording, file or slide: another of the kind says nothing about this one's failure. */
+const PER_FILE = new Set(["prep", "transcribe", "silence", "faces", "media", "music", "design"]);
 
 /**
  * The jobs still worth reporting: the newest of each kind, so a failure goes
  * once the same work has run again, whichever AI ran it.
  */
-function standing(events: JobEventValue[]): JobEventValue[] {
+export function standing(events: JobEventValue[]): JobEventValue[] {
   const newest = new Map<string, JobEventValue>();
   for (const e of events) newest.set(PER_FILE.has(e.kind) ? e.jobId : e.kind, e);
   return [...newest.values()];

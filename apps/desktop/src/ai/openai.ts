@@ -323,3 +323,8 @@ export function providerAgent(provider: Provider, options: { key: () => Promise<
     },
   };
 }
+
+/** The picked model, or null when OpenRouter's list no longer offers it (it can't read images, say) and it has to be picked again. */
+export function offered(provider: Provider, model: string | null, choices: ModelChoice[]): string | null {
+  return provider === "openrouter" && choices.length > 0 && !choices.some((c) => c.id === model) ? null : model;
+}

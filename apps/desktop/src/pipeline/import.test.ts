@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -215,5 +215,23 @@ describe("ImportPipeline", () => {
     expect(sources[0]!.name).toMatch(/IMG_1\.mov$/);
     expect(await readFile(sources[0]!.path, "utf8")).toBe("video");
     expect(sources[0]!.path.startsWith(store.dir(id))).toBe(true);
+  });
+
+  it("leaves no empty project behind when Photos deletes its file before the copy", async () => {
+    const { pipeline, store } = setup();
+    const lent = join(root, "com.apple.Photos.NSItemProvider", "IMG_2.mov");
+    await expect(pipeline.import([lent], null)).rejects.toThrow(/^IMG_2\.mov: /);
+    expect(await store.list()).toEqual([]);
+  });
+
+  it("keeps an existing project as it was when a lent file can't be copied", async () => {
+    const { pipeline, store } = setup();
+    const { id } = await store.create("talk");
+    const dir = join(root, "com.apple.Photos.NSItemProvider");
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, "IMG_3.mov"), "video");
+    await expect(pipeline.import([join(dir, "IMG_3.mov"), join(dir, "IMG_4.mov")], id)).rejects.toThrow(/^IMG_4\.mov: /);
+    expect((await store.get(id)).sources).toEqual([]);
+    expect(await readdir(join(store.dir(id), "media", "originals"))).toEqual([]);
   });
 });
