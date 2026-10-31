@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { AgentRun, SubmitReply } from "./analyze";
-import { listModels, openAiChoices, openRouterChoices, providerAgent, verifyProviderKey } from "./openai";
+import { listModels, offered, openAiChoices, openRouterChoices, providerAgent, verifyProviderKey } from "./openai";
 import { ANALYSIS_TASK, EDITOR_PROMPT } from "./prompt";
 
 type Sent = { url: string; headers: Record<string, string>; body: Record<string, unknown> | null };
@@ -207,5 +207,17 @@ describe("keys and model lists", () => {
     const { fetcher, sent } = fakeFetch([{ data: models }]);
     expect(await listModels("openrouter", "k", fetcher)).toHaveLength(1);
     expect(sent[0]!.url).toBe("https://openrouter.ai/api/v1/models?supported_parameters=tools");
+  });
+});
+
+describe("offered", () => {
+  const choices = [{ id: "a/vision", label: "Vision" }];
+  it("drops an OpenRouter model its list no longer offers", () => {
+    expect(offered("openrouter", "b/text-only", choices)).toBeNull();
+    expect(offered("openrouter", "a/vision", choices)).toBe("a/vision");
+  });
+  it("keeps the pick while the list isn't in, and never second-guesses OpenAI", () => {
+    expect(offered("openrouter", "b/text-only", [])).toBe("b/text-only");
+    expect(offered("openai", "gpt-x", choices)).toBe("gpt-x");
   });
 });

@@ -82,4 +82,59 @@ describe("MusicPipeline", () => {
     const kept = (await store.get(id)).music[0]!;
     expect(await readdir(join(store.dir(id), MUSIC_DIR))).toEqual([kept.prep!.slice(MUSIC_DIR.length + 1)]);
   });
+
+  it("keeps a copy that's still being written when another track is removed", async () => {
+    const store = new ProjectStore(root);
+    const queue = new JobQueue(() => {});
+    let writing!: (out: string) => void;
+    const started = new Promise<string>((resolve) => {
+      writing = resolve;
+    });
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const music = new MusicPipeline({
+      store,
+      queue,
+      probe: async () => 95,
+      prep: async (_file, _duration, out) => {
+        await writeFile(out, "partial");
+        writing(out);
+        await gate;
+      },
+      changed: () => {},
+    });
+    const { id } = await store.create("talk");
+    await music.add(id, "/m/two.mp3");
+    const out = await started;
+    await music.forget(id);
+    const dir = join(store.dir(id), MUSIC_DIR);
+    const name = out.slice(dir.length + 1);
+    expect(await readdir(dir)).toEqual([name]);
+    release();
+    await queue.idle(id);
+    expect((await store.get(id)).music[0]!.prep).toBe(`${MUSIC_DIR}/${name}`);
+  });
+
+  it("deletes a copy whose track was removed while it was being prepared", async () => {
+    const store = new ProjectStore(root);
+    const queue = new JobQueue(() => {});
+    const { id } = await store.create("talk");
+    const music = new MusicPipeline({
+      store,
+      queue,
+      probe: async () => 95,
+      prep: async (_file, _duration, out) => {
+        await writeFile(out, "aac");
+        await store.update(id, null, (p) => {
+          p.music = [];
+        });
+      },
+      changed: () => {},
+    });
+    await music.add(id, "/m/one.mp3");
+    await queue.idle(id);
+    expect(await readdir(join(store.dir(id), MUSIC_DIR))).toEqual([]);
+  });
 });

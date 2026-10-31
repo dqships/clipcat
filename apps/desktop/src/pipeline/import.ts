@@ -6,7 +6,7 @@
 // picks up whatever is missing.
 
 import { randomUUID } from "node:crypto";
-import { copyFile, mkdir } from "node:fs/promises";
+import { copyFile, mkdir, rm } from "node:fs/promises";
 import { basename, extname, join } from "node:path";
 import {
   type MediaInfo,
@@ -90,16 +90,30 @@ export class ImportPipeline {
     const first = files[0]!;
     const target = projectId ?? (await store.create(basename(first, extname(first)))).id;
     const language = projectId ? null : ((await this.deps.language?.()) ?? null);
-    const kept = await Promise.all(
+    const copies: string[] = [];
+    const settled = await Promise.allSettled(
       probed.map(async (f) => {
         if (!isTemporaryFile(f.path)) return f;
         const dir = join(store.dir(target), ORIGINALS_DIR);
         await mkdir(dir, { recursive: true });
         const copy = join(dir, `${shortId()}-${basename(f.path)}`);
-        await copyFile(f.path, copy);
+        copies.push(copy);
+        try {
+          await copyFile(f.path, copy);
+        } catch (e) {
+          throw new Error(`${basename(f.path)}: ${e instanceof Error ? e.message : String(e)}`);
+        }
         return { ...f, path: copy };
       }),
     );
+    const failed = settled.find((r) => r.status === "rejected");
+    if (failed) {
+      // Photos can delete its file before the copy is made: leave nothing behind, not an empty project.
+      if (projectId) await Promise.all(copies.map((c) => rm(c, { force: true })));
+      else await store.remove(target);
+      throw failed.reason;
+    }
+    const kept = settled.map((r) => (r as PromiseFulfilledResult<(typeof probed)[number]>).value);
     const added: string[] = [];
     const project = await store.update(target, null, (p) => {
       if (language) p.language = language;

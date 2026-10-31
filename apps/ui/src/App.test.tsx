@@ -166,7 +166,7 @@ describe("App", () => {
     await screen.findByRole("button", { name: "Suggest an edit" });
     const job = { projectId: "p1", kind: "analyze", label: "Claude is reading the transcript", fraction: null };
     emit("job", { ...job, jobId: "j1", state: "failed", agent: "Claude API, claude-sonnet-5-5", error: "The Claude API returned 400" });
-    expect(await screen.findByText(/Claude API, claude-sonnet-5-5 failed: The Claude API returned 400/)).toBeTruthy();
+    expect(await screen.findByText(/Claude is reading the transcript \(Claude API, claude-sonnet-5-5\) failed: The Claude API returned 400/)).toBeTruthy();
     emit("job", { ...job, jobId: "j2", state: "done", fraction: 1, agent: "OpenRouter, a/b", note: "OpenRouter, a/b suggested 2 edits." });
     expect(await screen.findByText("OpenRouter, a/b suggested 2 edits.")).toBeTruthy();
     expect(screen.queryByText(/The Claude API returned 400/)).toBeNull();
