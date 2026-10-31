@@ -137,6 +137,17 @@ export function applyChange(p: Project, change: Change): Change {
 }
 
 /**
+ * Drops the undo steps that retyped a word of `sourceId`. Transcribing a
+ * recording again gives its new words the old ids, so undoing one would put
+ * the old text on a different word.
+ */
+export function forgetWordFixes(history: History, sourceId: string): void {
+  const keeps = (step: History["past"][number]) => !Object.keys(step.change?.lists.transcript?.fields ?? {}).some((id) => id.startsWith(`${sourceId}-`));
+  history.past = history.past.filter(keeps);
+  history.future = history.future.filter(keeps);
+}
+
+/**
  * What undo or redo could still bring back: the ids of removed media and the
  * prepared copies of removed music, whose files have to stay on disk until
  * they fall out of the history.

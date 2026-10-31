@@ -13,6 +13,7 @@ import {
   type Project,
   type Source,
   detectSilence,
+  forgetWordFixes,
   frameLevels,
   fromSpeechTime,
   initialSegments,
@@ -241,6 +242,7 @@ export class ImportPipeline {
       p.transcript = [...p.transcript.filter((w) => w.sourceId !== sourceId), ...words].sort(
         (a, b) => (order.get(a.sourceId) ?? 0) - (order.get(b.sourceId) ?? 0) || a.start - b.start,
       );
+      forgetWordFixes(p.history, sourceId);
     });
     const { backend, model, fallback } = heard;
     await this.deps.store.log(projectId, { type: "transcribed", source: sourceId, backend, model, words: words.length, ...(fallback ? { fallback } : {}) });

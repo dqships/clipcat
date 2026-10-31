@@ -3,7 +3,7 @@ import { type EditOp, HISTORY_LIMIT, SAME_STEP_MS, applyEdit } from "./editor";
 import { initialSegments } from "./edits";
 import { counter, source, words } from "./fixtures";
 import { Project } from "./project";
-import { heldByHistory } from "./history";
+import { forgetWordFixes, heldByHistory } from "./history";
 import { overlayProposal, defaultOverlay } from "./overlays";
 import { soundProposal } from "./sounds";
 
@@ -169,6 +169,25 @@ describe("one drag is one undo step", () => {
     let p = project();
     for (let i = 0; i < HISTORY_LIMIT + 5; i++) p = applyEdit(p, { type: "bars", bars: i % 2 ? "black" : "blur" }, id);
     expect(p.history.past).toHaveLength(HISTORY_LIMIT);
+  });
+});
+
+describe("forgetWordFixes", () => {
+  it("drops word fixes for a recording transcribed again, and leaves the rest", () => {
+    let p = applyEdit(project(), { type: "speed", speed: 1.5 }, id, 0);
+    p = applyEdit(p, { type: "fix-word", wordId: "a-w0", text: "fixed" }, id, 5000);
+    p = applyEdit(p, { type: "bars", bars: "blur" }, id, 10_000);
+    p = undo(p);
+    expect(p.history.past).toHaveLength(2);
+    expect(p.history.future).toHaveLength(1);
+
+    forgetWordFixes(p.history, "b");
+    expect(p.history.past).toHaveLength(2);
+
+    forgetWordFixes(p.history, "a");
+    expect(p.history.past).toHaveLength(1);
+    expect(p.history.future).toHaveLength(1);
+    expect(undo(p).speed).toBe(1);
   });
 });
 
