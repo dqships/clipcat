@@ -18,6 +18,7 @@
 
 - 2026-10-31: Play from the beginning: a transport button, Enter, and a Playback menu item jump to the edit's first kept moment and play, even if it's already playing. Enter keeps its job in boxes, menus and dialogs, and on a button reached with Tab.
 - 2026-10-31: Every change to the edit is now one undo step, including word fixes, captions, speed, shape, framing, chapters, write-up, thumbnail, music and removing media or music. One drag of a slider is one step. Removed media and music keep their files until they leave the history.
+- 2026-10-31: CI builds Apple Silicon on macos-15, because GitHub retires macos-14 on November 2.
 - 2026-10-31: Exports no longer hang on music. ffmpeg froze when an endless loop restarted a file after its stretch ended, and when ducked music ended before the speech.
 - 2026-10-31: Exported captions match the preview's size, and boxed word-by-word captions are one clean box.
 - 2026-10-31: OpenAI and OpenRouter runs ask once more when the connection drops mid-request, and the error says why it dropped.
