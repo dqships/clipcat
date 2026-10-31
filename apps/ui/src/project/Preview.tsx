@@ -41,6 +41,8 @@ export type PreviewHandle = {
   shuttle: (direction: 1 | -1) => void;
   /** Pauses and moves `frames` frames of the edit (negative goes back). */
   step: (frames: number) => void;
+  /** Plays from the edit's first kept moment at the export's speed, even if already playing. */
+  restart: () => void;
 };
 
 /** How playback is going: `rate` is a multiple of the export's speed, negative backwards, 0 when paused. */
@@ -262,6 +264,17 @@ export function Preview({ project, onTime, onTransport, ref }: Props) {
     report(r);
   };
 
+  const restart = () => {
+    const { timeline: tl, sources: all } = live.current;
+    // A recording still being prepared can't play yet, so the edit starts at the first one that can.
+    const first = tl.items.find((i) => all.some((s) => s.id === i.sourceId));
+    if (!first) return;
+    stopReverse();
+    setForward(1);
+    go(first.sourceId, first.sourceStart, true);
+    report(1);
+  };
+
   const step = (frames: number) => {
     const v = video.current;
     const { timeline: tl, sourceId: sid, sources: all } = live.current;
@@ -288,6 +301,7 @@ export function Preview({ project, onTime, onTransport, ref }: Props) {
       else playBackwards(next);
     },
     step,
+    restart,
   }));
 
   useEffect(() => onTransport?.(transport), [transport, onTransport]);

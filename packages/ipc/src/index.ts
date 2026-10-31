@@ -229,6 +229,7 @@ export const MenuCommand = z.enum([
   "undo",
   "redo",
   "play-pause",
+  "play-from-start",
   "play-backwards",
   "pause",
   "play-forwards",
