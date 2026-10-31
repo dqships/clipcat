@@ -2,7 +2,7 @@
 title: ClipCat questions and short answers
 description: Short answers about ClipCat: what it costs, whether you need an account, which computers and languages it supports, and what it does with your videos.
 order: 18
-updated: 2026-10-29
+updated: 2026-10-31
 ---
 
 # Questions people ask
@@ -51,9 +51,9 @@ There isn't one. ClipCat saves every change as you make it.
 
 Yes. Save a timeline from the **Export** tab. See [Export the video](export.md).
 
-## Can Claude Code or Codex edit for me?
+## Can a coding agent edit for me?
 
-Yes. Connect it in Settings and ask in plain words. See [Use ClipCat from your coding agent](agents.md).
+Yes. Connect Claude Code, Codex, the Claude desktop app, Cursor, VS Code, Windsurf, LM Studio or Gemini CLI in Settings and ask in plain words. See [Use ClipCat from your coding agent](agents.md).
 
 ## Is ClipCat open source?
 

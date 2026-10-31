@@ -2,12 +2,12 @@
 title: ClipCat help: how to use every part of the app
 description: Step-by-step help for ClipCat, the desktop editor for talking-head videos. Recording, transcript editing, AI suggestions, captions, shorts and export.
 order: 0
-updated: 2026-10-29
+updated: 2026-10-31
 ---
 
 # ClipCat help
 
-ClipCat is a desktop app for Mac and Windows that edits videos of one person talking to the camera. You import or record your takes, and ClipCat transcribes them on your computer. Your own Claude Code, Codex or Claude API key suggests the edit, and you accept or reject each change. Then you export the video, the shorts and the text that goes with them.
+ClipCat is a desktop app for Mac and Windows that edits videos of one person talking to the camera. You import or record your takes, and ClipCat transcribes them on your computer. Your own Claude Code, Codex, or Claude, OpenAI or OpenRouter API key suggests the edit, and you accept or reject each change. Then you export the video, the shorts and the text that goes with them.
 
 These pages cover every screen, button, setting and shortcut. They're the same pages you see under Help in the app.
 

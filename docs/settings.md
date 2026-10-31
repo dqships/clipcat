@@ -1,6 +1,6 @@
 ---
 title: Every ClipCat setting and what it does
-description: Every ClipCat setting explained: the AI editor and your API keys, coding agents, installing Claude Code or Codex, transcription, updates and diagnostics.
+description: Every ClipCat setting explained: the AI editor and API keys, coding agents, installing Claude Code, Codex or Gemini CLI, transcription, updates and diagnostics.
 order: 14
 updated: 2026-10-31
 ---

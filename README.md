@@ -2,7 +2,8 @@
 
 A personal AI video editor for talking-head videos. Drop in raw takes; ClipCat
 transcribes them locally, proposes cuts for retakes and silences using your own
-Claude Code or Codex, and exports a captioned video in 16:9 and 9:16.
+Claude Code, Codex, or Claude, OpenAI or OpenRouter API key, and exports a
+captioned video in 16:9 and 9:16.
 
 Electron app for macOS (Apple Silicon and Intel) and Windows. The design system is
 in [DESIGN.md](DESIGN.md); read it before touching any screen.
@@ -92,6 +93,10 @@ key from console.anthropic.com (it is checked with one call, then stored
 encrypted with the system keychain, never in the settings file or the window),
 and choose Opus 5.5, Sonnet 5.5 or Haiku 5.5. The answer tool is the only tool
 the model gets; a declined request falls back to Anthropic's recommended model.
+
+OpenAI and OpenRouter work the same way, with a key from platform.openai.com or
+openrouter.ai. Their model lists come from your key, and OpenRouter lists only
+models that read images and use tools.
 
 The AI editor also takes one-off requests ("cut the part about pricing"), which
 add proposals next to the ones waiting, and fixes misheard names: list the

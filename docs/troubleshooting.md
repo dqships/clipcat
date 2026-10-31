@@ -25,7 +25,7 @@ The **AI editor** section on the **Edit** tab says what's wrong, and so does its
 - **It isn't signed in**: run `claude auth login` or `codex login` in a terminal, then choose **Check again** next to it in Settings.
 - **ClipCat can't find it**: ClipCat looks on your terminal's PATH and in the usual install folders. If it's somewhere else, set `CLIPCAT_CLAUDE_PATH` or `CLIPCAT_CODEX_PATH` to its full path and reopen ClipCat.
 - **Codex refuses the model**: an older Codex can't run a model a newer one set in `~/.codex/config.toml`. Update Codex from Settings, or pick another model there.
-- **The API key is refused**: check it on console.anthropic.com, then remove it in Settings and save it again.
+- **The API key is refused**: check it where you made it (console.anthropic.com, platform.openai.com or openrouter.ai), then remove it in Settings and save it again.
 
 ## A suggestion pass fails
 

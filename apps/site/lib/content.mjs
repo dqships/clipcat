@@ -112,16 +112,16 @@ export const PAGES = [
       },
       {
         kind: "agents",
-        h2: "Use the Claude or Codex plan you already have",
+        h2: "Use the AI plan or API key you already have",
         body: [
-          "ClipCat doesn't run its own AI or ask you to sign up. It sends the transcript to Claude Code, Codex or the Claude API with your own key, and checks each suggestion against your words.",
+          "ClipCat doesn't run its own AI or ask you to sign up. It sends the transcript to Claude Code, Codex, or the Claude, OpenAI or OpenRouter API with your own key, and checks each suggestion against your words.",
         ],
         cards: [
           { title: "Claude Code", text: "Uses your Claude plan. This is the default." },
           { title: "Codex", text: "Uses your ChatGPT plan." },
-          { title: "Claude API key", text: "Billed per use to your own Anthropic account." },
+          { title: "Your own API key", text: "Claude, OpenAI or OpenRouter, billed per use to your own account." },
         ],
-        h3: "Let Claude Code or Codex make the edits",
+        h3: "Let your coding agent make the edits",
         detail:
           "ClipCat includes an MCP server. Connect it in Settings, and Claude Code, Codex, the Claude app, Cursor, VS Code, Windsurf, LM Studio or Gemini CLI can open your projects, cut words, accept suggestions, make shorts and start exports while ClipCat is open. Each change is one step in ClipCat's undo history.",
         session: [
@@ -159,7 +159,7 @@ export const PAGES = [
       "Everything ClipCat does: transcript editing, AI cut suggestions, captions, vertical shorts, zooms, b-roll, sound, recording and Final Cut timelines.",
     h1: "Everything ClipCat does",
     lede: "ClipCat edits videos of one person talking to the camera. This page lists everything it does today.",
-    updated: UPDATED,
+    updated: "2026-10-31",
     sections: [
       {
         h2: "Edit the transcript to edit the video",
@@ -175,7 +175,7 @@ export const PAGES = [
       {
         h2: "Choose which AI makes suggestions",
         body: [
-          "ClipCat doesn't run its own AI service. It uses the [Claude Code](https://claude.com/claude-code) or Codex subscription you already have, or your own Claude API key. The AI gets one tool, for handing back its suggestions, and no access to your files, shell or the web.",
+          "ClipCat doesn't run its own AI service. It uses the [Claude Code](https://claude.com/claude-code) or Codex subscription you already have, or your own Claude, OpenAI or OpenRouter API key. The AI gets one tool, for handing back its suggestions, and no access to your files, shell or the web.",
         ],
       },
       {
@@ -273,7 +273,7 @@ export const PAGES = [
       "Download ClipCat, the free talking-head video editor, for Macs on macOS 14 or newer, Apple Silicon or Intel, and 64-bit Windows 10 and 11.",
     h1: "Download ClipCat",
     lede: "ClipCat is free and needs no account. Choose the installer for your computer.",
-    updated: UPDATED,
+    updated: "2026-10-31",
     sections: [
       {
         h2: "Installers",
@@ -286,7 +286,7 @@ export const PAGES = [
         h2: "After installing",
         list: [
           "On a Mac, macOS stops ClipCat the first time you open it and says it can't verify the app, because ClipCat isn't notarized by Apple. Open System Settings, then Privacy & Security, scroll down to Security, choose Open Anyway next to ClipCat, and enter your password. You only do this once.",
-          "For AI cuts, install [Claude Code](https://claude.com/claude-code) and sign in, or install the Codex CLI and sign in, or paste a Claude API key in ClipCat.",
+          "For AI cuts, install [Claude Code](https://claude.com/claude-code) and sign in, or install the Codex CLI and sign in, or paste a Claude, OpenAI or OpenRouter API key in ClipCat.",
           "The first transcription downloads the speech model once, a few hundred megabytes, from Hugging Face. To download it sooner, open Settings, then Transcription. See [which languages it hears](/languages).",
           "ClipCat checks for updates every few hours and installs them when you restart.",
         ],
@@ -302,17 +302,17 @@ export const PAGES = [
     nav: "Pricing",
     title: "ClipCat pricing: free, with your own AI subscription",
     description:
-      "ClipCat is free to download and use, with no account and no limits. AI cuts run on the Claude Code or Codex plan you already have, or your own Claude API key.",
+      "ClipCat is free, with no account and no limits. AI cuts run on your Claude Code or Codex plan, or your own Claude, OpenAI or OpenRouter API key.",
     h1: "Pricing",
-    lede: "ClipCat is free. There's no account, trial, watermark or export limit. AI suggestions use the Claude or Codex plan you already pay for.",
-    updated: UPDATED,
+    lede: "ClipCat is free. There's no account, trial, watermark or export limit. AI suggestions use the Claude or Codex plan you already pay for, or your own API key.",
+    updated: "2026-10-31",
     sections: [
       {
         h2: "What you pay for",
         body: ["Only the AI, and only when you use it. Transcription, editing, captions and export run on your computer and cost nothing."],
         list: [
           "**Claude Code or Codex**: AI cuts, shorts, slides and write-ups count against the plan you already have.",
-          "**Claude API key**: billed by Anthropic to your own account, per use. You pick the model in ClipCat.",
+          "**Claude, OpenAI or OpenRouter API key**: billed by that company to your own account, per use. You pick the model in ClipCat.",
         ],
       },
       {
