@@ -2,10 +2,8 @@
 
 ## Next
 
-- Review the PR from `claude/ai-providers-music-settings`.
-- Bump the version and write the release notes once the PR is approved.
 - Test by hand: recording (camera, microphone, screen), Claude Code as the AI editor (it isn't installed on the dev Mac), Connect and Disconnect, the menu bar and its shortcuts, and Windows.
-- Review PR 65 (Play from the beginning and full Undo), which is based on PR 64.
+- Check ducking on a normal recording: it dipped only 1 to 2 dB on a quiet test clip.
 
 ## On hold
 
@@ -16,6 +14,7 @@
 
 ## Done
 
+- 2026-10-31: Released 0.1.3 with PR 64 and PR 65.
 - 2026-10-31: Play from the beginning: a transport button, Enter, and a Playback menu item jump to the edit's first kept moment and play, even if it's already playing. Enter keeps its job in boxes, menus and dialogs, and on a button reached with Tab.
 - 2026-10-31: Every change to the edit is now one undo step, including word fixes, captions, speed, shape, framing, chapters, write-up, thumbnail, music and removing media or music. One drag of a slider is one step. Removed media and music keep their files until they leave the history.
 - 2026-10-31: CI builds Apple Silicon on macos-15, because GitHub retires macos-14 on November 2.
