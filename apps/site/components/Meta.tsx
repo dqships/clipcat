@@ -18,9 +18,11 @@ export function Meta({ page }: { page: Pick<Page, "path" | "title" | "descriptio
       {real && <link rel="alternate" type="text/markdown" href={mdPath(page.path)} />}
       <meta name="is-agentic-site-type" content="app" />
       <meta name="color-scheme" content="light dark" />
-      <link rel="icon" href="/favicon.ico" sizes="32x32" />
+      <link rel="icon" href="/favicon.ico" sizes="48x48" />
       <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-      <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+      <link rel="icon" href="/icon-96.png" type="image/png" sizes="96x96" />
+      <link rel="icon" href="/icon-192.png" type="image/png" sizes="192x192" />
+      <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180" />
       <meta property="og:type" content="website" />
       <meta property="og:site_name" content="ClipCat" />
       <meta property="og:title" content={page.title} />

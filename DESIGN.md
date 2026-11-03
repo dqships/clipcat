@@ -29,7 +29,8 @@ opening ±40°. The geometry is generated, so it stays exact.
 | `brand/icon/icon.icns` | macOS app icon (Electron `mac.icon`) |
 | `brand/icon/icon.ico` | Windows app icon (Electron `win.icon`), 16 to 256 px |
 | `brand/icon/icon.png` | 1024 px source PNG (Linux, generic) |
-| `brand/icon/favicon.svg`, `favicon.ico` | Site favicon |
+| `brand/icon/favicon.svg`, `favicon.ico` | Site favicon; the `.ico` holds 16, 32 and 48 px |
+| `brand/icon/png/web-{48,96,192,512}.png` | Site icons for browsers and search results, served as `/icon-{size}.png` |
 | `brand/icon/apple-touch-icon.png` | 180 px, square, for the site |
 | `brand/icon/png/` | All rendered sizes |
 
