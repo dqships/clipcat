@@ -75,7 +75,11 @@ for (const page of [...ALL, NOT_FOUND]) {
     assert.equal(decode(attr(html, /<title[^>]*>([^<]*)<\/title>/)), page.title);
     assert.equal(decode(attr(html, /<meta name="description" content="([^"]*)"/)), page.description);
     assert.match(html, /<meta name="is-agentic-site-type" content="app"/);
-    assert.match(html, /<link rel="icon" href="\/favicon.ico"/);
+    assert.match(html, /<link rel="icon" href="\/favicon.ico" sizes="48x48"/);
+    assert.match(html, /<link rel="icon" href="\/favicon.svg" type="image\/svg\+xml"/);
+    assert.match(html, /<link rel="icon" href="\/icon-96.png" type="image\/png" sizes="96x96"/);
+    assert.match(html, /<link rel="icon" href="\/icon-192.png" type="image\/png" sizes="192x192"/);
+    assert.match(html, /<link rel="apple-touch-icon" href="\/apple-touch-icon.png" sizes="180x180"/);
     for (const key of ["og:title", "og:description", "og:image", "og:url", "og:type"]) assert.match(html, new RegExp(`property="${key}" content="[^"]+"`));
     for (const key of ["twitter:title", "twitter:description", "twitter:image"]) assert.match(html, new RegExp(`name="${key}" content="[^"]+"`));
     assert.match(html, /name="twitter:card" content="summary_large_image"/);
@@ -128,6 +132,23 @@ test("Markdown at every page URL and every .md address", async () => {
 test("browsers still get HTML", async () => {
   const res = await get("/about", { accept: "text/html,application/xhtml+xml,*/*;q=0.8" });
   assert.match(res.headers.get("content-type"), /^text\/html/);
+});
+
+test("every icon is served as an image", async () => {
+  const icons = {
+    "/favicon.ico": /^image\/(x-icon|vnd\.microsoft\.icon)$/,
+    "/favicon.svg": /^image\/svg\+xml/,
+    "/icon-48.png": /^image\/png$/,
+    "/icon-96.png": /^image\/png$/,
+    "/icon-192.png": /^image\/png$/,
+    "/icon-512.png": /^image\/png$/,
+    "/apple-touch-icon.png": /^image\/png$/,
+  };
+  for (const [path, type] of Object.entries(icons)) {
+    const res = await get(path);
+    assert.equal(res.status, 200, path);
+    assert.match(res.headers.get("content-type"), type, path);
+  }
 });
 
 test("robots.txt, sitemap.xml and llms.txt", async () => {

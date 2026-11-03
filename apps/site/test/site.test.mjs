@@ -92,7 +92,7 @@ test("the proxy runs on page paths and .md addresses only", () => {
   const matcher = JSON.parse(read(join(root, "proxy.ts")).match(/matcher: (\[.*\])/)[1]);
   const matches = (path) => matcher.some((m) => new RegExp(`^${m}$`).test(path));
   for (const path of ["/", "/about", "/no-such-page", "/about.md", "/index.md"]) assert.ok(matches(path), path);
-  for (const path of ["/_next/static/chunks/main.js", "/favicon.svg", "/fonts/jost-latin-400-normal.woff2", "/robots.txt", "/llms.txt"]) {
+  for (const path of ["/_next/static/chunks/main.js", "/favicon.ico", "/favicon.svg", "/icon-192.png", "/apple-touch-icon.png", "/fonts/jost-latin-400-normal.woff2", "/robots.txt", "/llms.txt"]) {
     assert.ok(!matches(path), path);
   }
 });

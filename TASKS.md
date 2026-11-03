@@ -2,6 +2,7 @@
 
 ## Next
 
+- After the site icons ship: in Google Search Console, inspect https://clipcat.followusai.com/ and press Request indexing. Google's icon can take days to a few weeks to update.
 - Test by hand: recording (camera, microphone, screen), Claude Code as the AI editor (it isn't installed on the dev Mac), Connect and Disconnect, the menu bar and its shortcuts, and Windows.
 - Check ducking on a normal recording: it dipped only 1 to 2 dB on a quiet test clip.
 - If the Apple Developer membership is renewed: make a new app-specific password, add it back as the `APPLE_PASSWORD` secret, and remove the Open Anyway steps from `docs/getting-started.md`, `docs/troubleshooting.md` and the download page.
@@ -15,6 +16,7 @@
 
 ## Done
 
+- 2026-11-03: The site has a full set of icons for browsers and search results, all from the brand generator: a 16, 32 and 48 px `/favicon.ico`, `/favicon.svg`, PNGs at 48, 96, 192 and 512 px (`/icon-{size}.png`) and the 180 px apple touch icon, linked in every page's head. `brand/scripts/render.js` became `render.cjs` so it runs in this ES module repo.
 - 2026-10-31: The site, help pages and README name every AI option: OpenAI and OpenRouter as AI editors, Gemini CLI and the other agents as connected agents. Troubleshooting says where to check each API key.
 - 2026-10-31: The privacy and home pages say still frames go to the AI for b-roll and slides, not thumbnails, and the privacy page covers installing Claude Code, Codex and Gemini CLI from Settings.
 - 2026-10-31: Vercel Web Analytics loads on the site through a plain tag in `_document.tsx`, because the pages turn off Next's JavaScript and `<Analytics />` never ran. The privacy page and home page now separate the site, which counts visits, from the app, which sends no analytics. Checked on production: a visit to `/privacy` showed in Vercel as 1 page view.
