@@ -16,6 +16,7 @@
 
 ## Done
 
+- 2026-11-06: IndexNow for clipcat.followusai.com. The key file is `apps/site/public/379960cf5e254cd78b79366bced80586.txt`, and `.github/workflows/indexnow.yml` runs `apps/site/scripts/indexnow.mjs` after every successful Vercel production deploy, sending every page in the live sitemap to Bing and the other IndexNow engines. Previews and local builds never send. Check Bing Webmaster Tools → IndexNow a day after the first production deploy.
 - 2026-11-03: The site has a full set of icons for browsers and search results, all from the brand generator: a 16, 32 and 48 px `/favicon.ico`, `/favicon.svg`, PNGs at 48, 96, 192 and 512 px (`/icon-{size}.png`) and the 180 px apple touch icon, linked in every page's head. `brand/scripts/render.js` became `render.cjs` so it runs in this ES module repo.
 - 2026-10-31: The site, help pages and README name every AI option: OpenAI and OpenRouter as AI editors, Gemini CLI and the other agents as connected agents. Troubleshooting says where to check each API key.
 - 2026-10-31: The privacy and home pages say still frames go to the AI for b-roll and slides, not thumbnails, and the privacy page covers installing Claude Code, Codex and Gemini CLI from Settings.
